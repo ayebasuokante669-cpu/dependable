@@ -6,8 +6,9 @@ Multi-tenant school management SaaS.
   pattern, the design-system shell, and the admin.
 - **Step 2 — academic setup:** classes and subjects per branch, with management
   screens.
+- **Step 3 — fee structures:** terms, and what each class owes per term.
 
-Fees, students and payments are deliberately absent — those are the next branches.
+Students and payments are deliberately absent — those are the next branches.
 
 ## Running it
 
@@ -27,6 +28,7 @@ To load the pilot school's academic setup:
 
 ```bash
 python manage.py seed_academics --create-school       # Fulfilled Academy / Main Campus
+python manage.py seed_fees                            # First Term 2025/2026 pricing
 python manage.py bootstrap_tenant --name "Fulfilled Academy" --branch "Main Campus"
 ```
 
@@ -79,8 +81,8 @@ default to `config.settings.prod`.
 python manage.py test apps
 ```
 
-62 tests, covering the parts that must never regress: what each role can see,
-and what each role may change. The negative-path tests deliberately trigger 403s
+110 tests, covering the parts that must never regress: what each role can see,
+what each role may change, and that a fee total always equals its live line items. The negative-path tests deliberately trigger 403s
 and 404s, so Django logs tracebacks during a passing run.
 
 ---
@@ -161,6 +163,12 @@ while still being unable to change it.
 | ------------------ | :------------: | :----------: | :-------: | :----: |
 | `view_academics`   | ✓ | ✓ | ✓ | ✓ |
 | `manage_academics` | ✓ | ✓ | ✓ | — |
+| `view_fees`        | ✓ | ✓ | ✓ | ✓ |
+| `manage_fees`      | ✓ | ✓ | ✓ | — |
+
+A bursar collects against the fee structure but does not decide it, so they read
+both setup layers and change neither. The money-*movement* capabilities arrive
+with the payments layer.
 
 Grants live in one table, `ROLE_CAPABILITIES`, never in an ad-hoc check inside a
 view. Enforce with the mixin, and hide the controls to match:
@@ -249,6 +257,67 @@ currently carry identical subject lists**. The arms exist as classes and the
 seeder already supports narrowing — change a placement to `at(SENIOR, "Science")`
 when a subject should belong to one arm only.
 
+## Fee structures
+
+Step 3, at `/fees/`. Three models, all branch-owned:
+
+```
+Term  --<  FeeStructure  --<  FeeComponent
+```
+
+**`Term`** — one term of an academic year at a branch. Exactly one can be
+current per branch, enforced by a partial unique index *and* by `save()`
+standing the previous one down, so a stray script cannot leave two.
+
+**`FeeStructure`** — the fee set for one class in one term, unique on
+(class, term).
+
+**`FeeComponent`** — a line item: name and amount, ordered by `position`.
+
+### The total is never stored
+
+`FeeStructure.total` is a property that sums the live components. There is no
+total column, and a test asserts there never is one. A stored total is a second
+source of truth that drifts the moment someone edits a line item, and
+reconciling a payment against a stale figure costs a school real money.
+
+The editor's live sum is display-only — the browser never posts a total, so a
+JavaScript bug can degrade the typing experience but cannot change what a class
+owes. The form and its line-item formset are validated together inside one
+transaction, so a bad line can't leave a structure behind with no components.
+
+### Screens
+
+The list is grouped by level with per-level subtotals, defaults to the current
+term, and ends with a "not yet priced" section — the question a school owner
+actually has during onboarding. Terms themselves are managed in the Django
+admin; say the word if they should get first-class screens too.
+
+### Seeding
+
+```bash
+python manage.py seed_fees            # needs seed_academics to have run
+python manage.py seed_fees --replace  # drop structures the pricing file dropped
+```
+
+`apps/fees/pricing.py` is the single source, the same way `curriculum.py` is for
+academics. Fulfilled Academy's First Term 2025/2026 comes to 19 structures, 61
+line items, ₦1,796,000 across the term.
+
+Two things the pricing file handles deliberately:
+
+- **One structure per class, never shared.** Primary 2–6 charge the same today,
+  so they are written as one spec listing five class names — but the seeder
+  creates five independent structures with their own components. Repricing
+  Primary 3 leaves Primary 2 alone, and a test proves it.
+- **`client_total` is a cross-check, never stored.** Where the school's written
+  total disagrees with the line items, the seeder charges the line items and
+  prints a warning. Primary 1 currently trips this: the line items sum to
+  ₦102,000 against a written total of ₦104,000. The components are seeded as
+  supplied and **no balancing line has been invented** — the ₦2,000 gap is a
+  real question about the source data, and burying it in a fake component would
+  make it unanswerable later.
+
 ## Navigation
 
 `nav_for(role)` in `apps/core/navigation.py` is the server-side equivalent of a
@@ -307,7 +376,8 @@ apps/core/           tenancy.py, permissions.py, models.py, roles.py,
 apps/schools/        School (the tenant) and Branch
 apps/accounts/       the custom User
 apps/academics/      Class and Subject, their screens, and curriculum.py
-templates/           base.html, 403.html, partials/, core/, academics/,
+apps/fees/           Term, FeeStructure, FeeComponent, screens, and pricing.py
+templates/           base.html, 403.html, partials/, core/, academics/, fees/,
                      registration/
 static/src/app.css   design tokens and components (Tailwind source)
 static/css/app.css   compiled output (committed)

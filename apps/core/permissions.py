@@ -2,7 +2,7 @@
 
 Tenant scoping (``apps.core.tenancy``) answers "which rows?".  Capabilities
 answer "which actions?".  Keeping them apart means a bursar can be given full
-visibility of the academic setup while still being unable to change it.
+visibility of the academic and fee setup while still being unable to change it.
 
 Capabilities are granted by permission role only -- never by job title.
 """
@@ -22,18 +22,32 @@ class Capability(str, Enum):
 
     VIEW_ACADEMICS = "view_academics"
     MANAGE_ACADEMICS = "manage_academics"
+    VIEW_FEES = "view_fees"
+    MANAGE_FEES = "manage_fees"
 
 
-_VIEW_ONLY = frozenset({Capability.VIEW_ACADEMICS})
-_ACADEMIC_ADMIN = frozenset({Capability.VIEW_ACADEMICS, Capability.MANAGE_ACADEMICS})
+#: Owner- and principal-level roles: set up the school and what it charges.
+_LEADERSHIP = frozenset(
+    {
+        Capability.VIEW_ACADEMICS,
+        Capability.MANAGE_ACADEMICS,
+        Capability.VIEW_FEES,
+        Capability.MANAGE_FEES,
+    }
+)
+
+#: A bursar collects against the fee structure but does not decide it. Read-only
+#: on setup; the money-movement capabilities will land with the payments layer.
+_BURSAR = frozenset({Capability.VIEW_ACADEMICS, Capability.VIEW_FEES})
+
+_EVERYTHING = frozenset(Capability)
 
 #: The grant table. Add a capability here, not with an ad-hoc check in a view.
 ROLE_CAPABILITIES: dict[str, frozenset[Capability]] = {
-    Role.PLATFORM_OWNER: _ACADEMIC_ADMIN,
-    Role.SCHOOL_OWNER: _ACADEMIC_ADMIN,
-    Role.PRINCIPAL: _ACADEMIC_ADMIN,
-    # A bursar runs the money, not the curriculum: read-only on academic setup.
-    Role.BURSAR: _VIEW_ONLY,
+    Role.PLATFORM_OWNER: _LEADERSHIP,
+    Role.SCHOOL_OWNER: _LEADERSHIP,
+    Role.PRINCIPAL: _LEADERSHIP,
+    Role.BURSAR: _BURSAR,
 }
 
 
@@ -48,7 +62,7 @@ def capabilities_of(user) -> frozenset[Capability]:
     if user is None or not getattr(user, "is_authenticated", False):
         return frozenset()
     if getattr(user, "is_superuser", False):
-        return _ACADEMIC_ADMIN
+        return _EVERYTHING
     return capabilities_for(getattr(user, "role", None))
 
 

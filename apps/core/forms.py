@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from django import forms
 
+from apps.schools.models import Branch
+
 
 class StyledFormMixin:
     """Apply the design-system input classes to every widget on a form.
@@ -35,3 +37,27 @@ class StyledFormMixin:
                 widget.attrs.setdefault("rows", 3)
             else:
                 widget.attrs.setdefault("class", "field-input")
+
+
+class BranchScopedForm(StyledFormMixin, forms.ModelForm):
+    """Shared branch handling for records that belong to one campus.
+
+    ``Branch.objects`` is tenant-scoped, so the choices are already limited to
+    what the user may see. A principal has exactly one branch, so the field is
+    pre-selected and there is nothing to decide; a school owner must pick.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "branch" in self.fields:
+            branches = Branch.objects.filter(is_active=True)
+            self.fields["branch"].queryset = branches
+            self.fields["branch"].empty_label = None
+            if self.instance.pk is None and len(branches) == 1:
+                self.fields["branch"].initial = branches[0]
+
+    @property
+    def visible_branch_count(self) -> int:
+        """How many branches this user can see -- drives whether labels need
+        to be disambiguated by branch name."""
+        return Branch.objects.count()

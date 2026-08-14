@@ -136,6 +136,20 @@
     @apply text-ink-700 hover:bg-ink-100;
   }
 
+  .btn-danger {
+    @apply bg-overdue text-white hover:bg-overdue-strong;
+  }
+
+  /* A line item ticked for deletion but still on screen, so a mis-click can be
+     undone before the form is submitted. */
+  .is-removed {
+    @apply opacity-45;
+  }
+
+  .is-removed input {
+    @apply line-through;
+  }
+
   .card {
     @apply bg-white rounded-lg border border-ink-200 shadow-card;
   }

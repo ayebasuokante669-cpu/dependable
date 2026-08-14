@@ -10,26 +10,10 @@ from __future__ import annotations
 
 from django import forms
 
-from apps.core.forms import StyledFormMixin
-from apps.schools.models import Branch
+# BranchScopedForm lives in core: fees needs the same behaviour.
+from apps.core.forms import BranchScopedForm
 
 from .models import Class, Subject
-
-
-class BranchScopedForm(StyledFormMixin, forms.ModelForm):
-    """Shared branch handling for academic records.
-
-    A principal has exactly one branch, so the field is pre-selected and there
-    is nothing to decide. A school owner sees their branches and must pick.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        branches = Branch.objects.filter(is_active=True)
-        self.fields["branch"].queryset = branches
-        self.fields["branch"].empty_label = None
-        if self.instance.pk is None and len(branches) == 1:
-            self.fields["branch"].initial = branches[0]
 
 
 class ClassForm(BranchScopedForm):

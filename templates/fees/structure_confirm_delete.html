@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="card p-5 sm:p-6">
+    <h2 class="text-base font-semibold text-ink-900">
+      Delete the fee structure for {{ object.school_class.display_name }}?
+    </h2>
+    <p class="mt-2 text-sm text-ink-600">
+      {{ object.term.name }} at {{ object.branch.name }}. This cannot be undone.
+    </p>
+
+    <div class="mt-4 rounded-md bg-partial-soft px-3 py-3 text-sm text-partial-strong">
+      <p class="font-semibold">
+        {{ object.components.all|length }} line item{{ object.components.all|length|pluralize }}
+        totalling <span class="numeric">{{ object.total|naira }}</span> will go with it.
+      </p>
+      <div class="mt-2 flex flex-wrap gap-1">
+        {% for component in object.components.all %}
+          <span class="chip">
+            {{ component.name }}
+            <span class="numeric ml-1 text-ink-500">{{ component.amount|naira }}</span>
+          </span>
+        {% endfor %}
+      </div>
+      <p class="mt-2">The class and the term themselves are kept.</p>
+    </div>
+
+    <form method="post" class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      {% csrf_token %}
+      <a href="{% url 'fees:structure_list' %}?term={{ object.term_id }}"
+         class="btn btn-secondary text-sm">Cancel</a>
+      <button type="submit" class="btn btn-danger text-sm">Delete fee structure</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
