@@ -1,3 +1,13 @@
 venv/
 __pycache__/
+*.py[cod]
 .env
+
+node_modules/
+db.sqlite3
+staticfiles/
+media/
+
+.idea/
+.vscode/
+.DS_Store

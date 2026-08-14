@@ -1,0 +1,145 @@
+"""Fulfilled Academy's First Term 2025/2026 fee schedule.
+
+The single source for seeding, the same way ``academics/curriculum.py`` is for
+classes and subjects: edit the tuples below and re-run
+``manage.py seed_fees --replace``.
+
+Two things to know about how this data is expressed:
+
+* A spec listing several class names creates *one structure per class*, not one
+  shared row. "Primary 2-6" charge the same today, but each class owns its own
+  components so any one of them can be repriced without touching the others.
+* ``client_total`` is a cross-check, never stored. Where the school's written
+  total disagrees with the line items, the seeder charges the line items and
+  prints a warning. Inventing a balancing component to make the arithmetic work
+  would bury a real question about the source data.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from decimal import Decimal
+
+
+@dataclass(frozen=True)
+class FeeLine:
+    name: str
+    amount: Decimal
+
+
+def line(name: str, amount: int | str) -> FeeLine:
+    # Decimal from a string/int, never a float -- money must not carry binary
+    # rounding error.
+    return FeeLine(name=name, amount=Decimal(str(amount)))
+
+
+@dataclass(frozen=True)
+class StructureSpec:
+    """One fee set, applied to each of ``class_names`` separately."""
+
+    class_names: tuple[str, ...]
+    lines: tuple[FeeLine, ...]
+    #: Empty means every arm of the named class; otherwise only these arms.
+    streams: tuple[str, ...] = ()
+    #: The school's own written total, for cross-checking only.
+    client_total: Decimal | None = None
+    #: Why the two disagree, shown by the seeder when they do.
+    total_note: str = ""
+
+    @property
+    def computed_total(self) -> Decimal:
+        return sum((line.amount for line in self.lines), Decimal("0"))
+
+    def matches(self, klass) -> bool:
+        if klass.name not in self.class_names:
+            return False
+        return not self.streams or klass.stream in self.streams
+
+
+TERM = {
+    "name": "First Term 2025/2026",
+    "academic_year": "2025/2026",
+    "sequence": 1,
+    "is_current": True,
+}
+
+
+FEE_STRUCTURES: tuple[StructureSpec, ...] = (
+    # --- Nursery ----------------------------------------------------------
+    StructureSpec(
+        ("Pre-KG",),
+        (line("School Fees", 24_000), line("Textbooks", 30_000),
+         line("Development", 2_000)),
+    ),
+    StructureSpec(
+        ("KG 1",),
+        (line("School Fees", 24_000), line("Textbooks", 32_000),
+         line("Development", 2_000)),
+    ),
+    StructureSpec(
+        ("KG 2",),
+        (line("School Fees", 24_000), line("Textbooks", 35_000),
+         line("Development", 2_000)),
+    ),
+    StructureSpec(
+        ("KG 3",),
+        (line("School Fees", 24_000), line("Textbooks", 45_000),
+         line("Development", 2_000)),
+    ),
+
+    # --- Primary ----------------------------------------------------------
+    # Entry year: carries the uniform charge.
+    StructureSpec(
+        ("Primary 1",),
+        (line("School Fees", 26_000), line("Uniform", 24_000),
+         line("Development", 2_000), line("Textbooks", 50_000)),
+        client_total=Decimal("104000"),
+        total_note=(
+            "School's written total is 104,000 but these line items sum to "
+            "102,000 -- a 2,000 gap being confirmed with the client. Components "
+            "are seeded as supplied; no balancing line has been invented."
+        ),
+    ),
+    StructureSpec(
+        ("Primary 2", "Primary 3", "Primary 4", "Primary 5", "Primary 6"),
+        (line("School Fees", 26_000), line("Textbooks", 50_000),
+         line("Development", 2_000)),
+    ),
+
+    # --- Junior secondary --------------------------------------------------
+    StructureSpec(
+        ("JSS 1",),
+        (line("School Fees", 31_000), line("Uniform", 24_000),
+         line("Development", 2_000), line("Textbooks", 55_000)),
+    ),
+    StructureSpec(
+        ("JSS 2", "JSS 3"),
+        (line("School Fees", 31_000), line("Textbooks", 55_000),
+         line("Development", 2_000)),
+    ),
+
+    # --- Senior secondary ---------------------------------------------------
+    # SSS 1 is priced the same for both arms; the split starts at SSS 2.
+    StructureSpec(
+        ("SSS 1",),
+        (line("School Fees", 40_000), line("Uniform", 30_000),
+         line("Practical/Devy", 5_000), line("Textbooks", 75_000)),
+    ),
+    StructureSpec(
+        ("SSS 2", "SSS 3"),
+        (line("School Fees", 40_000), line("Textbooks", 75_000),
+         line("Practical/Devy", 5_000)),
+        streams=("Science",),
+    ),
+    StructureSpec(
+        ("SSS 2", "SSS 3"),
+        (line("School Fees", 40_000), line("Textbooks", 70_000),
+         line("Practical/Devy", 5_000)),
+        streams=("Arts",),
+    ),
+)
+
+
+def structures_for(klass) -> list[StructureSpec]:
+    """Every spec that should produce a structure for ``klass``."""
+    return [spec for spec in FEE_STRUCTURES if spec.matches(klass)]

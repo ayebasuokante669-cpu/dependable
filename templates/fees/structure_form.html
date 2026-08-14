@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl">
+  <form method="post" novalidate id="fee-form">
+    {% csrf_token %}
+
+    {% if form.non_field_errors or formset.non_form_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        {% for error in formset.non_form_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card p-5 sm:p-6">
+      <div class="grid gap-5 sm:grid-cols-2">
+        {% include "partials/_field.html" with field=form.school_class %}
+        {% include "partials/_field.html" with field=form.term %}
+      </div>
+    </div>
+
+    <div class="card mt-5 overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Line items</h2>
+        <p class="field-hint mt-0.5">
+          The total is the sum of these. It is never stored separately, so
+          editing a line here changes what the class owes.
+        </p>
+      </div>
+
+      {{ formset.management_form }}
+
+      <div id="components" class="divide-y divide-ink-200">
+        {% for component_form in formset %}
+          <div class="component-row px-5 py-3" data-row
+               data-new="{% if component_form.instance.pk %}false{% else %}true{% endif %}">
+            {{ component_form.id }}
+            <div class="flex items-end gap-3">
+              <div class="min-w-0 flex-1">
+                <label for="{{ component_form.name.id_for_label }}"
+                       class="field-label text-xs">Item</label>
+                {{ component_form.name }}
+              </div>
+              <div class="w-32 shrink-0 sm:w-40">
+                <label for="{{ component_form.amount.id_for_label }}"
+                       class="field-label text-xs">Amount (&#8358;)</label>
+                {{ component_form.amount }}
+              </div>
+              <div class="hidden">{{ component_form.DELETE }}</div>
+              <button type="button" data-remove
+                      class="btn btn-ghost size-touch shrink-0 px-0 text-overdue-strong
+                             hover:bg-overdue-soft"
+                      aria-label="Remove line item">
+                <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                     stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                        d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.2v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                </svg>
+              </button>
+            </div>
+            {% for error in component_form.name.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+            {% for error in component_form.amount.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t
+                  border-ink-200 bg-ink-50 px-5 py-4">
+        <button type="button" id="add-component" class="btn btn-secondary text-sm">
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+               stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Add line item
+        </button>
+        <div class="text-right">
+          <div class="text-xs font-semibold uppercase tracking-wider text-ink-500">Total</div>
+          <div id="fee-total" class="numeric text-2xl font-semibold text-brand-900"
+               aria-live="polite">
+            {% if formset.is_bound %}{{ formset.total|naira }}
+            {% elif form.instance.pk %}{{ form.instance.total|naira }}
+            {% else %}&#8358;0{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <a href="{% url 'fees:structure_list' %}" class="btn btn-secondary text-sm">Cancel</a>
+      <button type="submit" class="btn btn-primary text-sm">{{ verb }} fee structure</button>
+    </div>
+  </form>
+</div>
+
+{# Blueprint for rows added on the client. #}
+<template id="component-template">
+  <div class="component-row px-5 py-3" data-row data-new="true">
+    <div class="flex items-end gap-3">
+      {# __prefix__ is rewritten to the row index when the row is cloned, which
+         keeps each label tied to its own input. #}
+      <div class="min-w-0 flex-1">
+        <label class="field-label text-xs"
+               for="id_{{ formset.prefix }}-__prefix__-name">Item</label>
+        {{ formset.empty_form.name }}
+      </div>
+      <div class="w-32 shrink-0 sm:w-40">
+        <label class="field-label text-xs"
+               for="id_{{ formset.prefix }}-__prefix__-amount">Amount (&#8358;)</label>
+        {{ formset.empty_form.amount }}
+      </div>
+      <div class="hidden">{{ formset.empty_form.DELETE }}{{ formset.empty_form.id }}</div>
+      <button type="button" data-remove
+              class="btn btn-ghost size-touch shrink-0 px-0 text-overdue-strong
+                     hover:bg-overdue-soft" aria-label="Remove line item">
+        <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+             stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.2v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+        </svg>
+      </button>
+    </div>
+  </div>
+</template>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+  // Line-item editor. Dependency-free, and display-only: the server recomputes
+  // the total from the saved components regardless of what this shows.
+  (function () {
+    var PREFIX = "{{ formset.prefix }}";
+    var container = document.getElementById("components");
+    var totalOut = document.getElementById("fee-total");
+    var addBtn = document.getElementById("add-component");
+    var totalForms = document.getElementById("id_" + PREFIX + "-TOTAL_FORMS");
+    var initialForms = parseInt(
+      document.getElementById("id_" + PREFIX + "-INITIAL_FORMS").value, 10
+    );
+    var template = document.getElementById("component-template");
+    if (!container || !totalForms) return;
+
+    function format(value) {
+      // Match the server-side `naira` filter: kobo only when there are any.
+      var fixed = Math.round(value * 100) / 100;
+      var opts = Number.isInteger(fixed)
+        ? { minimumFractionDigits: 0, maximumFractionDigits: 0 }
+        : { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+      return "₦" + fixed.toLocaleString("en-NG", opts);
+    }
+
+    function recalc() {
+      var sum = 0;
+      container.querySelectorAll("[data-row]").forEach(function (row) {
+        if (row.classList.contains("is-removed")) return;
+        var input = row.querySelector('input[name$="-amount"]');
+        var value = input ? parseFloat(input.value) : NaN;
+        if (!isNaN(value)) sum += value;
+      });
+      totalOut.textContent = format(sum);
+    }
+
+    function reindexNewRows() {
+      // Only rows after INITIAL_FORMS are renumbered: Django maps the first
+      // INITIAL_FORMS entries to existing objects by position, so those must
+      // keep their index.
+      var newRows = container.querySelectorAll('[data-row][data-new="true"]');
+      newRows.forEach(function (row, offset) {
+        var index = initialForms + offset;
+        row.querySelectorAll("input, select, textarea, label").forEach(function (el) {
+          ["name", "id", "htmlFor"].forEach(function (attr) {
+            var key = attr === "htmlFor" ? "for" : attr;
+            var current = el.getAttribute(key);
+            if (current) {
+              el.setAttribute(
+                key,
+                current.replace(
+                  new RegExp(PREFIX + "-(\\d+|__prefix__)-"), PREFIX + "-" + index + "-"
+                )
+              );
+            }
+          });
+        });
+      });
+      totalForms.value = initialForms + newRows.length;
+    }
+
+    function removeRow(row) {
+      var deleteBox = row.querySelector('input[name$="-DELETE"]');
+      if (row.dataset.new === "true") {
+        row.remove();
+        reindexNewRows();
+      } else {
+        // Existing row: tick DELETE and let it be undone, rather than making a
+        // mis-click cost the whole line.
+        row.classList.add("is-removed");
+        if (deleteBox) deleteBox.checked = true;
+        var button = row.querySelector("[data-remove]");
+        button.setAttribute("aria-label", "Restore line item");
+        button.dataset.remove = "undo";
+      }
+      recalc();
+    }
+
+    function restoreRow(row) {
+      row.classList.remove("is-removed");
+      var deleteBox = row.querySelector('input[name$="-DELETE"]');
+      if (deleteBox) deleteBox.checked = false;
+      var button = row.querySelector("[data-remove]");
+      button.setAttribute("aria-label", "Remove line item");
+      button.dataset.remove = "";
+      recalc();
+    }
+
+    container.addEventListener("input", recalc);
+    container.addEventListener("click", function (event) {
+      var button = event.target.closest("[data-remove]");
+      if (!button) return;
+      var row = button.closest("[data-row]");
+      if (button.dataset.remove === "undo") restoreRow(row);
+      else removeRow(row);
+    });
+
+    addBtn.addEventListener("click", function () {
+      var index = parseInt(totalForms.value, 10);
+      var markup = template.innerHTML.replace(/__prefix__/g, index);
+      var wrapper = document.createElement("div");
+      wrapper.innerHTML = markup.trim();
+      var row = wrapper.firstElementChild;
+      container.appendChild(row);
+      totalForms.value = index + 1;
+      var nameInput = row.querySelector('input[name$="-name"]');
+      if (nameInput) nameInput.focus();
+      recalc();
+    });
+
+    // Rows marked for deletion by a failed submit should come back dimmed.
+    container.querySelectorAll('input[name$="-DELETE"]').forEach(function (box) {
+      if (box.checked) removeRow(box.closest("[data-row]"));
+    });
+
+    recalc();
+  })();
+</script>
+{% endblock %}

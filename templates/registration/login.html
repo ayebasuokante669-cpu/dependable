@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in{% endblock %}
+
+{% block anonymous_content %}
+<div class="grid min-h-full place-items-center px-4 py-12">
+  <div class="w-full max-w-sm">
+    <div class="mb-8 flex items-center justify-center gap-2.5">
+      <span class="grid size-10 place-items-center rounded-md bg-brand-900
+                   text-lg font-semibold text-white">D</span>
+      <span class="text-xl font-semibold tracking-tight text-brand-900">Dependable</span>
+    </div>
+
+    <div class="card p-6">
+      <h1 class="text-lg font-semibold text-ink-900">Sign in</h1>
+      <p class="mt-1 text-sm text-ink-600">Use the credentials issued by your school.</p>
+
+      {% if form.errors %}
+        <div class="mt-4 rounded-md bg-overdue-soft px-3 py-2.5 text-sm text-overdue-strong">
+          Your username and password didn't match. Please try again.
+        </div>
+      {% endif %}
+
+      <form method="post" class="mt-5 space-y-4">
+        {% csrf_token %}
+        <div>
+          <label for="{{ form.username.id_for_label }}" class="field-label">Username</label>
+          <input type="text" name="{{ form.username.html_name }}"
+                 id="{{ form.username.id_for_label }}" class="field-input"
+                 autocomplete="username" autofocus required>
+        </div>
+        <div>
+          <label for="{{ form.password.id_for_label }}" class="field-label">Password</label>
+          <input type="password" name="{{ form.password.html_name }}"
+                 id="{{ form.password.id_for_label }}" class="field-input"
+                 autocomplete="current-password" required>
+        </div>
+        <input type="hidden" name="next" value="{{ next }}">
+        <button type="submit" class="btn btn-primary w-full">Sign in</button>
+      </form>
+    </div>
+
+    <p class="mt-6 text-center text-xs text-ink-500">
+      Trouble signing in? Contact your school administrator.
+    </p>
+  </div>
+</div>
+{% endblock %}

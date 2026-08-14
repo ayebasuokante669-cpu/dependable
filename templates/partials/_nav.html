@@ -1,0 +1,41 @@
+{% comment %}
+Renders the navigation tree produced server-side by apps.core.navigation.nav_for().
+Shared by the desktop sidebar and the mobile drawer so the two can never drift.
+{% endcomment %}
+<nav class="flex-1 overflow-y-auto px-3 pb-6" aria-label="{{ nav_label|default:'Main' }}">
+  {% for section in nav_sections %}
+    <div class="nav-section-label">{{ section.label }}</div>
+    <ul class="space-y-0.5">
+      {% for item in section.items %}
+        <li>
+          {% if item.available %}
+            <a href="{{ item.href }}"
+               class="nav-link {% if item.active %}nav-link-active{% endif %}"
+               {% if item.active %}aria-current="page"{% endif %}>
+              <svg class="size-5 shrink-0" fill="none" viewBox="0 0 24 24"
+                   stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                {% for d in item.icon_paths %}
+                  <path stroke-linecap="round" stroke-linejoin="round" d="{{ d }}" />
+                {% endfor %}
+              </svg>
+              <span class="truncate">{{ item.label }}</span>
+            </a>
+          {% else %}
+            <span class="nav-link nav-link-disabled" aria-disabled="true"
+                  title="Not built yet">
+              <svg class="size-5 shrink-0" fill="none" viewBox="0 0 24 24"
+                   stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                {% for d in item.icon_paths %}
+                  <path stroke-linecap="round" stroke-linejoin="round" d="{{ d }}" />
+                {% endfor %}
+              </svg>
+              <span class="truncate">{{ item.label }}</span>
+              <span class="ml-auto text-[10px] font-semibold uppercase tracking-wide
+                           text-brand-300/70">soon</span>
+            </span>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endfor %}
+</nav>

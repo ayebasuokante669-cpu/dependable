@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block page_subtitle %}
+  {% if selected_term %}
+    <p class="truncate text-sm text-ink-600">
+      {{ selected_term.name }} &middot; {{ structures|length }} class{{ structures|length|pluralize:"es" }} priced
+      {% if grand_total %}&middot; <span class="numeric">{{ grand_total|naira }}</span> across the term{% endif %}
+    </p>
+  {% endif %}
+{% endblock %}
+
+{% block page_actions %}
+  {% if terms|length > 1 %}
+    <form method="get" class="hidden sm:block">
+      <label for="term-select" class="sr-only">Term</label>
+      <select name="term" id="term-select" class="field-input text-sm"
+              onchange="this.form.submit()">
+        {% for term in terms %}
+          <option value="{{ term.pk }}" {% if term.pk == selected_term.pk %}selected{% endif %}>
+            {{ term.name }}{% if term.is_current %} (current){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+      <noscript><button type="submit" class="btn btn-secondary text-sm">Go</button></noscript>
+    </form>
+  {% endif %}
+  {% if "manage_fees" in capabilities and selected_term %}
+    <a href="{% url 'fees:structure_create' %}?term={{ selected_term.pk }}"
+       class="btn btn-primary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <span class="hidden sm:inline">New structure</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  {% if not selected_term %}
+    <div class="card empty-state">
+      <p class="text-base font-medium text-ink-700">No terms set up yet</p>
+      <p class="mx-auto mt-1 max-w-md text-sm">
+        A fee structure belongs to a term, so a term has to exist first.
+      </p>
+      {% if "manage_fees" in capabilities %}
+        <a href="{% url 'admin:fees_term_add' %}" class="btn btn-primary mt-5 text-sm">
+          Create a term
+        </a>
+      {% endif %}
+    </div>
+  {% else %}
+
+    {% if terms|length > 1 %}
+      <form method="get" class="mb-5 sm:hidden">
+        <label for="term-select-mobile" class="field-label">Term</label>
+        <select name="term" id="term-select-mobile" class="field-input"
+                onchange="this.form.submit()">
+          {% for term in terms %}
+            <option value="{{ term.pk }}" {% if term.pk == selected_term.pk %}selected{% endif %}>
+              {{ term.name }}{% if term.is_current %} (current){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+    {% endif %}
+
+    <div class="space-y-6">
+      {% for group in level_groups %}
+        <section class="card overflow-hidden">
+          <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-3">
+            <h2 class="text-sm font-semibold text-ink-900">
+              {{ group.label }}
+              <span class="ml-1 font-normal text-ink-500">({{ group.structures|length }})</span>
+            </h2>
+            <span class="numeric text-sm text-ink-600">{{ group.subtotal|naira }}</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="table-head">
+                <tr>
+                  <th scope="col" class="px-5 py-2.5 font-semibold">Class</th>
+                  <th scope="col" class="px-5 py-2.5 font-semibold">Line items</th>
+                  <th scope="col" class="px-5 py-2.5 text-right font-semibold">Total</th>
+                  {% if "manage_fees" in capabilities %}
+                    <th scope="col" class="px-5 py-2.5 text-right font-semibold">Actions</th>
+                  {% endif %}
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-ink-200">
+                {% for structure in group.structures %}
+                  <tr>
+                    <td class="whitespace-nowrap px-5 py-3 font-medium text-ink-900">
+                      {{ structure.school_class.display_name }}
+                    </td>
+                    <td class="px-5 py-3">
+                      <div class="flex flex-wrap gap-1">
+                        {% for component in structure.components.all %}
+                          <span class="chip">
+                            {{ component.name }}
+                            <span class="numeric ml-1 text-ink-500">{{ component.amount|naira }}</span>
+                          </span>
+                        {% endfor %}
+                      </div>
+                    </td>
+                    <td class="numeric whitespace-nowrap px-5 py-3 text-right font-semibold text-brand-900">
+                      {{ structure.total|naira }}
+                    </td>
+                    {% if "manage_fees" in capabilities %}
+                      <td class="px-5 py-3">
+                        <div class="flex justify-end gap-1">
+                          <a href="{% url 'fees:structure_update' structure.pk %}"
+                             class="btn btn-ghost text-xs">Edit</a>
+                          <a href="{% url 'fees:structure_delete' structure.pk %}"
+                             class="btn btn-ghost text-xs text-overdue-strong
+                                    hover:bg-overdue-soft">Delete</a>
+                        </div>
+                      </td>
+                    {% endif %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      {% empty %}
+        <div class="card empty-state">
+          <p class="text-base font-medium text-ink-700">
+            No fees set for {{ selected_term.name }}
+          </p>
+          <p class="mx-auto mt-1 max-w-md text-sm">
+            Price each class for this term and payments can be recorded against it later.
+          </p>
+          {% if "manage_fees" in capabilities %}
+            <a href="{% url 'fees:structure_create' %}?term={{ selected_term.pk }}"
+               class="btn btn-primary mt-5 text-sm">Set the first one</a>
+          {% else %}
+            <p class="mt-4 text-xs">Your role can view fee structures but not change them.</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      {% if classes_without_fees %}
+        <section class="card overflow-hidden">
+          <div class="border-b border-ink-200 bg-partial-soft px-5 py-3">
+            <h2 class="text-sm font-semibold text-partial-strong">
+              Not yet priced for {{ selected_term.name }}
+              <span class="ml-1 font-normal">({{ classes_without_fees|length }})</span>
+            </h2>
+          </div>
+          <ul class="divide-y divide-ink-200">
+            {% for klass in classes_without_fees %}
+              <li class="flex items-center justify-between gap-3 px-5 py-3">
+                <span class="text-sm font-medium text-ink-900">{{ klass.display_name }}</span>
+                {% if "manage_fees" in capabilities %}
+                  <a href="{% url 'fees:structure_create' %}?class={{ klass.pk }}&term={{ selected_term.pk }}"
+                     class="btn btn-secondary text-xs">Set fees</a>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

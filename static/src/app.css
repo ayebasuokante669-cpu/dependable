@@ -1,0 +1,248 @@
+@import "tailwindcss";
+
+/* Tailwind v4 scans these for class names. */
+@source "../../templates";
+@source "../../apps";
+
+/* ==========================================================================
+   Dependable design tokens
+   Declared in @theme so every token is available both as a Tailwind utility
+   (bg-brand-700, text-paid, rounded-md, min-h-touch) and as a raw CSS custom
+   property (var(--color-brand-700)) for anything hand-written.
+   ========================================================================== */
+@theme {
+  /* --- Brand: deep blue ------------------------------------------------ */
+  --color-brand-50: #eef3fb;
+  --color-brand-100: #d9e5f6;
+  --color-brand-200: #b8cdec;
+  --color-brand-300: #8badde;
+  --color-brand-400: #5886cb;
+  --color-brand-500: #3566b3;
+  --color-brand-600: #245096;
+  --color-brand-700: #1d3f79;
+  --color-brand-800: #1a3563;
+  --color-brand-900: #0f2547;
+  --color-brand-950: #091732;
+
+  /* --- Neutrals: cooled toward the brand hue --------------------------- */
+  --color-ink-50: #f6f8fb;
+  --color-ink-100: #eef1f6;
+  --color-ink-200: #dfe4ed;
+  --color-ink-300: #c3cbd9;
+  --color-ink-400: #94a0b5;
+  --color-ink-500: #6b7891;
+  --color-ink-600: #5a6b85;
+  --color-ink-700: #435065;
+  --color-ink-800: #2e3849;
+  --color-ink-900: #1c2432;
+
+  /* --- Payment status --------------------------------------------------
+     Four states, each with a solid tone for text/icons and a soft tone for
+     pill backgrounds. Never signal these by colour alone -- pair with the
+     label, as the .status-pill component below does. */
+  --color-paid: #0f7a52;
+  --color-paid-soft: #e4f4ec;
+  --color-paid-strong: #0a5c3e;
+
+  --color-partial: #a86a09;
+  --color-partial-soft: #fdf1dd;
+  --color-partial-strong: #7d4e04;
+
+  --color-unpaid: #5a6b85;
+  --color-unpaid-soft: #eef1f6;
+  --color-unpaid-strong: #435065;
+
+  --color-overdue: #b32424;
+  --color-overdue-soft: #fbe9e9;
+  --color-overdue-strong: #8a1a1a;
+
+  /* --- Typography ------------------------------------------------------ */
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /* --- Radii: 8px is the house corner ---------------------------------- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+
+  /* --- Touch targets ---------------------------------------------------
+     44px minimum, per WCAG 2.5.5. Available as min-h-touch / h-touch /
+     w-touch / p-touch. */
+  --spacing-touch: 2.75rem;
+
+  /* --- Elevation ------------------------------------------------------- */
+  --shadow-card: 0 1px 2px 0 rgb(9 23 50 / 0.06), 0 1px 3px 0 rgb(9 23 50 / 0.08);
+  --shadow-panel: 0 10px 30px -12px rgb(9 23 50 / 0.28);
+
+  /* --- Layout ----------------------------------------------------------- */
+  --spacing-sidebar: 16rem;
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-ink-50);
+    color: var(--color-ink-900);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* A visible, brand-coloured focus ring everywhere -- never remove it. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+
+  code, kbd, pre, samp {
+    font-family: var(--font-mono);
+  }
+}
+
+/* ==========================================================================
+   Components
+   Small, repeated pieces of the shell. Feature screens should reach for these
+   before inventing new markup.
+   ========================================================================== */
+@layer components {
+  /* Composed in markup -- `class="btn btn-primary"`. Tailwind v4's @apply only
+     accepts real utilities, so variants layer on rather than extend. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 min-h-touch px-4
+           rounded-md font-medium text-sm transition-colors
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-primary {
+    @apply bg-brand-700 text-white hover:bg-brand-800 active:bg-brand-900;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-brand-800 border border-ink-200
+           hover:bg-ink-50 active:bg-ink-100;
+  }
+
+  .btn-ghost {
+    @apply text-ink-700 hover:bg-ink-100;
+  }
+
+  .btn-danger {
+    @apply bg-overdue text-white hover:bg-overdue-strong;
+  }
+
+  /* A line item ticked for deletion but still on screen, so a mis-click can be
+     undone before the form is submitted. */
+  .is-removed {
+    @apply opacity-45;
+  }
+
+  .is-removed input {
+    @apply line-through;
+  }
+
+  .card {
+    @apply bg-white rounded-lg border border-ink-200 shadow-card;
+  }
+
+  .field-label {
+    @apply block text-sm font-medium text-ink-700 mb-1.5;
+  }
+
+  .field-input {
+    @apply block w-full min-h-touch px-3 rounded-md border border-ink-300
+           bg-white text-ink-900 placeholder:text-ink-400
+           focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20
+           focus:outline-none;
+  }
+
+  .field-textarea {
+    @apply block w-full py-2 px-3 rounded-md border border-ink-300
+           bg-white text-ink-900 placeholder:text-ink-400
+           focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20
+           focus:outline-none;
+  }
+
+  .field-checkbox {
+    @apply size-4 shrink-0 rounded-xs border-ink-300 text-brand-700
+           focus:ring-brand-500/30;
+  }
+
+  /* Whole-row checkbox target: the 44px minimum applies to the row, not the
+     16px box, so a subject can be ticked without precision aiming. */
+  .check-row {
+    @apply flex items-center gap-3 min-h-touch px-3 rounded-md cursor-pointer
+           hover:bg-ink-50;
+  }
+
+  .field-error {
+    @apply mt-1.5 text-xs font-medium text-overdue-strong;
+  }
+
+  .field-hint {
+    @apply mt-1.5 text-xs text-ink-500;
+  }
+
+  /* Small neutral chip, e.g. the classes listed against a subject. */
+  .chip {
+    @apply inline-flex items-center rounded-md bg-ink-100 px-2 py-0.5
+           text-xs font-medium text-ink-700;
+  }
+
+  .table-head {
+    @apply bg-ink-50 text-left text-xs uppercase tracking-wide text-ink-600;
+  }
+
+  .empty-state {
+    @apply px-5 py-12 text-center text-ink-500;
+  }
+
+  /* Navigation ---------------------------------------------------------- */
+  .nav-link {
+    @apply flex items-center gap-3 min-h-touch px-3 rounded-md text-sm
+           font-medium text-brand-100 transition-colors
+           hover:bg-white/10 hover:text-white;
+  }
+
+  .nav-link-active {
+    @apply bg-white/15 text-white;
+  }
+
+  .nav-link-disabled {
+    @apply text-brand-300/60 cursor-not-allowed hover:bg-transparent
+           hover:text-brand-300/60;
+  }
+
+  .nav-section-label {
+    @apply px-3 pt-5 pb-1 text-[11px] font-semibold uppercase
+           tracking-wider text-brand-300;
+  }
+
+  /* Payment status pills -------------------------------------------------
+     Composed in markup -- `class="status-pill status-paid"`.
+     Colour plus text, so the state survives greyscale printing and
+     colour-vision differences. */
+  .status-pill {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md
+           text-xs font-semibold whitespace-nowrap;
+  }
+
+  .status-paid    { @apply bg-paid-soft text-paid-strong; }
+  .status-partial { @apply bg-partial-soft text-partial-strong; }
+  .status-unpaid  { @apply bg-unpaid-soft text-unpaid-strong; }
+  .status-overdue { @apply bg-overdue-soft text-overdue-strong; }
+
+  /* Figures read as money/IDs -- tabular mono keeps columns aligned. */
+  .numeric {
+    @apply font-mono tabular-nums;
+  }
+}

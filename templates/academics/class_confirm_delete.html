@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="card p-5 sm:p-6">
+    <h2 class="text-base font-semibold text-ink-900">
+      Delete {{ object.display_name }}?
+    </h2>
+    <p class="mt-2 text-sm text-ink-600">
+      This removes the class from {{ object.branch.name }}. It cannot be undone.
+    </p>
+
+    {% with assigned=object.subjects.all %}
+      {% if assigned %}
+        <div class="mt-4 rounded-md bg-partial-soft px-3 py-3 text-sm text-partial-strong">
+          <p class="font-semibold">
+            {{ assigned|length }} subject{{ assigned|length|pluralize }} are taught in this class.
+          </p>
+          <p class="mt-1">
+            The subjects themselves are kept &mdash; they are simply no longer
+            attached to this class.
+          </p>
+          <div class="mt-2 flex flex-wrap gap-1">
+            {% for subject in assigned %}<span class="chip">{{ subject.name }}</span>{% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      {% csrf_token %}
+      <a href="{% url 'academics:class_list' %}" class="btn btn-secondary text-sm">Cancel</a>
+      <button type="submit"
+              class="btn text-sm bg-overdue text-white hover:bg-overdue-strong">
+        Delete class
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
