@@ -62,3 +62,29 @@ class TenantScopedModel(TimeStampedModel):
             if self.branch_id is None:
                 self.branch_id = context.branch_id
         super().save(*args, **kwargs)
+
+
+class BranchScopedModel(TenantScopedModel):
+    """A tenant record that must belong to one specific branch.
+
+    ``TenantScopedModel`` leaves ``branch`` nullable, because some records
+    belong to a school as a whole. Classes, subjects and anything else that
+    lives at a campus should use this instead: branch becomes required, and the
+    school is derived from it rather than being a second thing to keep in sync.
+    """
+
+    branch = models.ForeignKey(
+        "schools.Branch",
+        on_delete=models.CASCADE,
+        related_name="%(app_label)s_%(class)s_set",
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        # A platform owner has no school of their own, so the context cannot
+        # supply one -- the chosen branch always can.
+        if self.branch_id and self.school_id is None:
+            self.school_id = self.branch.school_id
+        super().save(*args, **kwargs)

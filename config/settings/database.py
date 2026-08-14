@@ -55,6 +55,19 @@ def _postgres_from_env() -> dict | None:
     }
 
 
+def _is_pooled(host: str, port: str) -> bool:
+    """Detect a transaction-mode connection pooler (PgBouncer, Supabase, etc.).
+
+    Transaction pooling hands each statement a different backend, which breaks
+    Django's server-side cursors (``.iterator()``). Django's documented fix is
+    ``DISABLE_SERVER_SIDE_CURSORS``; the alternative is a confusing
+    "cursor does not exist" error the first time a large queryset is streamed.
+    """
+    if os.environ.get("DB_POOLED"):
+        return os.environ["DB_POOLED"].strip().lower() in {"1", "true", "yes", "on"}
+    return "pooler" in host.lower() or "pgbouncer" in host.lower() or port == "6543"
+
+
 def _is_reachable(host: str, port: int) -> bool:
     try:
         with socket.create_connection((host, port), timeout=PROBE_TIMEOUT_SECONDS):
@@ -77,6 +90,9 @@ def get_database_config(base_dir: Path, *, allow_fallback: bool = True) -> dict:
                 "DB_ENGINE=postgres but no DATABASE_URL or DB_NAME was provided."
             )
         return _sqlite(base_dir)
+
+    if _is_pooled(postgres["HOST"], postgres["PORT"]):
+        postgres["DISABLE_SERVER_SIDE_CURSORS"] = True
 
     if engine_choice == "postgres" or not allow_fallback:
         # Explicitly demanded: let a real connection error surface instead of

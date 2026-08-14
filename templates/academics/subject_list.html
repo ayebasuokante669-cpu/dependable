@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ subjects|length }} subject{{ subjects|length|pluralize }}
+    {% if unassigned_count %}
+      &middot; <span class="text-partial-strong">{{ unassigned_count }} not yet assigned to a class</span>
+    {% endif %}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  {% if "manage_academics" in capabilities %}
+    <a href="{% url 'academics:subject_create' %}" class="btn btn-primary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <span class="hidden sm:inline">New subject</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  {% if subjects %}
+    <div class="card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="table-head">
+            <tr>
+              <th scope="col" class="px-5 py-3 font-semibold">Subject</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Code</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Taught in</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Status</th>
+              {% if "manage_academics" in capabilities %}
+                <th scope="col" class="px-5 py-3 text-right font-semibold">Actions</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ink-200">
+            {% for subject in subjects %}
+              <tr>
+                <td class="px-5 py-3 font-medium text-ink-900">{{ subject.name }}</td>
+                <td class="numeric px-5 py-3 text-ink-600">
+                  {% if subject.code %}{{ subject.code }}
+                  {% else %}<span class="text-ink-400">&mdash;</span>{% endif %}
+                </td>
+                <td class="px-5 py-3">
+                  {% with assigned=subject.classes.all %}
+                    {% if assigned %}
+                      <div class="flex flex-wrap gap-1">
+                        {% for klass in assigned %}
+                          <span class="chip">{{ klass.display_name }}</span>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <span class="status-pill status-partial">No classes assigned</span>
+                    {% endif %}
+                  {% endwith %}
+                </td>
+                <td class="px-5 py-3">
+                  {% if subject.is_active %}
+                    <span class="status-pill status-paid">Active</span>
+                  {% else %}
+                    <span class="status-pill status-unpaid">Inactive</span>
+                  {% endif %}
+                </td>
+                {% if "manage_academics" in capabilities %}
+                  <td class="px-5 py-3">
+                    <div class="flex justify-end gap-1">
+                      <a href="{% url 'academics:subject_update' subject.pk %}"
+                         class="btn btn-ghost text-xs">Edit</a>
+                      <a href="{% url 'academics:subject_delete' subject.pk %}"
+                         class="btn btn-ghost text-xs text-overdue-strong
+                                hover:bg-overdue-soft">Delete</a>
+                    </div>
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <div class="card empty-state">
+      <p class="text-base font-medium text-ink-700">No subjects yet</p>
+      <p class="mx-auto mt-1 max-w-md text-sm">
+        Add the subjects this branch teaches, then tick the classes each one applies to.
+      </p>
+      {% if "manage_academics" in capabilities %}
+        <a href="{% url 'academics:subject_create' %}" class="btn btn-primary mt-5 text-sm">
+          Add the first subject
+        </a>
+      {% else %}
+        <p class="mt-4 text-xs">Your role can view the academic setup but not change it.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

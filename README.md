@@ -1,8 +1,13 @@
 # Dependable
 
-Multi-tenant school management SaaS. This is the foundation: tenancy, a custom
-user model, the query-scoping pattern, the design-system shell, and the admin.
-**No feature screens yet** — students, fees and messaging are deliberately absent.
+Multi-tenant school management SaaS.
+
+- **Step 1 — foundation:** tenancy, a custom user model, the query-scoping
+  pattern, the design-system shell, and the admin.
+- **Step 2 — academic setup:** classes and subjects per branch, with management
+  screens.
+
+Fees, students and payments are deliberately absent — those are the next branches.
 
 ## Running it
 
@@ -16,6 +21,13 @@ copy .env.example .env           # macOS/Linux: cp .env.example .env
 python manage.py migrate
 python manage.py bootstrap_tenant     # optional demo school + one user per role
 python manage.py runserver
+```
+
+To load the pilot school's academic setup:
+
+```bash
+python manage.py seed_academics --create-school       # Fulfilled Academy / Main Campus
+python manage.py bootstrap_tenant --name "Fulfilled Academy" --branch "Main Campus"
 ```
 
 Then open http://127.0.0.1:8000/.
@@ -52,6 +64,11 @@ Postgres is the target; SQLite is the local fallback.
 - **`DB_ENGINE=postgres`** → Postgres required, no fallback (what `config.settings.prod` uses).
 - **`DB_ENGINE=sqlite`** → SQLite always.
 
+Connection poolers (Supabase, PgBouncer) are detected by host or port `6543` and
+get `DISABLE_SERVER_SIDE_CURSORS = True`, because transaction-mode pooling hands
+each statement a different backend and breaks Django's server-side cursors.
+Override the detection with `DB_POOLED=1` / `DB_POOLED=0`.
+
 Settings live in `config/settings/`: `base.py`, then `dev.py` (the default) and
 `prod.py`. `manage.py` defaults to `config.settings.dev`; `wsgi.py`/`asgi.py`
 default to `config.settings.prod`.
@@ -62,8 +79,9 @@ default to `config.settings.prod`.
 python manage.py test apps
 ```
 
-23 tests, covering the part that must never regress: what each role can and
-cannot see.
+62 tests, covering the parts that must never regress: what each role can see,
+and what each role may change. The negative-path tests deliberately trigger 403s
+and 404s, so Django logs tracebacks during a passing run.
 
 ---
 
@@ -89,6 +107,10 @@ from apps.core.models import TenantScopedModel
 class Student(TenantScopedModel):     # brings school + branch FKs and indexes
     full_name = models.CharField(max_length=200)
 ```
+
+Use `BranchScopedModel` instead when the record must live at one campus, as
+`Class` and `Subject` do. It makes `branch` required and derives `school` from
+it, so a platform owner — who has no school of their own — can still create rows.
 
 You get:
 
@@ -129,6 +151,34 @@ with scope_to(school_id=7, branch_id=3, role=Role.BURSAR):
     ...                           # background job acting as a tenant
 ```
 
+### Capabilities: what a role may *do*
+
+Scoping answers "which rows?". Capabilities (`apps/core/permissions.py`) answer
+"which actions?" — so a bursar can have full visibility of the academic setup
+while still being unable to change it.
+
+| Capability         | Platform owner | School owner | Principal | Bursar |
+| ------------------ | :------------: | :----------: | :-------: | :----: |
+| `view_academics`   | ✓ | ✓ | ✓ | ✓ |
+| `manage_academics` | ✓ | ✓ | ✓ | — |
+
+Grants live in one table, `ROLE_CAPABILITIES`, never in an ad-hoc check inside a
+view. Enforce with the mixin, and hide the controls to match:
+
+```python
+class ClassCreateView(CapabilityRequiredMixin, CreateView):
+    capability = Capability.MANAGE_ACADEMICS
+```
+
+```html
+{% if "manage_academics" in capabilities %} ... {% endif %}
+```
+
+The mixin raises 403 for a signed-in account that lacks the capability (rendered
+by `templates/403.html`) and redirects anyone signed out to the login page.
+Hiding a button is presentation; the mixin is the enforcement, and it blocks POST
+as well as GET.
+
 ### Permission role vs. job title
 
 Two separate fields on `User`, on purpose:
@@ -146,6 +196,58 @@ Authentication backends and `createsuperuser` resolve users through the default
 manager, before any tenant context exists — scoping it would break login. Use
 `User.scoped` for tenant-facing staff listings; the admin is narrowed separately
 by `TenantScopedAdminMixin`.
+
+## Academic setup
+
+Step 2 of onboarding, at `/academics/`. Both models are `BranchScopedModel`, so
+every list and lookup is tenant-filtered without a line of filtering in any view.
+
+**`Class`** — a teaching group. `name` holds the year without its arm ("SSS 2")
+and `stream` holds the arm ("Science", "A"); `display_name` joins them the way
+staff say it, appending a one-letter arm ("JSS 1A") and spacing a word one
+("SSS 2 Science"). Splitting them is what lets every arm of a year sort together
+and lets a subject attach to one arm but not the other.
+
+Ordering is by `level` then `year_in_level`, so classes always list in admission
+order — Pre-KG first, SSS 3 last. `Level` values are spaced (10/20/30/40) to
+leave room for a band in between later without a data migration.
+
+**`Subject`** — attached to classes many-to-many, because one subject genuinely
+spans several. Mathematics is *one* row linked to Primary 1 through SSS 3, not
+eleven near-duplicates.
+
+Class names are unique per branch, not per school, so every campus can run its
+own "JSS 1".
+
+### Seeding
+
+`seed_academics` builds the ladder and subject list from
+`apps/academics/curriculum.py` — one module, edit it and re-run:
+
+```bash
+python manage.py seed_academics --create-school
+python manage.py seed_academics --replace-subjects   # after editing curriculum.py
+```
+
+It is idempotent, matching on (branch, name). For Fulfilled Academy that is 19
+classes (13 single-arm plus three senior years × Arts/Science) and 21 subjects.
+
+Twenty-one, not twenty-eight, because a subject taught at several levels is one
+row: Religion Studies spans all 19 classes, Mathematics spans 15. Where the name
+differs by level it stays a separate subject — "Social Studies" (primary) and
+"Social & Citizenship Studies" (secondary), "History" and "Nigeria History".
+
+| Level | Subjects |
+| ----- | -------: |
+| Nursery | 8 |
+| Primary | 10 |
+| Junior Secondary | 10 |
+| Senior Secondary | 10 |
+
+The secondary list is one set covering JSS and SSS, so **SSS Arts and SSS Science
+currently carry identical subject lists**. The arms exist as classes and the
+seeder already supports narrowing — change a placement to `at(SENIOR, "Science")`
+when a subject should belong to one arm only.
 
 ## Navigation
 
@@ -200,11 +302,13 @@ Django superusers bypass it.
 
 ```
 config/settings/     base / dev / prod, plus the database fallback logic
-apps/core/           tenancy.py, models.py, roles.py, navigation.py,
-                     middleware.py, admin.py, tests.py
+apps/core/           tenancy.py, permissions.py, models.py, roles.py,
+                     navigation.py, middleware.py, forms.py, admin.py, tests.py
 apps/schools/        School (the tenant) and Branch
 apps/accounts/       the custom User
-templates/           base.html, partials/, core/, registration/
+apps/academics/      Class and Subject, their screens, and curriculum.py
+templates/           base.html, 403.html, partials/, core/, academics/,
+                     registration/
 static/src/app.css   design tokens and components (Tailwind source)
 static/css/app.css   compiled output (committed)
 ```

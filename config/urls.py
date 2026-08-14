@@ -9,5 +9,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # Login, logout and password-change views under their conventional names.
     path("accounts/", include("django.contrib.auth.urls")),
+    path("academics/", include("apps.academics.urls")),
     path("", include("apps.core.urls")),
 ]

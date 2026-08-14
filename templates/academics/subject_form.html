@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card p-5 sm:p-6">
+      <div class="space-y-5">
+        {% include "partials/_field.html" with field=form.branch %}
+        <div class="grid gap-5 sm:grid-cols-[2fr_1fr]">
+          {% include "partials/_field.html" with field=form.name %}
+          {% include "partials/_field.html" with field=form.code %}
+        </div>
+        <label class="check-row -mx-3">
+          {{ form.is_active }}
+          <span class="text-sm font-medium text-ink-800">{{ form.is_active.label }}</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card mt-5 p-5 sm:p-6">
+      <fieldset>
+        <legend class="text-sm font-semibold text-ink-900">{{ form.classes.label }}</legend>
+        <p class="field-hint mt-0">{{ form.classes.help_text }}</p>
+        {% for error in form.classes.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+
+        {% if class_groups %}
+          <div class="mt-4 space-y-5">
+            {% for group in class_groups %}
+              <div>
+                <h3 class="text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+                  {{ group.label }}
+                </h3>
+                <div class="mt-1 grid gap-0.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {% for widget in group.widgets %}
+                    <label class="check-row" for="{{ widget.id_for_label }}">
+                      {{ widget.tag }}
+                      <span class="text-sm text-ink-800">{{ widget.choice_label }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="mt-4 rounded-md bg-partial-soft px-3 py-2.5 text-sm text-partial-strong">
+            This branch has no active classes yet, so there is nothing to assign.
+            <a href="{% url 'academics:class_list' %}" class="font-semibold underline">
+              Set up classes first
+            </a>.
+          </p>
+        {% endif %}
+      </fieldset>
+    </div>
+
+    <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <a href="{% url 'academics:subject_list' %}" class="btn btn-secondary text-sm">Cancel</a>
+      <button type="submit" class="btn btn-primary text-sm">{{ verb }} subject</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

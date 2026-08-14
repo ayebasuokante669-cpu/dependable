@@ -22,7 +22,7 @@ from typing import Iterator
 from django.db import models
 from django.db.models import Q
 
-from .roles import Scope, scope_for
+from .roles import Role, Scope, scope_for
 
 
 @dataclass(frozen=True)
@@ -44,10 +44,17 @@ class TenantContext:
     def from_user(cls, user) -> "TenantContext":
         if user is None or not getattr(user, "is_authenticated", False):
             return cls(is_authenticated=False)
+        role = getattr(user, "role", None)
+        if getattr(user, "is_superuser", False):
+            # A Django superuser is platform staff by definition. Without this,
+            # an account from `createsuperuser` -- which gets the default role
+            # and no school -- would be scoped down to zero rows and find an
+            # empty admin.
+            role = Role.PLATFORM_OWNER
         return cls(
             school_id=getattr(user, "school_id", None),
             branch_id=getattr(user, "branch_id", None),
-            role=getattr(user, "role", None),
+            role=role,
             is_authenticated=True,
         )
 

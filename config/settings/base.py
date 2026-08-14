@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     "apps.core",
     "apps.schools",
     "apps.accounts",
+    # Onboarding step 2: classes and subjects.
+    "apps.academics",
 ]
 
 MIDDLEWARE = [

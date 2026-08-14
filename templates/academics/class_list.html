@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ classes|length }} class{{ classes|length|pluralize:"es" }} in admission order
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  {% if "manage_academics" in capabilities %}
+    <a href="{% url 'academics:class_create' %}" class="btn btn-primary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <span class="hidden sm:inline">New class</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  {% if level_groups %}
+    <div class="space-y-6">
+      {% for group in level_groups %}
+        <section class="card overflow-hidden">
+          <h2 class="border-b border-ink-200 px-5 py-3 text-sm font-semibold text-ink-900">
+            {{ group.label }}
+            <span class="ml-1 font-normal text-ink-500">({{ group.classes|length }})</span>
+          </h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="table-head">
+                <tr>
+                  <th scope="col" class="px-5 py-2.5 font-semibold">Class</th>
+                  <th scope="col" class="px-5 py-2.5 font-semibold">Stream</th>
+                  <th scope="col" class="px-5 py-2.5 font-semibold">Subjects</th>
+                  <th scope="col" class="px-5 py-2.5 font-semibold">Status</th>
+                  {% if "manage_academics" in capabilities %}
+                    <th scope="col" class="px-5 py-2.5 text-right font-semibold">Actions</th>
+                  {% endif %}
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-ink-200">
+                {% for klass in group.classes %}
+                  <tr>
+                    <td class="px-5 py-3 font-medium text-ink-900">{{ klass.display_name }}</td>
+                    <td class="px-5 py-3 text-ink-700">
+                      {% if klass.stream %}{{ klass.stream }}
+                      {% else %}<span class="text-ink-400">&mdash;</span>{% endif %}
+                    </td>
+                    <td class="numeric px-5 py-3 text-ink-700">{{ klass.subject_count }}</td>
+                    <td class="px-5 py-3">
+                      {% if klass.is_active %}
+                        <span class="status-pill status-paid">Active</span>
+                      {% else %}
+                        <span class="status-pill status-unpaid">Inactive</span>
+                      {% endif %}
+                    </td>
+                    {% if "manage_academics" in capabilities %}
+                      <td class="px-5 py-3">
+                        <div class="flex justify-end gap-1">
+                          <a href="{% url 'academics:class_update' klass.pk %}"
+                             class="btn btn-ghost text-xs">Edit</a>
+                          <a href="{% url 'academics:class_delete' klass.pk %}"
+                             class="btn btn-ghost text-xs text-overdue-strong
+                                    hover:bg-overdue-soft">Delete</a>
+                        </div>
+                      </td>
+                    {% endif %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card empty-state">
+      <p class="text-base font-medium text-ink-700">No classes yet</p>
+      <p class="mx-auto mt-1 max-w-md text-sm">
+        Set up the classes this branch runs &mdash; Pre-KG through SSS 3 &mdash; and
+        subjects can then be assigned to them.
+      </p>
+      {% if "manage_academics" in capabilities %}
+        <a href="{% url 'academics:class_create' %}" class="btn btn-primary mt-5 text-sm">
+          Add the first class
+        </a>
+      {% else %}
+        <p class="mt-4 text-xs">Your role can view the academic setup but not change it.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

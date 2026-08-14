@@ -151,6 +151,47 @@
            focus:outline-none;
   }
 
+  .field-textarea {
+    @apply block w-full py-2 px-3 rounded-md border border-ink-300
+           bg-white text-ink-900 placeholder:text-ink-400
+           focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20
+           focus:outline-none;
+  }
+
+  .field-checkbox {
+    @apply size-4 shrink-0 rounded-xs border-ink-300 text-brand-700
+           focus:ring-brand-500/30;
+  }
+
+  /* Whole-row checkbox target: the 44px minimum applies to the row, not the
+     16px box, so a subject can be ticked without precision aiming. */
+  .check-row {
+    @apply flex items-center gap-3 min-h-touch px-3 rounded-md cursor-pointer
+           hover:bg-ink-50;
+  }
+
+  .field-error {
+    @apply mt-1.5 text-xs font-medium text-overdue-strong;
+  }
+
+  .field-hint {
+    @apply mt-1.5 text-xs text-ink-500;
+  }
+
+  /* Small neutral chip, e.g. the classes listed against a subject. */
+  .chip {
+    @apply inline-flex items-center rounded-md bg-ink-100 px-2 py-0.5
+           text-xs font-medium text-ink-700;
+  }
+
+  .table-head {
+    @apply bg-ink-50 text-left text-xs uppercase tracking-wide text-ink-600;
+  }
+
+  .empty-state {
+    @apply px-5 py-12 text-center text-ink-500;
+  }
+
   /* Navigation ---------------------------------------------------------- */
   .nav-link {
     @apply flex items-center gap-3 min-h-touch px-3 rounded-md text-sm

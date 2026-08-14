@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card p-5 sm:p-6">
+      <div class="space-y-5">
+        {% include "partials/_field.html" with field=form.branch %}
+        {% include "partials/_field.html" with field=form.name %}
+
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.level %}
+          {% include "partials/_field.html" with field=form.year_in_level %}
+        </div>
+
+        {% include "partials/_field.html" with field=form.stream %}
+
+        <label class="check-row -mx-3">
+          {{ form.is_active }}
+          <span class="text-sm font-medium text-ink-800">{{ form.is_active.label }}</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <a href="{% url 'academics:class_list' %}" class="btn btn-secondary text-sm">Cancel</a>
+      <button type="submit" class="btn btn-primary text-sm">{{ verb }} class</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
