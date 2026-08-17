@@ -24,21 +24,34 @@ class Capability(str, Enum):
     MANAGE_ACADEMICS = "manage_academics"
     VIEW_FEES = "view_fees"
     MANAGE_FEES = "manage_fees"
+    VIEW_STUDENTS = "view_students"
+    MANAGE_STUDENTS = "manage_students"
 
 
-#: Owner- and principal-level roles: set up the school and what it charges.
+#: Owner- and principal-level roles: set up the school, who attends it, and what
+#: it charges.
 _LEADERSHIP = frozenset(
     {
         Capability.VIEW_ACADEMICS,
         Capability.MANAGE_ACADEMICS,
         Capability.VIEW_FEES,
         Capability.MANAGE_FEES,
+        Capability.VIEW_STUDENTS,
+        Capability.MANAGE_STUDENTS,
     }
 )
 
-#: A bursar collects against the fee structure but does not decide it. Read-only
-#: on setup; the money-movement capabilities will land with the payments layer.
-_BURSAR = frozenset({Capability.VIEW_ACADEMICS, Capability.VIEW_FEES})
+#: A bursar collects against the fee structure but does not decide it, and
+#: records payments against the roster without owning it -- they need to find a
+#: student to take money from them, not to enrol or remove one. Read-only
+#: throughout; the money-movement capabilities land with the payments layer.
+_BURSAR = frozenset(
+    {
+        Capability.VIEW_ACADEMICS,
+        Capability.VIEW_FEES,
+        Capability.VIEW_STUDENTS,
+    }
+)
 
 _EVERYTHING = frozenset(Capability)
 

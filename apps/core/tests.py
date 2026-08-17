@@ -221,10 +221,10 @@ class NavigationTests(TestCase):
 
     def test_unbuilt_destinations_render_as_unavailable(self):
         sections = {s.label: s.items for s in nav_for(Role.SCHOOL_OWNER, "/")}
-        branches = next(i for i in sections["School"] if i.label == "Branches")
         students = next(i for i in sections["School"] if i.label == "Students")
-        self.assertTrue(branches.available)  # admin URL exists today
-        self.assertFalse(students.available)  # feature screen not built yet
+        payments = next(i for i in sections["Finance"] if i.label == "Payments")
+        self.assertTrue(students.available)   # roster screens exist now
+        self.assertFalse(payments.available)  # feature screen not built yet
 
     def test_dashboard_is_marked_active_on_its_own_path(self):
         dashboard = nav_for(Role.BURSAR, "/")[0].items[0]

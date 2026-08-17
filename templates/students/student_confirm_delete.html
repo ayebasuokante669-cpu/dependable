@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="card p-5 sm:p-6">
+    <h2 class="text-base font-semibold text-ink-900">
+      Remove {{ student.formal_name }}?
+    </h2>
+    <p class="mt-2 text-sm text-ink-600">
+      This deletes the record for
+      <span class="numeric">{{ student.admission_number }}</span> in
+      {{ student.school_class.display_name }} at {{ student.branch.name }}.
+      It cannot be undone.
+    </p>
+
+    {# Withdrawing is almost always what "remove" means: it keeps the record,
+       and with it the payment history that will hang off this student. #}
+    <div class="mt-4 rounded-md bg-partial-soft px-3 py-3 text-sm text-partial-strong">
+      <p class="font-semibold">Consider marking them withdrawn instead.</p>
+      <p class="mt-1">
+        A withdrawn student drops off the active roster but keeps their record,
+        so any payments recorded against them still have a person attached.
+        Deleting is for a row that should never have existed &mdash; a duplicate
+        or a typo.
+      </p>
+      <a href="{{ withdraw_url }}" class="btn btn-secondary mt-3 text-sm">
+        Mark withdrawn instead
+      </a>
+    </div>
+
+    <form method="post" class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      {% csrf_token %}
+      <a href="{{ student.get_absolute_url }}" class="btn btn-secondary text-sm">Cancel</a>
+      <button type="submit"
+              class="btn text-sm bg-overdue text-white hover:bg-overdue-strong">
+        Delete student
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

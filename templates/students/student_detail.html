@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    <span class="numeric">{{ student.admission_number }}</span>
+    &middot; {{ student.school_class.display_name }}
+    {% if current_branch != student.branch %}&middot; {{ student.branch.name }}{% endif %}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'students:student_list' %}" class="btn btn-ghost text-sm">
+    <span class="hidden sm:inline">Back to roster</span>
+    <span class="sm:hidden">Back</span>
+  </a>
+  {% if "manage_students" in capabilities %}
+    <a href="{% url 'students:student_update' student.pk %}" class="btn btn-primary text-sm">
+      Edit
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-5 lg:grid-cols-3">
+
+  {# ===== Left: who they are ============================================== #}
+  <div class="space-y-5 lg:col-span-2">
+
+    <section class="card overflow-hidden">
+      <div class="flex items-center gap-4 border-b border-ink-200 px-5 py-4">
+        <span class="grid size-12 shrink-0 place-items-center rounded-lg bg-brand-100
+                     text-base font-semibold text-brand-800" aria-hidden="true">
+          {{ student.initials }}
+        </span>
+        <div class="min-w-0">
+          <h2 class="truncate text-base font-semibold text-ink-900">
+            {{ student.formal_name }}
+          </h2>
+          <p class="text-sm text-ink-600">
+            {{ student.get_sex_display }}
+            {% if student.age %}&middot; {{ student.age }} years old{% endif %}
+          </p>
+        </div>
+        <span class="ml-auto status-pill
+                     {% if student.is_enrolled %}status-paid{% else %}status-unpaid{% endif %}">
+          {{ student.get_status_display }}
+        </span>
+      </div>
+
+      <dl class="grid gap-x-6 gap-y-4 px-5 py-5 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Admission number
+          </dt>
+          <dd class="numeric mt-1 text-sm text-ink-900">{{ student.admission_number }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Class</dt>
+          <dd class="mt-1 text-sm text-ink-900">
+            {{ student.school_class.display_name }}
+            <span class="text-ink-500">
+              ({{ student.school_class.get_level_display }}{% if classmate_count %},
+              {{ classmate_count }} classmate{{ classmate_count|pluralize }}{% endif %})
+            </span>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Date of birth
+          </dt>
+          <dd class="mt-1 text-sm text-ink-900">
+            {% if student.date_of_birth %}{{ student.date_of_birth|date:"j F Y" }}
+            {% else %}<span class="text-ink-400">Not recorded</span>{% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Date admitted
+          </dt>
+          <dd class="mt-1 text-sm text-ink-900">{{ student.date_admitted|date:"j F Y" }}</dd>
+        </div>
+        {% if student.other_names %}
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Other names
+            </dt>
+            <dd class="mt-1 text-sm text-ink-900">{{ student.other_names }}</dd>
+          </div>
+        {% endif %}
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Branch</dt>
+          <dd class="mt-1 text-sm text-ink-900">{{ student.branch.name }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-3">
+        <h2 class="text-sm font-semibold text-ink-900">Parent / guardian</h2>
+      </div>
+      <dl class="grid gap-x-6 gap-y-4 px-5 py-5 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Name</dt>
+          <dd class="mt-1 text-sm text-ink-900">{{ student.parent_name }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Phone</dt>
+          <dd class="mt-1 text-sm">
+            <a href="{{ student.parent_phone_link }}"
+               class="numeric text-brand-800 hover:underline">
+              {{ student.parent_phone_display }}
+            </a>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Email</dt>
+          <dd class="mt-1 text-sm">
+            {% if student.parent_email %}
+              <a href="mailto:{{ student.parent_email }}"
+                 class="text-brand-800 hover:underline">{{ student.parent_email }}</a>
+            {% else %}<span class="text-ink-400">Not recorded</span>{% endif %}
+          </dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Address</dt>
+          <dd class="mt-1 whitespace-pre-line text-sm text-ink-900">
+            {% if student.address %}{{ student.address }}
+            {% else %}<span class="text-ink-400">Not recorded</span>{% endif %}
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    {# ===== Payment history ==============================================
+       The slot the payments layer fills. The heading, the card and its place
+       in the page are already right, so landing payments is a matter of
+       replacing this empty state with the receipt rows -- nothing above it
+       moves. #}
+    <section class="card overflow-hidden">
+      <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-3">
+        <h2 class="text-sm font-semibold text-ink-900">Payment history</h2>
+        <span class="chip">Coming with payments</span>
+      </div>
+      <div class="empty-state">
+        <p class="text-sm text-ink-600">Nothing recorded yet</p>
+        <p class="mx-auto mt-1 max-w-md text-sm">
+          Receipts for {{ student.first_name }} will list here once the payments
+          feature lands, and the balance opposite will follow them.
+        </p>
+      </div>
+    </section>
+  </div>
+
+  {# ===== Right: what they owe ============================================ #}
+  <div class="space-y-5">
+    <section class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-3">
+        <h2 class="text-sm font-semibold text-ink-900">Fee position</h2>
+        <p class="mt-0.5 text-xs text-ink-500">
+          {% if position.term %}{{ position.term.name }}
+          {% else %}No current term{% endif %}
+        </p>
+      </div>
+
+      {% if position.is_priced %}
+        <div class="px-5 py-4">
+          <dl class="space-y-1.5 text-sm">
+            {% for component in fee_components %}
+              <div class="flex items-baseline justify-between gap-3">
+                <dt class="text-ink-600">{{ component.name }}</dt>
+                <dd class="numeric text-ink-800">{{ component.amount|naira }}</dd>
+              </div>
+            {% endfor %}
+          </dl>
+          <div class="mt-3 flex items-baseline justify-between gap-3 border-t
+                      border-ink-200 pt-3">
+            <span class="text-sm font-semibold text-ink-900">Expected this term</span>
+            <span class="numeric text-lg font-semibold text-brand-900">
+              {{ position.expected|naira }}
+            </span>
+          </div>
+          <p class="field-hint">
+            The total of {{ student.school_class.display_name }}'s fee structure.
+            It is read from the structure every time, never copied onto the
+            student &mdash; repricing the class updates this page.
+          </p>
+        </div>
+
+        {# The balance block. `paid` is zero everywhere until payments exist,
+           so this reads honestly today and needs no layout change later. #}
+        <div class="border-t border-ink-200 bg-ink-50 px-5 py-4">
+          <dl class="space-y-2 text-sm">
+            <div class="flex items-baseline justify-between gap-3">
+              <dt class="text-ink-600">Paid so far</dt>
+              <dd class="numeric text-ink-800">{{ position.paid|naira }}</dd>
+            </div>
+            <div class="flex items-baseline justify-between gap-3">
+              <dt class="font-semibold text-ink-900">Outstanding</dt>
+              <dd class="numeric text-lg font-semibold
+                         {% if position.outstanding %}text-overdue-strong
+                         {% else %}text-paid-strong{% endif %}">
+                {{ position.outstanding|naira }}
+              </dd>
+            </div>
+          </dl>
+          <div class="mt-3 flex items-center gap-2">
+            <span class="status-pill {{ position.pill_class }}">{{ position.pill_label }}</span>
+            <span class="text-xs text-ink-500">No payments recorded yet</span>
+          </div>
+        </div>
+
+      {% elif position.term %}
+        <div class="empty-state">
+          <p class="text-sm font-medium text-ink-700">
+            {{ student.school_class.display_name }} has no fees set for
+            {{ position.term.name }}
+          </p>
+          <p class="mx-auto mt-1 max-w-xs text-sm">
+            Until it does, there is nothing to charge this student.
+          </p>
+          {% if "manage_fees" in capabilities %}
+            <a href="{% url 'fees:structure_create' %}?class={{ student.school_class_id }}"
+               class="btn btn-secondary mt-4 text-sm">Set the fees</a>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="empty-state">
+          <p class="text-sm font-medium text-ink-700">No current term</p>
+          <p class="mx-auto mt-1 max-w-xs text-sm">
+            Mark a term as current and this student's fees appear here.
+          </p>
+        </div>
+      {% endif %}
+    </section>
+
+    {% if "manage_students" in capabilities %}
+      <section class="card p-5">
+        <h2 class="text-sm font-semibold text-ink-900">Manage</h2>
+        <div class="mt-3 flex flex-col gap-2">
+          <a href="{% url 'students:student_update' student.pk %}"
+             class="btn btn-secondary text-sm">Edit details</a>
+          <a href="{% url 'students:student_delete' student.pk %}"
+             class="btn btn-ghost text-sm text-overdue-strong hover:bg-overdue-soft">
+            Remove from roster
+          </a>
+        </div>
+      </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

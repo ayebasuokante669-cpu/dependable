@@ -7,8 +7,11 @@ Multi-tenant school management SaaS.
 - **Step 2 — academic setup:** classes and subjects per branch, with management
   screens.
 - **Step 3 — fee structures:** terms, and what each class owes per term.
+- **Step 4 — student records:** the roster, entered by hand, with each student's
+  fee position derived from their class.
 
-Students and payments are deliberately absent — those are the next branches.
+The Excel import and payments are deliberately absent — those are the next
+branches.
 
 ## Running it
 
@@ -29,6 +32,7 @@ To load the pilot school's academic setup:
 ```bash
 python manage.py seed_academics --create-school       # Fulfilled Academy / Main Campus
 python manage.py seed_fees                            # First Term 2025/2026 pricing
+python manage.py seed_students                        # 60 students across 9 classes
 python manage.py bootstrap_tenant --name "Fulfilled Academy" --branch "Main Campus"
 ```
 
@@ -81,9 +85,11 @@ default to `config.settings.prod`.
 python manage.py test apps
 ```
 
-110 tests, covering the parts that must never regress: what each role can see,
-what each role may change, and that a fee total always equals its live line items. The negative-path tests deliberately trigger 403s
-and 404s, so Django logs tracebacks during a passing run.
+180 tests, covering the parts that must never regress: what each role can see,
+what each role may change, that a fee total always equals its live line items,
+and that a student's expected fee is always read from their class rather than
+stored on them. The negative-path tests deliberately trigger 403s and 404s, so
+Django logs tracebacks during a passing run.
 
 ---
 
@@ -106,20 +112,21 @@ Subclass `TenantScopedModel` and you're done:
 ```python
 from apps.core.models import TenantScopedModel
 
-class Student(TenantScopedModel):     # brings school + branch FKs and indexes
-    full_name = models.CharField(max_length=200)
+class Payment(TenantScopedModel):     # brings school + branch FKs and indexes
+    reference = models.CharField(max_length=64)
 ```
 
 Use `BranchScopedModel` instead when the record must live at one campus, as
-`Class` and `Subject` do. It makes `branch` required and derives `school` from
-it, so a platform owner — who has no school of their own — can still create rows.
+`Class`, `Subject` and `Student` do. It makes `branch` required and derives
+`school` from it, so a platform owner — who has no school of their own — can
+still create rows.
 
 You get:
 
 - `school` and `branch` foreign keys (`branch` nullable — some records belong to
   the school as a whole).
-- `Student.objects` — filtered by the active tenant automatically.
-- `Student.all_objects` — never filtered, for jobs and cross-tenant reporting.
+- `Payment.objects` — filtered by the active tenant automatically.
+- `Payment.all_objects` — never filtered, for jobs and cross-tenant reporting.
 - `save()` stamps `school`/`branch` from the active context when left blank.
 - `created_at` / `updated_at`.
 
@@ -165,10 +172,13 @@ while still being unable to change it.
 | `manage_academics` | ✓ | ✓ | ✓ | — |
 | `view_fees`        | ✓ | ✓ | ✓ | ✓ |
 | `manage_fees`      | ✓ | ✓ | ✓ | — |
+| `view_students`    | ✓ | ✓ | ✓ | ✓ |
+| `manage_students`  | ✓ | ✓ | ✓ | — |
 
-A bursar collects against the fee structure but does not decide it, so they read
-both setup layers and change neither. The money-*movement* capabilities arrive
-with the payments layer.
+A bursar collects against the fee structure but does not decide it, and finds
+students in order to take money from them rather than to enrol or remove them —
+so they read all three layers and change none. The money-*movement* capabilities
+arrive with the payments layer.
 
 Grants live in one table, `ROLE_CAPABILITIES`, never in an ad-hoc check inside a
 view. Enforce with the mixin, and hide the controls to match:
@@ -318,6 +328,80 @@ Two things the pricing file handles deliberately:
   real question about the source data, and burying it in a fake component would
   make it unanswerable later.
 
+## Student records
+
+Step 4, at `/students/`. One model, `BranchScopedModel` like the rest, so a
+principal's roster is their own campus without a line of filtering in any view.
+
+**`Student`** — admission number, names, sex, dates of birth and admission,
+status, and the parent/guardian contact the school actually calls about fees.
+
+### Admission numbers are unique per branch, not globally
+
+Two campuses of the same school both number their intake from 001, and neither
+should have to renumber because the other got there first. The constraint is
+`UniqueConstraint(Upper("admission_number"), "branch")` — case-insensitive, so
+`FA/2025/001` and `fa/2025/001` collide, but the school's own casing is stored
+as typed rather than rewritten. The form catches the clash first and reports it
+on the field; the constraint is what makes it true regardless of how the row
+arrives, which matters for the Excel import next.
+
+### The fee position is derived, never stored
+
+A student's expected fee is the total of their class's `FeeStructure` for the
+term their branch is currently in. It is computed in `apps/students/fees.py`,
+and there is no fee column on `Student` — a test asserts there never is one.
+Copying the figure onto the student would go stale the first time a class is
+repriced and would then have to be corrected for every child in it by hand.
+
+The list screen would make that derivation expensive if done per row, so
+`fees.load(students)` fetches the current terms and the class totals in two
+queries and answers for the whole page in memory. A test asserts a page of
+twelve students costs the same as a page of two.
+
+Payments do not exist yet, so `paid` is zero and every priced student reads as
+**Unpaid** with the full term fee outstanding. That is honest rather than
+decorative, and it is the seam the payments layer plugs into: fill
+`FeeSchedule.payments` and the pills, balances and the "Payment history" card
+on the detail page start telling the real story without those screens changing.
+A student in a class with no structure for the term reads **No fees set**,
+which is a setup gap the school needs to see — not a zero balance to be
+reassured by.
+
+### Screens
+
+- **List** — searchable by name or admission number (whole or fragment, because
+  staff quote either "FA/2025/014" or just "014"), filterable by class and
+  status, 25 to a page. Defaults to active students; a roster that has run for
+  years is mostly former ones.
+- **Detail** — identity, class, guardian, and the fee position broken down to
+  the line items behind it, with the payment-history slot laid out and labelled.
+- **Add / edit** — manual entry. Branch is not a field: the class carries it, and
+  asking for both invites the two to disagree. Removing a student offers
+  "mark withdrawn" first, because deleting throws away the record that a payment
+  will later need to hang off.
+
+Parent phone numbers are validated as Nigerian mobiles and stored in one
+canonical form (`08034129876`), whichever of `0803 412 4567`, `+234 803 …` or
+`234 …` was typed; the screens group them for reading and link them for calling.
+
+### Seeding
+
+```bash
+python manage.py seed_students            # needs seed_academics; seed_fees for fee positions
+python manage.py seed_students --replace  # drop students the roster file dropped
+```
+
+`apps/students/roster.py` is the single source. Fulfilled Academy's pilot roster
+is 60 students across 9 classes, ₦5,802,000 expected for First Term 2025/2026.
+
+The data is deliberate rather than filler, because a roster of "Student One /
+Student Two" hides the problems these screens exist to surface: admission
+numbers carry their year of admission (so the same `001` recurs each year and
+across branches), dates of birth match the class, two Okonkwo siblings sit in
+Primary 1 and KG 2 sharing one guardian, and one student is withdrawn and one
+inactive so the status filter has something real to filter.
+
 ## Navigation
 
 `nav_for(role)` in `apps/core/navigation.py` is the server-side equivalent of a
@@ -377,8 +461,10 @@ apps/schools/        School (the tenant) and Branch
 apps/accounts/       the custom User
 apps/academics/      Class and Subject, their screens, and curriculum.py
 apps/fees/           Term, FeeStructure, FeeComponent, screens, and pricing.py
+apps/students/       Student, its screens, the derived fee position (fees.py),
+                     validators.py, and roster.py
 templates/           base.html, 403.html, partials/, core/, academics/, fees/,
-                     registration/
+                     students/, registration/
 static/src/app.css   design tokens and components (Tailwind source)
 static/css/app.css   compiled output (committed)
 ```

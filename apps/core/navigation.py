@@ -169,7 +169,10 @@ NAVIGATION: tuple[NavSection, ...] = (
             NavItem("Branches", "admin:schools_branch_changelist", "branches",
                     (Role.PLATFORM_OWNER, Role.SCHOOL_OWNER)),
             NavItem("Staff", "admin:accounts_user_changelist", "users", _LEADERSHIP),
-            NavItem("Students", "students:index", "students", _LEADERSHIP),
+            # A bursar reads the roster to record payments against it;
+            # owner/principal level enrols and edits (Capability.MANAGE_STUDENTS),
+            # so every role gets the link.
+            NavItem("Students", "students:student_list", "students", ALL_ROLES),
         ),
     ),
     NavSection(
