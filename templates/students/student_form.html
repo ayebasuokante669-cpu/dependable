@@ -6,7 +6,8 @@
       <span class="numeric">{{ form.instance.admission_number }}</span>
       &middot; {{ form.instance.school_class.display_name }}
     {% else %}
-      Manual entry. Bulk enrolment from a spreadsheet comes with the Excel import.
+      Manual entry. For a roster you already keep in a spreadsheet, use the
+      <a href="{% url 'students:student_import' %}" class="font-medium text-brand-800 underline">Excel import</a>.
     {% endif %}
   </p>
 {% endblock %}

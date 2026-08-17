@@ -13,6 +13,15 @@
 
 {% block page_actions %}
   {% if "manage_students" in capabilities %}
+    <a href="{% url 'students:student_import' %}" class="btn btn-secondary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21
+                 18.75V16.5M7.5 7.5 12 3m0 0 4.5 4.5M12 3v13.5" />
+      </svg>
+      <span class="hidden sm:inline">Import from Excel</span>
+    </a>
     <a href="{% url 'students:student_create' %}{% if filter_form.school_class.value %}?school_class={{ filter_form.school_class.value }}{% endif %}"
        class="btn btn-primary text-sm">
       <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
@@ -193,13 +202,19 @@
     <div class="card empty-state">
       <p class="text-base font-medium text-ink-700">No students yet</p>
       <p class="mx-auto mt-1 max-w-md text-sm">
-        Enrol students one at a time here. Each one is placed in a class, which
-        is what decides the fees they are charged this term.
+        Enrol students one at a time, or import a roster you already keep in a
+        spreadsheet. Each one is placed in a class, which is what decides the
+        fees they are charged this term.
       </p>
       {% if "manage_students" in capabilities %}
-        <a href="{% url 'students:student_create' %}" class="btn btn-primary mt-5 text-sm">
-          Enrol the first student
-        </a>
+        <div class="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
+          <a href="{% url 'students:student_create' %}" class="btn btn-primary text-sm">
+            Enrol the first student
+          </a>
+          <a href="{% url 'students:student_import' %}" class="btn btn-secondary text-sm">
+            Import from Excel
+          </a>
+        </div>
       {% else %}
         <p class="mt-4 text-xs">Your role can view the roster but not change it.</p>
       {% endif %}

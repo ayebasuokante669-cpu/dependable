@@ -1,10 +1,15 @@
-"""Manual student entry.
+"""Student entry -- one at a time, and by the spreadsheet.
 
-The Excel import lands on its own branch; this is the path for the child who
-walks in on a Tuesday. Every queryset here goes through a tenant-scoped manager,
-so the classes offered are already limited to what the user may see -- the extra
-validation below guards what scoping alone cannot: a school owner who *can* see
-two branches must still not put a Main Campus child into an Annex class.
+``StudentForm`` is the path for the child who walks in on a Tuesday;
+``StudentImportForm`` is the front door of the bulk import, and does nothing
+except decide which campus the file belongs to and refuse anything that is
+obviously not a workbook. The real reading happens in
+:mod:`apps.students.workbook`.
+
+Every queryset here goes through a tenant-scoped manager, so the classes offered
+are already limited to what the user may see -- the extra validation below
+guards what scoping alone cannot: a school owner who *can* see two branches must
+still not put a Main Campus child into an Annex class.
 """
 
 from __future__ import annotations
@@ -13,6 +18,7 @@ from django import forms
 
 from apps.academics.models import Class
 from apps.core.forms import StyledFormMixin
+from apps.schools.models import Branch
 
 from .models import Student, StudentStatus
 from .validators import normalise_admission_number, normalise_phone
@@ -196,3 +202,68 @@ class StudentFilterForm(forms.Form):
 
     def clean_q(self):
         return self.cleaned_data["q"].strip()
+
+
+class StudentImportForm(StyledFormMixin, forms.Form):
+    """Pick the campus, hand over the workbook.
+
+    Branch is asked for only when the account can see more than one -- a
+    principal has exactly one campus and should not be made to confirm it. It is
+    asked at all because the import stamps every student it creates with that
+    branch, and "whichever branch the class happened to match" is not a decision
+    to make on the user's behalf when the same class names run at two campuses.
+    """
+
+    #: Well above any real roster once zipped, and low enough that a mistaken
+    #: upload is refused before it is read into memory.
+    MAX_BYTES = 5 * 1024 * 1024
+
+    branch = forms.ModelChoiceField(
+        queryset=Branch.objects.none(),
+        label="Campus",
+        empty_label=None,
+        help_text="Every student in the file is enrolled at this branch.",
+    )
+    upload = forms.FileField(
+        label="Filled-in template",
+        help_text="An .xlsx file. Use the template above so the headings match.",
+        widget=forms.ClearableFileInput(attrs={"accept": ".xlsx"}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        active = Branch.objects.filter(is_active=True)
+        self.fields["branch"].queryset = active
+        branches = list(active)
+        if len(branches) == 1:
+            # Nothing to choose. The field is dropped rather than hidden so the
+            # POST cannot be edited to name a branch the account cannot see.
+            del self.fields["branch"]
+            self.only_branch = branches[0]
+        else:
+            self.only_branch = None
+
+    @property
+    def chosen_branch(self) -> Branch | None:
+        """The campus the file is for, however it was decided."""
+        if self.only_branch is not None:
+            return self.only_branch
+        return self.cleaned_data.get("branch")
+
+    def clean_upload(self):
+        upload = self.cleaned_data["upload"]
+        name = (upload.name or "").lower()
+        if not name.endswith(".xlsx"):
+            raise forms.ValidationError(
+                "That is not an .xlsx file. Open it in Excel or Google Sheets "
+                "and save it as an Excel Workbook (.xlsx) — .xls and .csv files "
+                "cannot be read here."
+            )
+        if upload.size and upload.size > self.MAX_BYTES:
+            raise forms.ValidationError(
+                f"That file is {upload.size / 1_048_576:.1f} MB. The import "
+                f"accepts files up to "
+                f"{self.MAX_BYTES // 1_048_576} MB — a roster this large is "
+                f"usually a spreadsheet with images or extra sheets in it."
+            )
+        return upload

@@ -7,11 +7,10 @@ Multi-tenant school management SaaS.
 - **Step 2 — academic setup:** classes and subjects per branch, with management
   screens.
 - **Step 3 — fee structures:** terms, and what each class owes per term.
-- **Step 4 — student records:** the roster, entered by hand, with each student's
-  fee position derived from their class.
+- **Step 4 — student records:** the roster, entered by hand or imported from a
+  spreadsheet, with each student's fee position derived from their class.
 
-The Excel import and payments are deliberately absent — those are the next
-branches.
+Payments are deliberately absent — that is the next branch.
 
 ## Running it
 
@@ -85,11 +84,12 @@ default to `config.settings.prod`.
 python manage.py test apps
 ```
 
-180 tests, covering the parts that must never regress: what each role can see,
+234 tests, covering the parts that must never regress: what each role can see,
 what each role may change, that a fee total always equals its live line items,
-and that a student's expected fee is always read from their class rather than
-stored on them. The negative-path tests deliberately trigger 403s and 404s, so
-Django logs tracebacks during a passing run.
+that a student's expected fee is always read from their class rather than stored
+on them, and that a spreadsheet import reports every bad row, imports the good
+ones, and writes all-or-nothing. The negative-path tests deliberately trigger
+403s and 404s, so Django logs tracebacks during a passing run.
 
 ---
 
@@ -344,7 +344,7 @@ should have to renumber because the other got there first. The constraint is
 `FA/2025/001` and `fa/2025/001` collide, but the school's own casing is stored
 as typed rather than rewritten. The form catches the clash first and reports it
 on the field; the constraint is what makes it true regardless of how the row
-arrives, which matters for the Excel import next.
+arrives, which is what the Excel import leans on.
 
 ### The fee position is derived, never stored
 
@@ -380,10 +380,63 @@ reassured by.
   asking for both invites the two to disagree. Removing a student offers
   "mark withdrawn" first, because deleting throws away the record that a payment
   will later need to hang off.
+- **Import** — the bulk path for a school arriving with a roster already in a
+  spreadsheet. Template, per-row validation report, then the write. See below.
 
 Parent phone numbers are validated as Nigerian mobiles and stored in one
 canonical form (`08034129876`), whichever of `0803 412 4567`, `+234 803 …` or
 `234 …` was typed; the screens group them for reading and link them for calling.
+
+### Excel import
+
+At `/students/import/`, owner- and principal-level only (`MANAGE_STUDENTS`, so a
+bursar gets a 403). Three screens, because the middle one is the product:
+
+1. **Download** — `apps/students/workbook.py` builds an `.xlsx` from the column
+   spec in `importer.py`: a header row, a guidance row showing the format of
+   every field, drop-downs for Sex and Status, and a second sheet listing *that
+   branch's* classes with the Class column validated against it. A school owner
+   is offered one template per campus, because the class list differs.
+2. **Upload and check** — every row is parsed and judged before anything is
+   written. Nothing at all is saved by this step.
+3. **Confirm** — the valid rows are written in one transaction.
+
+**A bad row is not a bad file.** All-or-nothing sends the user back to fix one
+cell at a time, so failure is per row: the report names the spreadsheet's own
+row number, the column, and the reason — *"Row 14 — Admission Number
+'FA/2025/001' already belongs to Chinaza Okonkwo; Class 'JS1' is not a class at
+North"* — and the rows that passed can still be imported while the rest are
+corrected. A row reports *all* of its problems at once, including the ones the
+model finds, so the trip back to the spreadsheet happens once.
+
+What is validated: the required fields (admission number, first and last name,
+class, parent name and phone); the admission number against the branch's
+existing roster *and* against the other rows of the same file, case-insensitively
+like the constraint; the class against the branch's active classes, with
+separate messages for unknown, inactive and ambiguous (`JSS 3` where the branch
+runs `JSS 3A` and `JSS 3B`); sex, status and dates by parsing; and then the
+model's own `full_clean` for phone format, email, lengths and the
+born-after-admission rule, which are not restated here.
+
+The realistic mess is handled rather than reported: columns are matched **by
+heading, never by position**, with aliases (`Adm No`, `Surname`, `DOB`,
+`Guardian`, `Phone`), so a school's own sheet imports; a title row above the
+headings is found; whitespace is trimmed; blank rows anywhere are skipped;
+columns we have no field for are ignored and listed; and a phone column Excel
+turned numeric (`8031122334`) gets its leading zero back. A file that is not a
+workbook, is not the template, or has no rows under its headings produces a
+sentence on the form, never a 500.
+
+Two things worth knowing about the shape of it:
+
+- **`importer.py` never touches openpyxl; `workbook.py` never validates.** The
+  reader hands over plain strings — dates as ISO — so validation is testable
+  without building a workbook, and so the parsed rows survive the session.
+- **The rows wait in the session, not a table.** An abandoned import leaves
+  nothing to clean up. Validation then runs *twice*: once to draw the report,
+  and again on confirm, because the roster can move while the report is on
+  screen. A test covers exactly that race, and another asserts that a failure on
+  the third student of a batch leaves the first two unwritten.
 
 ### Seeding
 
@@ -462,7 +515,8 @@ apps/accounts/       the custom User
 apps/academics/      Class and Subject, their screens, and curriculum.py
 apps/fees/           Term, FeeStructure, FeeComponent, screens, and pricing.py
 apps/students/       Student, its screens, the derived fee position (fees.py),
-                     validators.py, and roster.py
+                     validators.py, roster.py, and the Excel import
+                     (importer.py validates, workbook.py reads and writes .xlsx)
 templates/           base.html, 403.html, partials/, core/, academics/, fees/,
                      students/, registration/
 static/src/app.css   design tokens and components (Tailwind source)
