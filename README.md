@@ -84,11 +84,12 @@ default to `config.settings.prod`.
 python manage.py test apps
 ```
 
-234 tests, covering the parts that must never regress: what each role can see,
+236 tests, covering the parts that must never regress: what each role can see,
 what each role may change, that a fee total always equals its live line items,
 that a student's expected fee is always read from their class rather than stored
-on them, and that a spreadsheet import reports every bad row, imports the good
-ones, and writes all-or-nothing. The negative-path tests deliberately trigger
+on them, that each senior arm carries exactly the subjects the school named, and
+that a spreadsheet import reports every bad row, imports the good ones, and
+writes all-or-nothing. The negative-path tests deliberately trigger
 403s and 404s, so Django logs tracebacks during a passing run.
 
 ---
@@ -231,8 +232,8 @@ order — Pre-KG first, SSS 3 last. `Level` values are spaced (10/20/30/40) to
 leave room for a band in between later without a data migration.
 
 **`Subject`** — attached to classes many-to-many, because one subject genuinely
-spans several. Mathematics is *one* row linked to Primary 1 through SSS 3, not
-eleven near-duplicates.
+spans several. Mathematics is *one* row linked to Primary 1 through both arms of
+SSS 3, not fifteen near-duplicates.
 
 Class names are unique per branch, not per school, so every campus can run its
 own "JSS 1".
@@ -248,24 +249,47 @@ python manage.py seed_academics --replace-subjects   # after editing curriculum.
 ```
 
 It is idempotent, matching on (branch, name). For Fulfilled Academy that is 19
-classes (13 single-arm plus three senior years × Arts/Science) and 21 subjects.
+classes (13 single-arm plus three senior years × Arts/Science) and 34 subjects.
 
-Twenty-one, not twenty-eight, because a subject taught at several levels is one
-row: Religion Studies spans all 19 classes, Mathematics spans 15. Where the name
+Thirty-four, not sixty-odd, because a subject taught at several levels is one
+row: Religion Studies spans 13 classes, Mathematics spans 15. Where the name
 differs by level it stays a separate subject — "Social Studies" (primary) and
-"Social & Citizenship Studies" (secondary), "History" and "Nigeria History".
+"Social & Citizenship Studies" (secondary), "History" and "Nigeria History",
+"Home Economics" (primary/junior) and "Home Management" (SSS Arts).
 
-| Level | Subjects |
-| ----- | -------: |
+| Level | Subjects per class |
+| ----- | -----------------: |
 | Nursery | 8 |
 | Primary | 10 |
 | Junior Secondary | 10 |
-| Senior Secondary | 10 |
+| Senior Secondary | 11 per arm |
 
-The secondary list is one set covering JSS and SSS, so **SSS Arts and SSS Science
-currently carry identical subject lists**. The arms exist as classes and the
-seeder already supports narrowing — change a placement to `at(SENIOR, "Science")`
-when a subject should belong to one arm only.
+### The senior arms teach different subjects
+
+Nursery through junior secondary is one list per band. Senior secondary is not:
+SSS Science and SSS Arts carry **eleven subjects each, and only five of them
+overlap**.
+
+| | Subjects |
+| --- | --- |
+| Shared core | Mathematics, English Studies, Economics, Marketing, Civic Education |
+| Science only | Chemistry, Biology, Physics, Agriculture, Geography, Livestock |
+| Arts only | Commerce, Accounting, Government, Literature in English, Christian Religious Knowledge, Home Management |
+
+Arm-specific subjects narrow their placement — `at(SENIOR, "Science")` — while
+the shared five stay **one row each** at `at(SENIOR)` with no arm named, which
+puts them on both. Duplicating them per arm would mean renaming a subject twice
+and would make "how many subjects does SSS 2 Science take?" a question about our
+data model rather than about the school.
+
+The consequence worth knowing: several subjects that run through junior
+secondary stop at JSS 3, because neither senior list includes them — Digital
+Literacy, Nigeria History, Social & Citizenship Studies, Basic Science
+Technology & PHE, Cultural and Creative Art, Religion Studies and Home
+Economics. The senior arms pick their own equivalents up by name where the
+school teaches one, which is why Christian Religious Knowledge and Home
+Management are separate rows rather than senior placements of the junior
+subjects.
 
 ## Fee structures
 

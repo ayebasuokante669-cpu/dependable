@@ -4,10 +4,12 @@ This is the single source for seeding. Edit the tuples below and re-run
 ``manage.py seed_academics --replace-subjects``; nothing else needs touching.
 
 A subject is listed once and attached to every class it is taught in. That is
-the point of the many-to-many: "Religion Studies" runs from Pre-KG to SSS 3 as
-one row, not twenty near-duplicates. Where a name differs between levels it is a
+the point of the many-to-many: "Religion Studies" runs from Pre-KG to JSS 3 as
+one row, not sixteen near-duplicates, and "Mathematics" is one row reaching both
+senior arms rather than one per arm. Where a name differs between levels it is a
 different subject -- "Social Studies" (primary) and "Social & Citizenship
-Studies" (secondary) are separate rows, as are "History" and "Nigeria History".
+Studies" (secondary) are separate rows, as are "History" and "Nigeria History",
+and as are "Home Economics" (primary/junior) and "Home Management" (SSS Arts).
 """
 
 from __future__ import annotations
@@ -87,10 +89,25 @@ CLASSES: tuple[ClassSpec, ...] = (
 # ---------------------------------------------------------------------------
 # Subjects
 #
-# The secondary list is one set covering both junior and senior secondary, so
-# it is placed at JUNIOR and SENIOR. No subject is currently arm-specific --
-# SSS Arts and SSS Science carry identical subject lists. When that changes,
-# narrow the placement: at(SENIOR, "Science").
+# Nursery through junior secondary is one list per level band, every class in
+# the band taking the same set.
+#
+# Senior secondary is not: the school's two arms teach genuinely different
+# subjects, so the senior placements are narrowed with at(SENIOR, "Science") /
+# at(SENIOR, "Arts"). The five subjects both arms sit -- Mathematics, English
+# Studies, Economics, Marketing and Civic Education -- stay one row each placed
+# at(SENIOR), which puts them on both arms. Duplicating them per arm would mean
+# renaming a subject twice and would make "how many subjects does SSS 2 Science
+# take?" a question about our data model rather than about the school.
+#
+# Eleven subjects per arm. A subject that does not appear in an arm's list is
+# simply not placed there -- which is why several subjects that run through
+# junior secondary (Digital Literacy, Nigeria History, Social & Citizenship
+# Studies, Basic Science Technology & PHE, Cultural and Creative Art, Religion
+# Studies, Home Economics) stop at JSS 3. The senior arms pick their own
+# equivalents up again by name where the school teaches one: Religion Studies
+# gives way to Christian Religious Knowledge on the Arts arm, Home Economics to
+# Home Management.
 # ---------------------------------------------------------------------------
 
 SUBJECTS: tuple[SubjectSpec, ...] = (
@@ -103,35 +120,50 @@ SUBJECTS: tuple[SubjectSpec, ...] = (
     SubjectSpec("Writing Skills", "WRT", (at(NURSERY),)),
     SubjectSpec("Rhymes & Poems", "RHY", (at(NURSERY),)),
 
-    # --- Runs the whole way through ---------------------------------------
-    SubjectSpec(
-        "Religion Studies", "REL", (at(NURSERY), at(PRIMARY), at(JUNIOR), at(SENIOR))
-    ),
+    # --- Nursery through junior secondary ----------------------------------
+    SubjectSpec("Religion Studies", "REL", (at(NURSERY), at(PRIMARY), at(JUNIOR))),
 
-    # --- Primary and secondary --------------------------------------------
-    SubjectSpec("Mathematics", "MTH", (at(PRIMARY), at(JUNIOR), at(SENIOR))),
-    SubjectSpec("English Studies", "ENG", (at(PRIMARY), at(JUNIOR), at(SENIOR))),
-    SubjectSpec("Agriculture", "AGR", (at(PRIMARY), at(JUNIOR), at(SENIOR))),
-    SubjectSpec("Home Economics", "HEC", (at(PRIMARY), at(JUNIOR), at(SENIOR))),
-    SubjectSpec(
-        "Cultural and Creative Art", "CCA", (at(PRIMARY), at(JUNIOR), at(SENIOR))
-    ),
+    # --- Primary and junior secondary --------------------------------------
+    SubjectSpec("Home Economics", "HEC", (at(PRIMARY), at(JUNIOR))),
+    SubjectSpec("Cultural and Creative Art", "CCA", (at(PRIMARY), at(JUNIOR))),
 
     # --- Primary only ------------------------------------------------------
     SubjectSpec("Social Studies", "SST", (at(PRIMARY),)),
-    SubjectSpec("Civic Education", "CIV", (at(PRIMARY),)),
     SubjectSpec("Basic Science & Technology", "BST", (at(PRIMARY),)),
     SubjectSpec("History", "HIS", (at(PRIMARY),)),
 
-    # --- Secondary only (junior and senior) --------------------------------
+    # --- Junior secondary only ---------------------------------------------
+    SubjectSpec("Basic Science, Technology & PHE", "BTP", (at(JUNIOR),)),
+    SubjectSpec("Social & Citizenship Studies", "SCS", (at(JUNIOR),)),
+    SubjectSpec("Nigeria History", "NHI", (at(JUNIOR),)),
+    SubjectSpec("Digital Literacy", "DIG", (at(JUNIOR),)),
+
+    # --- Senior secondary: shared core -------------------------------------
+    # One row each, at(SENIOR) with no arm named, so both arms get them.
+    SubjectSpec("Mathematics", "MTH", (at(PRIMARY), at(JUNIOR), at(SENIOR))),
+    SubjectSpec("English Studies", "ENG", (at(PRIMARY), at(JUNIOR), at(SENIOR))),
+    SubjectSpec("Economics", "ECO", (at(SENIOR),)),
+    SubjectSpec("Marketing", "MKT", (at(SENIOR),)),
+    SubjectSpec("Civic Education", "CIV", (at(PRIMARY), at(SENIOR))),
+
+    # --- Senior secondary: the Science arm ---------------------------------
+    SubjectSpec("Chemistry", "CHE", (at(SENIOR, "Science"),)),
+    SubjectSpec("Biology", "BIO", (at(SENIOR, "Science"),)),
+    SubjectSpec("Physics", "PHY", (at(SENIOR, "Science"),)),
+    SubjectSpec("Geography", "GEO", (at(SENIOR, "Science"),)),
+    SubjectSpec("Livestock", "LIV", (at(SENIOR, "Science"),)),
+    # Taught the whole way up, but only the Science arm carries it at senior.
     SubjectSpec(
-        "Basic Science, Technology & PHE", "BTP", (at(JUNIOR), at(SENIOR))
+        "Agriculture", "AGR", (at(PRIMARY), at(JUNIOR), at(SENIOR, "Science"))
     ),
-    SubjectSpec(
-        "Social & Citizenship Studies", "SCS", (at(JUNIOR), at(SENIOR))
-    ),
-    SubjectSpec("Nigeria History", "NHI", (at(JUNIOR), at(SENIOR))),
-    SubjectSpec("Digital Literacy", "DIG", (at(JUNIOR), at(SENIOR))),
+
+    # --- Senior secondary: the Arts arm ------------------------------------
+    SubjectSpec("Commerce", "COM", (at(SENIOR, "Arts"),)),
+    SubjectSpec("Accounting", "ACC", (at(SENIOR, "Arts"),)),
+    SubjectSpec("Government", "GOV", (at(SENIOR, "Arts"),)),
+    SubjectSpec("Literature in English", "LIT", (at(SENIOR, "Arts"),)),
+    SubjectSpec("Christian Religious Knowledge", "CRK", (at(SENIOR, "Arts"),)),
+    SubjectSpec("Home Management", "HOM", (at(SENIOR, "Arts"),)),
 )
 
 
