@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ current_branch.name }}
+    {% if term %}&middot; {{ term.name }}{% else %}&middot; no current term{% endif %}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'students:student_list' %}" class="btn btn-secondary text-sm">
+    <span class="hidden sm:inline">Find a</span> student
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {% if not term %}
+    <div class="card border-partial/30 bg-partial-soft px-5 py-4 text-sm text-partial-strong">
+      <p class="font-semibold">No term is marked current for this campus.</p>
+      <p class="mt-0.5">
+        Every figure on this page is priced against a term, so there is nothing
+        to total until a principal or the proprietor sets one.
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="grid gap-4 sm:grid-cols-3">
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Expected this term</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">
+        {{ expected_total|naira }}
+      </div>
+      <div class="mt-1 text-xs text-ink-500">
+        Across {{ student_count }} enrolled student{{ student_count|pluralize }}
+      </div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Collected</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-ink-400">
+        {{ collected_total|naira }}
+      </div>
+      <div class="mt-1 text-xs text-ink-500">Payments not recorded yet</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Outstanding</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-overdue-strong">
+        {{ expected_total|naira }}
+      </div>
+      <div class="mt-1 text-xs text-ink-500">
+        The whole term fee until payments land
+      </div>
+    </div>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
+      <h2 class="text-sm font-semibold text-ink-900">What each class is worth</h2>
+      <a href="{% url 'fees:structure_list' %}" class="btn btn-secondary text-xs">
+        Fee structures
+      </a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="table-head">
+          <tr>
+            <th scope="col" class="px-5 py-3 font-semibold">Class</th>
+            <th scope="col" class="px-5 py-3 text-right font-semibold">Per student</th>
+            <th scope="col" class="px-5 py-3 text-right font-semibold">Students</th>
+            <th scope="col" class="px-5 py-3 text-right font-semibold">Expected</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-ink-200">
+          {% for row in rows %}
+            <tr>
+              <td class="px-5 py-3 font-medium text-ink-900">
+                {{ row.klass.display_name }}
+              </td>
+              <td class="numeric px-5 py-3 text-right text-ink-700">
+                {{ row.per_student|naira }}
+              </td>
+              <td class="numeric px-5 py-3 text-right text-ink-700">{{ row.students }}</td>
+              <td class="numeric px-5 py-3 text-right font-medium text-ink-900">
+                {{ row.expected|naira }}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-5 py-8 text-center text-ink-500">
+                {% if term %}
+                  No class has fees set for {{ term.name }} yet.
+                {% else %}
+                  Nothing to price without a current term.
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if unpriced_classes %}
+      <p class="border-t border-ink-200 bg-partial-soft px-5 py-3 text-xs text-partial-strong">
+        Not counted above:
+        {% for klass in unpriced_classes %}
+          <span class="chip">{{ klass.display_name }} ({{ klass.students_count }})</span>
+        {% endfor %}
+        — these classes have students but no fee structure this term, so their
+        expected total is unknown rather than zero.
+      </p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

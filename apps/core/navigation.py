@@ -14,6 +14,42 @@ from dataclasses import dataclass, field
 from django.urls import NoReverseMatch, reverse
 
 from .roles import Role
+from .tenancy import TenantContext
+
+#: Sentinel url_name: "wherever this role's dashboard is". Resolved per role in
+#: :func:`_resolve`, so the sidebar's Dashboard entry points a bursar at the
+#: bursar dashboard and a principal at their branch's.
+HOME = "__role_home__"
+
+#: The one place that answers "where does this role live?". Both the sidebar
+#: entry above and the post-login redirect read it, so the link in the shell and
+#: the page you land on after signing in can never drift apart.
+ROLE_HOME: dict[str, str] = {
+    Role.PLATFORM_OWNER: "core:platform_overview",
+    Role.SCHOOL_OWNER: "core:school_dashboard",
+    Role.PRINCIPAL: "core:branch_dashboard",
+    Role.BURSAR: "core:bursar_dashboard",
+}
+
+#: An account whose role we do not recognise gets the narrowest dashboard, the
+#: same way scope_for() gives it the narrowest visibility.
+DEFAULT_HOME = "core:branch_dashboard"
+
+
+def home_url_name(role: str | None) -> str:
+    """The URL name of ``role``'s dashboard."""
+    return ROLE_HOME.get(role, DEFAULT_HOME)
+
+
+def home_url_for(user) -> str:
+    """Where ``user`` should land after signing in.
+
+    Goes through :class:`TenantContext` rather than reading ``user.role``
+    directly, so a Django superuser -- who is promoted to platform scope for
+    every other purpose -- is sent to the platform overview rather than to
+    whatever role happens to be stored on their row.
+    """
+    return reverse(home_url_name(TenantContext.from_user(user).role))
 
 #: Heroicons-style outline paths, drawn on a 24x24 viewbox.
 ICONS: dict[str, list[str]] = {
@@ -151,7 +187,8 @@ NAVIGATION: tuple[NavSection, ...] = (
     NavSection(
         label="Overview",
         items=(
-            NavItem("Dashboard", "core:dashboard", "home", ALL_ROLES),
+            # Resolves per role -- see HOME and ROLE_HOME above.
+            NavItem("Dashboard", HOME, "home", ALL_ROLES),
             NavItem("Reports", "reports:index", "chart", _LEADERSHIP + (Role.BURSAR,)),
         ),
     ),
@@ -210,9 +247,10 @@ NAVIGATION: tuple[NavSection, ...] = (
 )
 
 
-def _resolve(item: NavItem, current_path: str) -> ResolvedItem:
+def _resolve(item: NavItem, current_path: str, role: str | None = None) -> ResolvedItem:
+    url_name = home_url_name(role) if item.url_name == HOME else item.url_name
     try:
-        href = reverse(item.url_name)
+        href = reverse(url_name)
         available = True
     except NoReverseMatch:
         # Destination not built yet -- render it greyed out rather than 404ing.
@@ -240,7 +278,9 @@ def nav_for(role: str | None, current_path: str = "") -> list[ResolvedSection]:
         return []
     sections: list[ResolvedSection] = []
     for section in NAVIGATION:
-        items = [_resolve(i, current_path) for i in section.items if role in i.roles]
+        items = [
+            _resolve(i, current_path, role) for i in section.items if role in i.roles
+        ]
         if items:
             sections.append(ResolvedSection(label=section.label, items=items))
     return sections

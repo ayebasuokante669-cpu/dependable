@@ -1,3 +1,4 @@
+
 # Dependable
 
 Multi-tenant school management SaaS.
@@ -9,6 +10,9 @@ Multi-tenant school management SaaS.
 - **Step 3 — fee structures:** terms, and what each class owes per term.
 - **Step 4 — student records:** the roster, entered by hand or imported from a
   spreadsheet, with each student's fee position derived from their class.
+- **Step 5 — the public side:** landing page, signup, login with a per-role
+  landing, password reset, and the onboarding checklist that ties the four
+  setup steps together.
 
 Payments are deliberately absent — that is the next branch.
 
@@ -84,12 +88,13 @@ default to `config.settings.prod`.
 python manage.py test apps
 ```
 
-236 tests, covering the parts that must never regress: what each role can see,
+276 tests, covering the parts that must never regress: what each role can see,
 what each role may change, that a fee total always equals its live line items,
 that a student's expected fee is always read from their class rather than stored
-on them, that each senior arm carries exactly the subjects the school named, and
+on them, that each senior arm carries exactly the subjects the school named,
 that a spreadsheet import reports every bad row, imports the good ones, and
-writes all-or-nothing. The negative-path tests deliberately trigger
+writes all-or-nothing, and that a signup builds exactly one school, branch and
+owner while each role lands on its own dashboard. The negative-path tests deliberately trigger
 403s and 404s, so Django logs tracebacks during a passing run.
 
 ---
@@ -479,6 +484,77 @@ across branches), dates of birth match the class, two Okonkwo siblings sit in
 Primary 1 and KG 2 sharing one guardian, and one student is withdrawn and one
 inactive so the status filter has something real to filter.
 
+## The public side and signing in
+
+Everything above assumed you were already signed in. This is how you get there.
+
+| URL | What it is |
+| --- | --- |
+| `/` | Landing page. Public; a signed-in visitor is redirected to their dashboard. |
+| `/signup/` | Creates a School, its first Branch and the owner User, then signs them in. |
+| `/welcome/` | The four-step onboarding checklist. |
+| `/accounts/login/` | Login, landing each role on its own dashboard. |
+| `/accounts/password_reset/` | Django's reset flow; the console backend prints the link in dev. |
+| `/dashboard/` | Not a screen — forwards to whichever dashboard the role belongs on. |
+
+### One dashboard per role
+
+"The dashboard" is a different question for each role, so there are four
+screens rather than one with three quarters hidden:
+
+| Role | Lands on | Answers |
+| --- | --- | --- |
+| Platform owner | `/platform/` | Every school, its plan, its size. |
+| School owner | `/school/` | Every campus they run, side by side. |
+| Principal | `/branch/` | Their campus: enrolment, classes, what is unpriced. |
+| Bursar | `/finance/` | What the term is worth, per class. |
+
+`ROLE_HOME` in `apps/core/navigation.py` is the single source for that mapping.
+Both the post-login redirect and the sidebar's "Dashboard" entry read it, so
+the link in the shell and the page you land on after signing in cannot drift
+apart — a test asserts they agree for every role. `next=` still wins when
+present, so a deep link survives the login page.
+
+Reaching another role's dashboard by typing its URL is not a leak — the scoped
+managers narrow it either way — but it is a screen answering someone else's
+question, so `RoleDashboardMixin` sends you to your own instead.
+
+The effective role comes from `TenantContext.from_user`, not `user.role`, which
+is what sends a Django superuser to the platform overview rather than to
+whatever role happens to be stored on their row.
+
+### Signup is the one place without a tenant
+
+There is no tenant yet, so the scoped managers would return nothing and a
+uniqueness check that cannot see existing rows is not a uniqueness check.
+`SchoolSignupForm` therefore uses `all_objects` throughout, and creates the
+school, the branch and the owner in one transaction — a signup that produced a
+School with no owner would leave a tenant nobody can sign into and no screen
+from which to fix it.
+
+The owner is created with **no branch**: they see every campus, and pinning them
+to the first one would narrow them the day they open a second. The username is
+derived from the email (they never type one), with a numeric suffix on collision
+rather than a rejected signup.
+
+### Onboarding progress is derived
+
+`views.setup_progress()` asks the data — are there classes, fee structures,
+students, colleagues? — rather than reading a "setup complete" flag. A flag
+would go stale the moment someone deleted their last class, and the school would
+be told it had finished a step it had not.
+
+### Trying it
+
+```bash
+python manage.py bootstrap_tenant --name "Fulfilled Academy"
+```
+
+Then sign in as `fulfilled-academy.owner`, `.principal`, `.bursar` or
+`platform.owner`, password `dependable`. Each account is given an
+`@example.com` address so the password-reset flow has somewhere to send; in dev
+the console backend prints the whole message, link included.
+
 ## Navigation
 
 `nav_for(role)` in `apps/core/navigation.py` is the server-side equivalent of a
@@ -533,7 +609,9 @@ Django superusers bypass it.
 ```
 config/settings/     base / dev / prod, plus the database fallback logic
 apps/core/           tenancy.py, permissions.py, models.py, roles.py,
-                     navigation.py, middleware.py, forms.py, admin.py, tests.py
+                     navigation.py (incl. ROLE_HOME), middleware.py, admin.py,
+                     forms.py (incl. SchoolSignupForm), views.py (landing,
+                     signup, onboarding, the four role dashboards)
 apps/schools/        School (the tenant) and Branch
 apps/accounts/       the custom User
 apps/academics/      Class and Subject, their screens, and curriculum.py
@@ -541,8 +619,10 @@ apps/fees/           Term, FeeStructure, FeeComponent, screens, and pricing.py
 apps/students/       Student, its screens, the derived fee position (fees.py),
                      validators.py, roster.py, and the Excel import
                      (importer.py validates, workbook.py reads and writes .xlsx)
-templates/           base.html, 403.html, partials/, core/, academics/, fees/,
-                     students/, registration/
+templates/           base.html, 403.html, partials/, core/ (landing, signup,
+                     onboarding, dashboards), academics/, fees/, students/,
+                     registration/ (_auth_base.html plus login, password reset
+                     and password change)
 static/src/app.css   design tokens and components (Tailwind source)
 static/css/app.css   compiled output (committed)
 ```

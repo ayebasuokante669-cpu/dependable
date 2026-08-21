@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block page_title %}Set up your school{% endblock %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ setup.done_count }} of {{ setup.total }} done
+    {% if setup.next_step %}&middot; next: {{ setup.next_step.label }}{% endif %}
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-5">
+
+  {% if setup.is_complete %}
+    <div class="card border-paid/30 bg-paid-soft px-5 py-4 text-sm text-paid-strong">
+      <p class="font-semibold">That is everything.</p>
+      <p class="mt-0.5">
+        Your school is set up. This page stays here if you want to check
+        anything again.
+      </p>
+    </div>
+  {% else %}
+    <div class="card px-5 py-4">
+      <p class="text-sm text-ink-700">
+        Each step can be done now or later, and picked up where you left it.
+        Steps run in order because each one uses what the last one set up —
+        fees are set per class, and students are enrolled into a class.
+      </p>
+    </div>
+  {% endif %}
+
+  <ol class="card divide-y divide-ink-200 overflow-hidden">
+    {% for step in setup.steps %}
+      <li class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center">
+        <span class="grid size-8 shrink-0 place-items-center rounded-md text-sm
+                     font-semibold
+                     {% if step.done %}bg-paid-soft text-paid-strong
+                     {% else %}bg-brand-50 text-brand-800{% endif %}">
+          {% if step.done %}
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+            </svg>
+            <span class="sr-only">Done</span>
+          {% else %}
+            {{ forloop.counter }}
+          {% endif %}
+        </span>
+
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold text-ink-900">{{ step.label }}</p>
+          <p class="mt-0.5 text-sm text-ink-600">{{ step.description }}</p>
+          {% if step.done %}
+            <p class="mt-1 text-xs text-paid-strong">
+              {{ step.count }} {{ step.noun }}{{ step.count|pluralize }} so far
+            </p>
+          {% endif %}
+        </div>
+
+        <a href="{{ step.url }}"
+           class="btn shrink-0 text-sm
+                  {% if step.done %}btn-secondary{% else %}btn-primary{% endif %}">
+          {% if step.done %}Review{% else %}Start{% endif %}
+        </a>
+      </li>
+    {% endfor %}
+  </ol>
+
+  <div class="flex justify-end">
+    <a href="{% url 'core:dashboard' %}" class="btn btn-ghost text-sm">
+      Skip to my dashboard
+    </a>
+  </div>
+
+</div>
+{% endblock %}

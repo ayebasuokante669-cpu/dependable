@@ -1,48 +1,68 @@
-{% extends "base.html" %}
+{% extends "registration/_auth_base.html" %}
 
 {% block title %}Sign in{% endblock %}
+{% block auth_heading %}Sign in{% endblock %}
 
-{% block anonymous_content %}
-<div class="grid min-h-full place-items-center px-4 py-12">
-  <div class="w-full max-w-sm">
-    <div class="mb-8 flex items-center justify-center gap-2.5">
-      <span class="grid size-10 place-items-center rounded-md bg-brand-900
-                   text-lg font-semibold text-white">D</span>
-      <span class="text-xl font-semibold tracking-tight text-brand-900">Dependable</span>
+{% block auth_intro %}
+  <p class="mt-1 text-sm text-ink-600">
+    Use the credentials issued by your school.
+  </p>
+{% endblock %}
+
+{% block auth_body %}
+  {# Django puts a bad username/password on the form as a non-field error, and
+     a disabled account as its own message. Rendering them rather than a fixed
+     sentence means the user is told which of the two actually happened. #}
+  {% if form.non_field_errors %}
+    <div class="mt-4 rounded-md border border-overdue/30 bg-overdue-soft px-3 py-2.5
+                text-sm text-overdue-strong" role="alert">
+      {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" class="mt-5 space-y-4" novalidate>
+    {% csrf_token %}
+
+    <div>
+      <label for="{{ form.username.id_for_label }}" class="field-label">Username</label>
+      <input type="text" name="{{ form.username.html_name }}"
+             id="{{ form.username.id_for_label }}" class="field-input"
+             value="{{ form.username.value|default:'' }}"
+             autocomplete="username" autofocus required>
+      {% for error in form.username.errors %}
+        <p class="field-error">{{ error }}</p>
+      {% endfor %}
     </div>
 
-    <div class="card p-6">
-      <h1 class="text-lg font-semibold text-ink-900">Sign in</h1>
-      <p class="mt-1 text-sm text-ink-600">Use the credentials issued by your school.</p>
-
-      {% if form.errors %}
-        <div class="mt-4 rounded-md bg-overdue-soft px-3 py-2.5 text-sm text-overdue-strong">
-          Your username and password didn't match. Please try again.
-        </div>
-      {% endif %}
-
-      <form method="post" class="mt-5 space-y-4">
-        {% csrf_token %}
-        <div>
-          <label for="{{ form.username.id_for_label }}" class="field-label">Username</label>
-          <input type="text" name="{{ form.username.html_name }}"
-                 id="{{ form.username.id_for_label }}" class="field-input"
-                 autocomplete="username" autofocus required>
-        </div>
-        <div>
-          <label for="{{ form.password.id_for_label }}" class="field-label">Password</label>
-          <input type="password" name="{{ form.password.html_name }}"
-                 id="{{ form.password.id_for_label }}" class="field-input"
-                 autocomplete="current-password" required>
-        </div>
-        <input type="hidden" name="next" value="{{ next }}">
-        <button type="submit" class="btn btn-primary w-full">Sign in</button>
-      </form>
+    <div>
+      <div class="flex items-baseline justify-between">
+        <label for="{{ form.password.id_for_label }}" class="field-label">Password</label>
+        <a href="{% url 'password_reset' %}"
+           class="mb-1.5 text-xs font-medium text-brand-700 hover:underline">
+          Forgot it?
+        </a>
+      </div>
+      <input type="password" name="{{ form.password.html_name }}"
+             id="{{ form.password.id_for_label }}" class="field-input"
+             autocomplete="current-password" required>
+      {% for error in form.password.errors %}
+        <p class="field-error">{{ error }}</p>
+      {% endfor %}
     </div>
 
-    <p class="mt-6 text-center text-xs text-ink-500">
-      Trouble signing in? Contact your school administrator.
-    </p>
-  </div>
-</div>
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <button type="submit" class="btn btn-primary w-full">Sign in</button>
+  </form>
+{% endblock %}
+
+{% block auth_footer %}
+  <p class="mt-6 text-center text-sm text-ink-600">
+    New school?
+    <a href="{% url 'core:signup' %}" class="font-semibold text-brand-700 hover:underline">
+      Create an account
+    </a>
+  </p>
+  <p class="mt-2 text-center text-xs text-ink-500">
+    Staff accounts are issued by your school — ask your principal or proprietor.
+  </p>
 {% endblock %}

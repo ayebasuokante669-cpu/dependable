@@ -96,8 +96,19 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LOGIN_URL = "login"
+# The role-aware dispatcher, not a screen: it forwards to whichever dashboard
+# the signed-in role belongs on (apps/core/navigation.py::ROLE_HOME).
 LOGIN_REDIRECT_URL = "core:dashboard"
-LOGOUT_REDIRECT_URL = "login"
+# Signing out returns to the public front door rather than the login form --
+# "you are out" reads better than being asked to go straight back in.
+LOGOUT_REDIRECT_URL = "core:landing"
+
+# The From: on password-reset mail. In dev the console backend prints the whole
+# message, link included, so nothing has to be delivered for the flow to work.
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL", "Fulfilled Lite <no-reply@dependable.example>"
+)
+PASSWORD_RESET_TIMEOUT = 60 * 60 * 24 * 3  # three days
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")

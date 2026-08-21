@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    Every school on the platform &middot; {{ role_label }}
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Schools</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ school_count }}</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Branches</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ branch_count }}</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Students</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ student_count }}</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Accounts</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ user_count }}</div>
+    </div>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
+      <h2 class="text-sm font-semibold text-ink-900">Schools</h2>
+      <a href="{% url 'admin:schools_school_changelist' %}"
+         class="btn btn-secondary text-xs">Manage in admin</a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="table-head">
+          <tr>
+            <th scope="col" class="px-5 py-3 font-semibold">School</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Plan</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Status</th>
+            <th scope="col" class="px-5 py-3 text-right font-semibold">Branches</th>
+            <th scope="col" class="px-5 py-3 text-right font-semibold">Students</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-ink-200">
+          {% for school in schools %}
+            <tr>
+              <td class="px-5 py-3 font-medium text-ink-900">{{ school.name }}</td>
+              <td class="px-5 py-3 text-ink-700">{{ school.get_plan_display }}</td>
+              <td class="px-5 py-3">
+                <span class="status-pill
+                             {% if school.is_active %}status-paid{% else %}status-overdue{% endif %}">
+                  {{ school.get_status_display }}
+                </span>
+              </td>
+              <td class="numeric px-5 py-3 text-right text-ink-700">{{ school.branches_count }}</td>
+              <td class="numeric px-5 py-3 text-right text-ink-700">{{ school.students_count }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-5 py-8 text-center text-ink-500">
+                No schools on the platform yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
