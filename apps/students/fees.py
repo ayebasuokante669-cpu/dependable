@@ -10,11 +10,12 @@ the list screen: rendering fifty students must not mean fifty structure lookups.
 :class:`FeeSchedule` loads the term and the class totals in two queries and then
 answers for any number of students in memory.
 
-Payments do not exist yet, so ``paid`` is always zero and every priced student
-reads as unpaid. That is honest -- nothing has been recorded -- and it is the
-shape the payments layer fills in: give :class:`FeeSchedule` a map of amounts
-paid and the pills, balances and totals below start telling the real story
-without another screen changing.
+``paid`` comes from the payments app when it is installed, and is zero when it
+is not -- which is honest rather than broken: nothing has been recorded, so
+every priced student reads as unpaid. The lookup goes through
+:func:`_paid_amounts`, which resolves the payments app lazily. A hard import
+would make the roster unrenderable until payments ships, and this module is
+older than that app by several branches.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Iterable
 
+from django.apps import apps as django_apps
 from django.db.models import Sum
 
 from apps.fees.models import FeeComponent, FeeStructure, Term
@@ -127,7 +129,9 @@ class FeeSchedule:
         )
 
 
-def load(students: Iterable) -> FeeSchedule:
+def load(
+    students: Iterable, *, payments: dict[int, Decimal] | None = None
+) -> FeeSchedule:
     """Build the schedule covering ``students``, in two queries.
 
     Both querysets go through tenant-scoped managers, so a caller can never
@@ -166,7 +170,27 @@ def load(students: Iterable) -> FeeSchedule:
         .annotate(amount=Sum("amount"))
     }
 
-    return FeeSchedule(terms=terms, structures=structures, totals=totals)
+    if payments is None:
+        payments = _paid_amounts(students, terms)
+
+    return FeeSchedule(
+        terms=terms, structures=structures, totals=totals, payments=payments
+    )
+
+
+def _paid_amounts(students, terms: dict) -> dict[int, Decimal]:
+    """Confirmed payments per student, for the term their branch is in.
+
+    Resolved through the app registry rather than an import, so this module has
+    no dependency on the payments app and keeps working when it is absent. The
+    payments layer owns the definition of what counts -- confirmed only, this
+    term only -- and this file does not second-guess it.
+    """
+    if not django_apps.is_installed("apps.payments"):
+        return {}
+    from apps.payments.balances import paid_by_student
+
+    return paid_by_student(students, terms)
 
 
 def position_for(student) -> FeePosition:

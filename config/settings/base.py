@@ -48,6 +48,8 @@ INSTALLED_APPS = [
     "apps.fees",
     # Onboarding step 4: the student roster.
     "apps.students",
+    # Outbound parent messaging (SMS/WhatsApp). Staff-side only.
+    "apps.messaging",
 ]
 
 MIDDLEWARE = [
@@ -109,6 +111,26 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL", "Fulfilled Lite <no-reply@dependable.example>"
 )
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 24 * 3  # three days
+
+# --- Messaging ----------------------------------------------------------
+# Which provider carries parent SMS/WhatsApp. "console" logs the message and
+# marks it delivered, so the whole feature works with no credentials at all --
+# see apps/messaging/providers/. Swapping to a real gateway is this one line
+# plus its keys; nothing above the provider interface changes.
+MESSAGING_PROVIDER = os.environ.get("MESSAGING_PROVIDER", "console")
+
+# The name a parent sees the message come from. Gateways require this to be
+# registered with them before they will accept it.
+MESSAGING_SENDER_ID = os.environ.get("MESSAGING_SENDER_ID", "")
+
+TERMII_API_KEY = os.environ.get("TERMII_API_KEY", "")
+TERMII_BASE_URL = os.environ.get("TERMII_BASE_URL", "https://api.ng.termii.com")
+
+AFRICASTALKING_USERNAME = os.environ.get("AFRICASTALKING_USERNAME", "")
+AFRICASTALKING_API_KEY = os.environ.get("AFRICASTALKING_API_KEY", "")
+AFRICASTALKING_BASE_URL = os.environ.get(
+    "AFRICASTALKING_BASE_URL", "https://api.africastalking.com"
+)
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")

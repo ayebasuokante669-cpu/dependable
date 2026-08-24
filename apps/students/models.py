@@ -21,7 +21,12 @@ from django.utils import timezone
 
 from apps.core.models import BranchScopedModel
 
-from .validators import format_phone, normalise_admission_number, validate_phone
+from .validators import (
+    format_phone,
+    normalise_admission_number,
+    to_international,
+    validate_phone,
+)
 
 
 class Sex(models.TextChoices):
@@ -179,7 +184,7 @@ class Student(BranchScopedModel):
     @property
     def parent_phone_link(self) -> str:
         """``tel:`` target -- staff read the roster on a phone as often as a desk."""
-        return f"tel:+234{self.parent_phone.lstrip('0')}" if self.parent_phone else ""
+        return f"tel:{to_international(self.parent_phone)}" if self.parent_phone else ""
 
     # -- persistence ---------------------------------------------------------
 

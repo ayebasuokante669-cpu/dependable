@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    Goes out by SMS or WhatsApp. Parents do not sign in.
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'messaging:index' %}" class="btn btn-ghost text-sm">
+    <span class="hidden sm:inline">Back to messages</span>
+    <span class="sm:hidden">Back</span>
+  </a>
+{% endblock %}
+
+{% block content %}
+
+  {% include "messaging/_provider_note.html" %}
+
+  {% if intro %}
+    <p class="card mb-5 px-4 py-3 text-sm text-ink-600">{{ intro }}</p>
+  {% endif %}
+
+  <form method="post" id="compose-form" class="grid gap-5 lg:grid-cols-3"
+        data-count-url="{{ count_url }}">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong lg:col-span-3">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    {# ===== Left: the message itself ====================================== #}
+    <div class="space-y-5 lg:col-span-2">
+
+      <section class="card overflow-hidden">
+        <div class="border-b border-ink-200 px-5 py-3">
+          <h2 class="text-sm font-semibold text-ink-900">Message</h2>
+        </div>
+        <div class="px-5 py-5">
+          <label for="{{ form.body.id_for_label }}" class="sr-only">
+            {{ form.body.label }}
+          </label>
+          {{ form.body }}
+          {% for error in form.body.errors %}
+            <p class="field-error">{{ error }}</p>
+          {% endfor %}
+          <p class="field-hint" id="body-count" data-segment="{{ sms_segment }}">
+            An SMS is charged in {{ sms_segment }}-character parts.
+          </p>
+        </div>
+
+        <fieldset class="border-t border-ink-200 px-5 py-4">
+          <legend class="field-label">{{ form.channel.label }}</legend>
+          <div class="flex flex-wrap gap-2">
+            {% for radio in form.channel %}
+              <label class="check-row flex-1 border border-ink-200 px-3
+                            has-[:checked]:border-brand-500
+                            has-[:checked]:bg-brand-50">
+                {{ radio.tag }}
+                <span class="text-sm font-medium text-ink-800">
+                  {{ radio.choice_label }}
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          {% for error in form.channel.errors %}
+            <p class="field-error">{{ error }}</p>
+          {% endfor %}
+          <p class="field-hint">
+            {{ provider.label }} can carry: {{ provider.channels|join:", " }}.
+          </p>
+        </fieldset>
+      </section>
+
+      {# ===== Audience ==================================================== #}
+      <section class="card overflow-hidden">
+        <div class="border-b border-ink-200 px-5 py-3">
+          <h2 class="text-sm font-semibold text-ink-900">{{ form.audience_type.label }}</h2>
+        </div>
+
+        {% if needs_branch_choice %}
+          <div class="border-b border-ink-200 px-5 py-4">
+            <label for="{{ form.branch.id_for_label }}" class="field-label">
+              {{ form.branch.label }}
+            </label>
+            {{ form.branch }}
+            <p class="field-hint">{{ form.branch.help_text }}</p>
+            {% for error in form.branch.errors %}
+              <p class="field-error">{{ error }}</p>
+            {% endfor %}
+          </div>
+        {% else %}
+          {# One campus: nothing to decide, so it is carried rather than asked. #}
+          <input type="hidden" name="branch" value="{{ form.branch.value|default_if_none:'' }}">
+        {% endif %}
+
+        <fieldset class="px-5 py-4">
+          <legend class="sr-only">{{ form.audience_type.label }}</legend>
+          <div class="space-y-2">
+            {% for radio in form.audience_type %}
+              <label class="check-row items-start border border-ink-200 py-3
+                            has-[:checked]:border-brand-500
+                            has-[:checked]:bg-brand-50">
+                <span class="mt-0.5">{{ radio.tag }}</span>
+                <span class="min-w-0">
+                  <span class="block text-sm font-medium text-ink-900">
+                    {{ radio.choice_label }}
+                  </span>
+                  {# One line of plain English per option. Written out rather
+                     than looked up through a filter: four options, and the
+                     wording is a design decision, not data. #}
+                  <span class="block text-xs text-ink-500">
+                    {% if radio.data.value == "all" %}
+                      Every enrolled student's parent at this campus.
+                    {% elif radio.data.value == "class" %}
+                      The parents of one class.
+                    {% elif radio.data.value == "students" %}
+                      Pick the students by hand.
+                    {% elif radio.data.value == "owing" %}
+                      Parents whose confirmed payments do not yet cover this
+                      term's fees.
+                    {% endif %}
+                  </span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          {% for error in form.audience_type.errors %}
+            <p class="field-error">{{ error }}</p>
+          {% endfor %}
+        </fieldset>
+
+        {# Shown by the script when "One class" is picked; always rendered so
+           the form still works with scripting off. #}
+        <div class="border-t border-ink-200 px-5 py-4" data-audience-panel="class">
+          <label for="{{ form.school_class.id_for_label }}" class="field-label">
+            {{ form.school_class.label }}
+          </label>
+          {{ form.school_class }}
+          {% for error in form.school_class.errors %}
+            <p class="field-error">{{ error }}</p>
+          {% endfor %}
+        </div>
+
+        <div class="border-t border-ink-200 px-5 py-4" data-audience-panel="students">
+          <span class="field-label">{{ form.students.label }}</span>
+          <div class="max-h-72 overflow-y-auto rounded-md border border-ink-200 p-1">
+            {% for checkbox in form.students %}
+              <label class="check-row">
+                {{ checkbox.tag }}
+                <span class="text-sm text-ink-800">{{ checkbox.choice_label }}</span>
+              </label>
+            {% empty %}
+              <p class="px-3 py-4 text-sm text-ink-500">
+                No students on the roster yet.
+              </p>
+            {% endfor %}
+          </div>
+          {% for error in form.students.errors %}
+            <p class="field-error">{{ error }}</p>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+
+    {# ===== Right: who it reaches ========================================= #}
+    <div class="space-y-5">
+      <section class="card overflow-hidden lg:sticky lg:top-20">
+        <div class="border-b border-ink-200 px-5 py-3">
+          <h2 class="text-sm font-semibold text-ink-900">Recipients</h2>
+        </div>
+        <div class="px-5 py-5 text-center">
+          <p class="numeric text-3xl font-semibold text-brand-900" id="recipient-count"
+             aria-live="polite">
+            {{ preview.count }}
+          </p>
+          <p class="mt-1 text-sm text-ink-600" id="recipient-label">
+            parent{{ preview.count|pluralize }} will receive this
+          </p>
+          <p class="mt-2 text-xs text-ink-500" id="recipient-description">
+            {{ preview.description }}
+          </p>
+
+          <p class="mt-3 text-xs text-partial-strong {% if not preview.unreachable_count %}hidden{% endif %}"
+             id="recipient-unreachable">
+            <span id="recipient-unreachable-count">{{ preview.unreachable_count }}</span>
+            in this group {% if preview.unreachable_count == 1 %}has{% else %}have{% endif %}
+            no parent phone number on file and will be skipped.
+          </p>
+        </div>
+
+        <div class="border-t border-ink-200 px-5 py-4">
+          <button type="submit" class="btn btn-primary w-full text-sm">
+            Send message
+          </button>
+          <p class="field-hint text-center">
+            This cannot be unsent. The count above is the batch that goes out.
+          </p>
+        </div>
+      </section>
+
+      <section class="card p-5">
+        <h2 class="text-sm font-semibold text-ink-900">Who is left out</h2>
+        <ul class="mt-2 space-y-1.5 text-xs text-ink-600">
+          <li>Students who are not active — withdrawn, graduated or inactive.</li>
+          <li>Students with no parent phone number recorded.</li>
+          <li>Parents at any other campus. A message reaches one branch only.</li>
+        </ul>
+      </section>
+    </div>
+  </form>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+  // Compose behaviour, dependency-free like the rest of the shell:
+  //   1. show only the panel the chosen audience needs;
+  //   2. keep the recipient count live;
+  //   3. count SMS segments as the body is typed.
+  // All three are enhancements -- with scripting off, every panel is visible,
+  // the count is the one rendered on load, and the form still sends.
+  (function () {
+    var form = document.getElementById('compose-form');
+    if (!form) return;
+
+    var countUrl = form.getAttribute('data-count-url');
+
+    var countEl = document.getElementById('recipient-count');
+    var labelEl = document.getElementById('recipient-label');
+    var descEl = document.getElementById('recipient-description');
+    var unreachableEl = document.getElementById('recipient-unreachable');
+    var unreachableCountEl = document.getElementById('recipient-unreachable-count');
+    var panels = form.querySelectorAll('[data-audience-panel]');
+
+    function chosenAudience() {
+      var picked = form.querySelector('input[name="audience_type"]:checked');
+      return picked ? picked.value : 'all';
+    }
+
+    function showPanels() {
+      var audience = chosenAudience();
+      panels.forEach(function (panel) {
+        panel.hidden = panel.getAttribute('data-audience-panel') !== audience;
+      });
+    }
+
+    var inFlight = null;
+    function refreshCount() {
+      if (!countUrl) return;
+      var params = new URLSearchParams();
+      params.set('audience_type', chosenAudience());
+
+      var branch = form.querySelector('[name="branch"]');
+      if (branch && branch.value) params.set('branch', branch.value);
+
+      var klass = form.querySelector('[name="school_class"]');
+      if (klass && klass.value) params.set('school_class', klass.value);
+
+      form.querySelectorAll('input[name="students"]:checked').forEach(function (box) {
+        params.append('students', box.value);
+      });
+
+      if (inFlight) inFlight.abort();
+      inFlight = new AbortController();
+      fetch(countUrl + '?' + params.toString(), {
+        signal: inFlight.signal,
+        headers: { 'X-Requested-With': 'fetch' }
+      })
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+          countEl.textContent = data.count;
+          labelEl.textContent =
+            'parent' + (data.count === 1 ? '' : 's') + ' will receive this';
+          descEl.textContent = data.description;
+          unreachableCountEl.textContent = data.unreachable;
+          unreachableEl.classList.toggle('hidden', data.unreachable === 0);
+        })
+        // A dropped request leaves the last good number on screen rather than
+        // a zero the user would read as "nobody will get this".
+        .catch(function () {});
+    }
+
+    form.addEventListener('change', function (event) {
+      if (event.target.name === 'audience_type') showPanels();
+      if (['audience_type', 'school_class', 'students', 'branch']
+            .indexOf(event.target.name) !== -1) {
+        refreshCount();
+      }
+    });
+
+    // --- SMS segment counter ---------------------------------------------
+    var body = form.querySelector('[name="body"]');
+    var counter = document.getElementById('body-count');
+    if (body && counter) {
+      var segment = parseInt(counter.getAttribute('data-segment'), 10) || 160;
+      var base = counter.textContent;
+      var update = function () {
+        var length = body.value.length;
+        if (!length) { counter.textContent = base; return; }
+        var parts = Math.ceil(length / segment);
+        counter.textContent =
+          length + ' characters — ' + parts + ' SMS part' + (parts === 1 ? '' : 's');
+      };
+      body.addEventListener('input', update);
+      update();
+    }
+
+    showPanels();
+  })();
+</script>
+{% endblock %}
