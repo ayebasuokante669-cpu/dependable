@@ -115,15 +115,32 @@ DEFAULT_FROM_EMAIL = os.environ.get(
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 24 * 3  # three days
 
 # --- Messaging ----------------------------------------------------------
-# Which provider carries parent SMS/WhatsApp. "console" logs the message and
-# marks it delivered, so the whole feature works with no credentials at all --
-# see apps/messaging/providers/. Swapping to a real gateway is this one line
-# plus its keys; nothing above the provider interface changes.
+# Which gateway carries parent SMS is normally each school's own choice, stored
+# on its SchoolMessagingConfig alongside the Sender ID it registered there.
+#
+# MESSAGING_PROVIDER is the platform override: when set it wins over every
+# school's choice. It defaults to "console", which logs the message (Sender ID
+# included) and marks it delivered, so a fresh checkout sends nothing anywhere
+# and the whole feature still works with no credentials. Clear it in production
+# -- MESSAGING_PROVIDER= -- and each school goes out through its own gateway.
 MESSAGING_PROVIDER = os.environ.get("MESSAGING_PROVIDER", "console")
 
-# The name a parent sees the message come from. Gateways require this to be
-# registered with them before they will accept it.
-MESSAGING_SENDER_ID = os.environ.get("MESSAGING_SENDER_ID", "")
+# There is deliberately no platform-wide sender ID. Who a message comes from is
+# the school's own registered identity, resolved per send by
+# apps/messaging/identity.py -- a school with no approved Sender ID is refused
+# rather than falling back to a shared name.
+
+# --- Gateway master credentials -----------------------------------------
+# The platform holds the account and pays for the units; each school sends
+# under its own Sender ID against it. A school that later takes out its own
+# account puts its key on its messaging config, which wins over these.
+BULKSMSNIGERIA_API_TOKEN = os.environ.get("BULKSMSNIGERIA_API_TOKEN", "")
+BULKSMSNIGERIA_BASE_URL = os.environ.get(
+    "BULKSMSNIGERIA_BASE_URL", "https://www.bulksmsnigeria.com"
+)
+# DND routing: 2 sends via the corporate route so reminders still reach the
+# many Nigerian numbers on the Do-Not-Disturb register. See the provider.
+BULKSMSNIGERIA_DND = os.environ.get("BULKSMSNIGERIA_DND", "2")
 
 TERMII_API_KEY = os.environ.get("TERMII_API_KEY", "")
 TERMII_BASE_URL = os.environ.get("TERMII_BASE_URL", "https://api.ng.termii.com")

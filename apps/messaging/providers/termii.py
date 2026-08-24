@@ -6,7 +6,9 @@ Filling this in is one method and one dependency, and nothing above it changes.
 
 Termii wants numbers in international form without the plus (``2348031234567``)
 and a registered sender ID; both are prepared below so the shape of the request
-is settled before the account exists.
+is settled before the account exists. The sender comes from the school's
+:class:`SenderIdentity`, not from a platform-wide setting -- Termii registers
+sender IDs per account exactly as BulkSMS Nigeria does.
 """
 
 from __future__ import annotations
@@ -19,36 +21,39 @@ from .base import (
     Channel,
     DeliveryStatus,
     MessagingProvider,
+    ProviderKey,
     ProviderNotConfigured,
     SendResult,
 )
 
 
 class TermiiProvider(MessagingProvider):
-    key = "termii"
+    key = ProviderKey.TERMII
     label = "Termii"
     channels = (Channel.SMS, Channel.WHATSAPP)
 
     #: Termii's own name for each of our channels.
     CHANNEL_MAP = {Channel.SMS: "generic", Channel.WHATSAPP: "whatsapp"}
 
-    def __init__(self):
-        self.api_key = getattr(settings, "TERMII_API_KEY", "")
-        self.sender_id = getattr(settings, "MESSAGING_SENDER_ID", "")
+    def __init__(self, identity=None):
+        super().__init__(identity)
         self.base_url = getattr(
             settings, "TERMII_BASE_URL", "https://api.ng.termii.com"
         )
 
+    @property
+    def api_key(self) -> str:
+        """The school's own key if it has one, otherwise the platform's."""
+        if self.identity is not None and self.identity.api_key:
+            return self.identity.api_key
+        return getattr(settings, "TERMII_API_KEY", "")
+
     def check(self) -> None:
+        super().check()
         if not self.api_key:
             raise ProviderNotConfigured(
                 "TERMII_API_KEY is not set, so no message can be sent. Set it in "
                 "the environment, or run on the console provider."
-            )
-        if not self.sender_id:
-            raise ProviderNotConfigured(
-                "MESSAGING_SENDER_ID is not set. Termii will not accept a "
-                "message without a registered sender ID."
             )
 
     def payload(self, recipient: str, message: str, channel: str) -> dict:

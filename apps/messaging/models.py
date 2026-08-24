@@ -1,8 +1,9 @@
-"""Outbound parent messaging: what was sent, to whom, and what became of it.
+"""Outbound parent messaging: who it came from, what was sent, and to whom.
 
-Two models, both branch-owned so they inherit tenant scoping:
+Three models:
 
-    Message  --<  MessageRecipient
+    SchoolMessagingConfig          -- the school's own sending identity
+    Message  --<  MessageRecipient -- what went out under it
 
 ``Message`` is one press of Send. ``MessageRecipient`` is one row per parent it
 went to, and it is the reason this is a delivery log rather than a sent-items
@@ -18,10 +19,209 @@ from __future__ import annotations
 from django.conf import settings
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 
-from apps.core.models import BranchScopedModel
+from apps.core.models import BranchScopedModel, TenantScopedModel
 
-from .providers import Channel, DeliveryStatus
+from .providers import Channel, DeliveryStatus, ProviderKey
+from .validators import SENDER_ID_MAX_LENGTH, normalise_sender_id, validate_sender_id
+
+
+class SenderIdStatus(models.TextChoices):
+    """Where a school's Sender ID stands with the gateway.
+
+    Registration is not instant and is not guaranteed: a gateway reviews an
+    alphanumeric sender before it will carry anything under it, and does reject
+    them. Modelling that as a status rather than a boolean means the screen can
+    tell a proprietor *why* their school is not sending yet, which is the only
+    version of this a school can act on.
+    """
+
+    PENDING = "pending", "Awaiting approval"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
+    SUSPENDED = "suspended", "Suspended"
+
+
+#: Design-system pill per status, reusing the four payment-status colours the
+#: rest of the platform has already taught staff to read.
+SENDER_ID_PILLS = {
+    SenderIdStatus.PENDING: "status-partial",
+    SenderIdStatus.APPROVED: "status-paid",
+    SenderIdStatus.REJECTED: "status-overdue",
+    SenderIdStatus.SUSPENDED: "status-overdue",
+}
+
+
+class SchoolMessagingConfig(TenantScopedModel):
+    """One school's messaging identity: the name its parents see.
+
+    The platform holds the gateway account and pays for the units; each school
+    registers its own alphanumeric Sender ID against it. So SCHOOLCORD sends,
+    and "Dapgroup" is what arrives on the handset.
+
+    Scoped per school, with ``branch`` left nullable and part of the uniqueness
+    rule so a school that later wants one Sender ID per campus can have it
+    without a redesign: a row with no branch is the school's default, and a row
+    with one overrides it for that campus. :func:`apps.messaging.identity.resolve`
+    is the only place that ordering is expressed.
+
+    Credentials are nullable on purpose. For the pilot every school falls
+    through to the platform's master account and is distinguished only by its
+    Sender ID; a school that later takes out its own gateway account fills in
+    ``api_key`` and nothing else about the send path changes.
+    """
+
+    sender_id = models.CharField(
+        "Sender ID",
+        max_length=SENDER_ID_MAX_LENGTH,
+        validators=[validate_sender_id],
+        help_text=(
+            'The name parents see the message come from, e.g. "Dapgroup". '
+            f"At most {SENDER_ID_MAX_LENGTH} characters, and it must be "
+            f"registered with the gateway before it will carry anything."
+        ),
+    )
+    provider = models.CharField(
+        max_length=32,
+        choices=ProviderKey.choices,
+        default=ProviderKey.BULKSMSNIGERIA,
+        help_text="The gateway this Sender ID is registered with.",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=SenderIdStatus.choices,
+        default=SenderIdStatus.PENDING,
+        help_text="Nothing sends under this Sender ID until it is approved.",
+    )
+    status_note = models.CharField(
+        max_length=250,
+        blank=True,
+        help_text="Why it was rejected or suspended — shown to the school.",
+    )
+
+    # --- The school's own gateway account, if it ever has one -------------
+    api_key = models.CharField(
+        "provider API key",
+        max_length=255,
+        blank=True,
+        help_text="Leave blank to send on the platform's master account, which "
+        "is how the pilot works.",
+    )
+    account_reference = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text="Sub-account or reseller reference on the master account, "
+        "if the gateway issues one.",
+    )
+
+    # --- Approval trail ----------------------------------------------------
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="sender_ids_approved",
+        null=True,
+        blank=True,
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        abstract = False
+        verbose_name = "messaging identity"
+        verbose_name_plural = "messaging identities"
+        ordering = ["school__name", "branch__name"]
+        constraints = [
+            # One identity per campus...
+            models.UniqueConstraint(
+                fields=["school", "branch"],
+                name="one_messaging_config_per_branch",
+            ),
+            # ...and one school-wide default. A second constraint is needed
+            # because SQL treats NULLs as distinct, so the rule above would
+            # happily allow a school two school-wide rows and leave resolution
+            # picking whichever came back first.
+            models.UniqueConstraint(
+                fields=["school"],
+                condition=models.Q(branch__isnull=True),
+                name="one_default_messaging_config_per_school",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["school", "branch"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.sender_id} ({self.get_provider_display()})"
+
+    def get_absolute_url(self) -> str:
+        return reverse("messaging:identity")
+
+    # -- derived facts -------------------------------------------------------
+
+    @property
+    def is_approved(self) -> bool:
+        return self.status == SenderIdStatus.APPROVED
+
+    @property
+    def is_usable(self) -> bool:
+        """Whether a message may actually go out under this identity.
+
+        The single rule the send path asks about. Deliberately not the same
+        thing as "a row exists": an unapproved Sender ID is a gateway rejection
+        waiting to happen, and the platform should refuse first and say why.
+        """
+        return self.is_approved and bool(self.sender_id)
+
+    @property
+    def pill_class(self) -> str:
+        return SENDER_ID_PILLS.get(self.status, "status-unpaid")
+
+    @property
+    def scope_label(self) -> str:
+        return self.branch.name if self.branch_id else "All campuses"
+
+    @property
+    def uses_own_credentials(self) -> bool:
+        return bool(self.api_key)
+
+    # -- transitions ---------------------------------------------------------
+
+    def approve(self, *, by=None, save: bool = True) -> "SchoolMessagingConfig":
+        """Mark the Sender ID registered and usable."""
+        self.status = SenderIdStatus.APPROVED
+        self.status_note = ""
+        self.approved_by = by
+        self.approved_at = timezone.now()
+        if save:
+            self.save(
+                update_fields=[
+                    "status", "status_note", "approved_by", "approved_at",
+                    "updated_at",
+                ]
+            )
+        return self
+
+    # -- persistence ---------------------------------------------------------
+
+    def save(self, *args, **kwargs):
+        # A platform owner has no school of their own, so the branch -- which
+        # always knows its school -- is what places the config.
+        if self.branch_id and self.school_id is None:
+            self.school_id = self.branch.school_id
+        self.sender_id = normalise_sender_id(self.sender_id)
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+
+        self.sender_id = normalise_sender_id(self.sender_id)
+        if self.branch_id and self.school_id:
+            if self.branch.school_id != self.school_id:
+                raise ValidationError(
+                    {"branch": "That campus belongs to a different school."}
+                )
 
 
 class AudienceType(models.TextChoices):
@@ -101,6 +301,14 @@ class Message(BranchScopedModel):
     #: Which provider carried it, recorded at send time. A school that switches
     #: gateways mid-term needs to know which batch went out over which.
     provider = models.CharField(max_length=40, blank=True)
+    #: The Sender ID this batch went out under, snapshotted like the recipients'
+    #: phone numbers are. A school that renames its Sender ID next term has not
+    #: retroactively sent last term's reminders under the new name, and a log
+    #: that claims otherwise is worse than no log.
+    #:
+    #: Named ``sent_as`` rather than ``sender_id`` because ``sender`` above is a
+    #: foreign key, and Django already owns that column name for its id.
+    sent_as = models.CharField("Sender ID", max_length=32, blank=True)
 
     class Meta(BranchScopedModel.Meta):
         abstract = False

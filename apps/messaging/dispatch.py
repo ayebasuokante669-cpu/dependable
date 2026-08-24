@@ -17,6 +17,13 @@ a branch's whole parent body is a few hundred rows, the console provider has no
 latency to speak of, and a task queue is a piece of infrastructure the school
 would have to run. When a real gateway makes the loop slow, ``deliver`` is what
 moves onto a worker -- it already takes a saved batch and touches nothing else.
+
+Every batch is sent under one school's own Sender ID, resolved once by
+:mod:`apps.messaging.identity` before anything is written. Resolving it first
+is what makes "a school with no approved Sender ID sends nothing" true rather
+than aspirational: there is no path from here to a provider that does not go
+through that resolution, and a school that fails it never gets a Message row at
+all -- so the log never shows a batch that was never really sendable.
 """
 
 from __future__ import annotations
@@ -26,12 +33,14 @@ from django.utils import timezone
 
 from apps.students.validators import normalise_phone
 
+from . import identity as identity_module
 from .audiences import Audience
 from .models import Message, MessageRecipient
 from .providers import (
     Channel,
     DeliveryStatus,
     MessagingProvider,
+    SenderIdentity,
     SendResult,
     get_provider,
 )
@@ -46,8 +55,14 @@ def record(
     branch,
     sender=None,
     provider_key: str = "",
+    identity: SenderIdentity | None = None,
 ) -> Message:
-    """Write the batch as queued. Sends nothing."""
+    """Write the batch as queued. Sends nothing.
+
+    ``identity`` is resolved by the caller rather than here so that a school
+    with no approved Sender ID is refused *before* any row is written -- see
+    :func:`send`.
+    """
     message = Message(
         branch=branch,
         school_id=branch.school_id,
@@ -57,6 +72,9 @@ def record(
         audience_type=audience.type,
         sender=sender,
         provider=provider_key,
+        # Snapshotted, like the recipients' phone numbers: this is the name the
+        # parents on this batch actually saw.
+        sent_as=identity.sender_id if identity else "",
     )
     message.save()
 
@@ -89,8 +107,12 @@ def deliver(message: Message, provider: MessagingProvider | None = None) -> Mess
     Idempotent by design: rows that already have a terminal status are skipped,
     so re-running a half-finished batch finishes it rather than texting the
     parents who already heard.
+
+    Called without a provider -- finishing a batch that was recorded earlier --
+    it rebuilds one from the school's identity, so a resumed send goes out
+    under the same name the batch was stamped with.
     """
-    provider = provider or get_provider()
+    provider = provider or get_provider(identity=identity_for(message))
     pending = list(
         message.recipients.filter(status=DeliveryStatus.PENDING)
     )
@@ -133,6 +155,16 @@ def _send_one(
         return SendResult.failure(f"{type(exc).__name__}: {exc}")
 
 
+def identity_for(message: Message) -> SenderIdentity:
+    """The identity a saved batch belongs to.
+
+    Re-resolved from the school's config rather than rebuilt from the stored
+    ``sender_id``, so a batch resumed after an approval was withdrawn is
+    refused rather than finished under a name that is no longer registered.
+    """
+    return identity_module.resolve(message.school_id, message.branch)
+
+
 def send(
     *,
     body: str,
@@ -142,8 +174,16 @@ def send(
     sender=None,
     provider: MessagingProvider | None = None,
 ) -> Message:
-    """Record a batch and deliver it. What the compose screen calls."""
-    provider = provider or get_provider()
+    """Record a batch and deliver it. What the compose screen calls.
+
+    Resolves the school's Sender ID first, and raises
+    :class:`~apps.messaging.identity.SenderIdentityUnavailable` before writing
+    anything if there is not an approved one. The compose screen catches that
+    and shows the reason; nothing reaches a gateway under a borrowed or blank
+    name.
+    """
+    identity = identity_module.resolve_for_branch(branch)
+    provider = provider or get_provider(identity=identity)
     message = record(
         body=body,
         channel=channel,
@@ -151,5 +191,6 @@ def send(
         branch=branch,
         sender=sender,
         provider_key=provider.key,
+        identity=identity,
     )
     return deliver(message, provider)

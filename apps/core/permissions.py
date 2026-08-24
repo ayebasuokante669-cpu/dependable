@@ -31,6 +31,8 @@ class Capability(str, Enum):
     VIEW_PAYMENTS = "view_payments"
     RECORD_PAYMENTS = "record_payments"
     VOID_PAYMENTS = "void_payments"
+    VIEW_MESSAGING_IDENTITY = "view_messaging_identity"
+    MANAGE_MESSAGING_IDENTITY = "manage_messaging_identity"
 
 
 #: Owner- and principal-level roles: set up the school, who attends it, and what
@@ -48,8 +50,16 @@ _LEADERSHIP = frozenset(
         Capability.VIEW_PAYMENTS,
         Capability.RECORD_PAYMENTS,
         Capability.VOID_PAYMENTS,
+        Capability.VIEW_MESSAGING_IDENTITY,
     }
 )
+
+#: The platform owner holds everything a school owner does, plus the actions
+#: only the party holding the gateway account can take. Registering and
+#: approving a school's Sender ID is one: the platform submits it to the
+#: gateway, so a school approving its own would be marking its own homework and
+#: the first message would be rejected anyway.
+_PLATFORM = _LEADERSHIP | {Capability.MANAGE_MESSAGING_IDENTITY}
 
 #: A bursar collects against the fee structure but does not decide it, and
 #: records payments against the roster without owning it -- they need to find a
@@ -83,7 +93,7 @@ _EVERYTHING = frozenset(Capability)
 
 #: The grant table. Add a capability here, not with an ad-hoc check in a view.
 ROLE_CAPABILITIES: dict[str, frozenset[Capability]] = {
-    Role.PLATFORM_OWNER: _LEADERSHIP,
+    Role.PLATFORM_OWNER: _PLATFORM,
     Role.SCHOOL_OWNER: _LEADERSHIP,
     Role.PRINCIPAL: _LEADERSHIP,
     Role.BURSAR: _BURSAR,

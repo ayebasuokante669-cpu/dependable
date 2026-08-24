@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {% if is_platform_view %}
+      What each school's parents see its messages come from
+    {% else %}
+      What your parents see your messages come from
+    {% endif %}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'messaging:index' %}" class="btn btn-ghost text-sm">
+    <span class="hidden sm:inline">Back to</span> messages
+  </a>
+{% endblock %}
+
+{% block content %}
+
+{# ===== The school's own identity ======================================== #}
+{% if not is_platform_view %}
+  <div class="mx-auto max-w-3xl space-y-5">
+
+    {% if active %}
+      <section class="card overflow-hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b
+                    border-ink-200 px-5 py-4">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Your Sender ID
+            </p>
+            <p class="numeric mt-1 text-2xl font-semibold text-brand-900">
+              {{ active.sender_id }}
+            </p>
+          </div>
+          <span class="status-pill {{ active.pill_class }}">
+            {{ active.get_status_display }}
+          </span>
+        </div>
+
+        <div class="border-b border-ink-200 bg-ink-50 px-5 py-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            What a parent sees
+          </p>
+          {# A phone-ish preview, because "Sender ID" means nothing to a
+             proprietor until they see it where it lands. #}
+          <div class="mt-2 max-w-sm rounded-xl border border-ink-200 bg-white p-3
+                      shadow-card">
+            <p class="text-sm font-semibold text-ink-900">{{ active.sender_id }}</p>
+            <p class="mt-1 rounded-lg bg-ink-100 px-3 py-2 text-sm text-ink-700">
+              Dear parent, this is a reminder that school fees for this term are
+              due.
+            </p>
+          </div>
+        </div>
+
+        <dl class="grid gap-x-6 gap-y-4 px-5 py-5 sm:grid-cols-2">
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Gateway
+            </dt>
+            <dd class="mt-1 text-sm text-ink-900">{{ active.get_provider_display }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Applies to
+            </dt>
+            <dd class="mt-1 text-sm text-ink-900">{{ active.scope_label }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Account
+            </dt>
+            <dd class="mt-1 text-sm text-ink-900">
+              {% if active.uses_own_credentials %}
+                {{ school.name }}'s own gateway account
+              {% else %}
+                Sent on the platform's account under your name
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Approved
+            </dt>
+            <dd class="mt-1 text-sm text-ink-900">
+              {% if active.approved_at %}
+                {{ active.approved_at|date:"j F Y" }}
+                {% if active.approved_by %}
+                  <span class="block text-xs text-ink-500">
+                    by {{ active.approved_by }}
+                  </span>
+                {% endif %}
+              {% else %}
+                <span class="text-ink-400">Not yet</span>
+              {% endif %}
+            </dd>
+          </div>
+        </dl>
+
+        {% if blocked_reason %}
+          <p class="border-t border-ink-200 bg-overdue-soft px-5 py-4 text-sm
+                    text-overdue-strong">
+            <span class="font-semibold">Sending is blocked.</span>
+            {{ blocked_reason }}
+          </p>
+        {% else %}
+          <p class="border-t border-ink-200 px-5 py-3 text-xs text-ink-500">
+            Every message you send goes out under this name. Nobody else on the
+            platform can send under it.
+          </p>
+        {% endif %}
+
+        {% if can_manage %}
+          <div class="border-t border-ink-200 px-5 py-4">
+            <a href="{% url 'messaging:identity_update' school.pk %}"
+               class="btn btn-primary text-sm">Edit or approve</a>
+          </div>
+        {% endif %}
+      </section>
+
+    {% else %}
+      <div class="card empty-state">
+        <p class="text-base font-medium text-ink-700">No Sender ID registered yet</p>
+        <p class="mx-auto mt-1 max-w-md text-sm">
+          Until {{ school.name }} has an approved Sender ID, no SMS can be sent
+          to parents — there would be no name for the message to come from.
+          A platform administrator registers one with the gateway on your behalf.
+        </p>
+        {% if can_manage %}
+          <a href="{% url 'messaging:identity_update' school.pk %}"
+             class="btn btn-primary mt-5 text-sm">Register a Sender ID</a>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <section class="card p-5">
+      <h2 class="text-sm font-semibold text-ink-900">How this works</h2>
+      <ul class="mt-2 space-y-1.5 text-xs text-ink-600">
+        <li>
+          The platform holds the account with the SMS gateway and pays for the
+          units.
+        </li>
+        <li>
+          Your school registers its own Sender ID against it, so parents see
+          your name and not the platform's.
+        </li>
+        <li>
+          A gateway has to approve a Sender ID before it will carry anything
+          under it. Nothing sends until yours is approved.
+        </li>
+      </ul>
+    </section>
+  </div>
+
+{# ===== The platform roll ================================================ #}
+{% else %}
+  {% include "messaging/_provider_note.html" %}
+
+  <div class="card overflow-hidden">
+    <div class="border-b border-ink-200 px-5 py-3">
+      <h2 class="text-sm font-semibold text-ink-900">
+        Every school's messaging identity
+      </h2>
+      <p class="mt-0.5 text-xs text-ink-500">
+        Schools with nothing registered are listed too — they are the ones that
+        cannot send.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="table-head">
+          <tr>
+            <th scope="col" class="px-5 py-3 font-semibold">School</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Sender ID</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Gateway</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Account</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Status</th>
+            {% if can_manage %}
+              <th scope="col" class="px-5 py-3 text-right font-semibold">Actions</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-ink-200">
+          {% for row in rows %}
+            <tr class="{% if not row.config %}bg-ink-50/60{% endif %}">
+              <td class="px-5 py-3 font-medium text-ink-900">{{ row.school.name }}</td>
+              <td class="numeric px-5 py-3 text-ink-900">
+                {% if row.config %}{{ row.config.sender_id }}
+                {% else %}<span class="text-ink-400">—</span>{% endif %}
+              </td>
+              <td class="whitespace-nowrap px-5 py-3 text-ink-700">
+                {% if row.config %}{{ row.config.get_provider_display }}
+                {% else %}<span class="text-ink-400">—</span>{% endif %}
+              </td>
+              <td class="whitespace-nowrap px-5 py-3 text-xs text-ink-600">
+                {% if row.config %}
+                  {% if row.config.uses_own_credentials %}Own account
+                  {% else %}Platform master{% endif %}
+                {% else %}<span class="text-ink-400">—</span>{% endif %}
+              </td>
+              <td class="whitespace-nowrap px-5 py-3">
+                {% if row.config %}
+                  <span class="status-pill {{ row.config.pill_class }}">
+                    {{ row.config.get_status_display }}
+                  </span>
+                  {% if row.config.status_note %}
+                    <span class="mt-1 block max-w-xs text-xs text-ink-500">
+                      {{ row.config.status_note }}
+                    </span>
+                  {% endif %}
+                {% else %}
+                  <span class="status-pill status-unpaid">Not registered</span>
+                {% endif %}
+              </td>
+              {% if can_manage %}
+                <td class="px-5 py-3 text-right">
+                  <a href="{% url 'messaging:identity_update' row.school.pk %}"
+                     class="btn btn-ghost text-xs">
+                    {% if row.config %}Edit{% else %}Register{% endif %}
+                  </a>
+                </td>
+              {% endif %}
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="empty-state">No schools on the platform yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="border-t border-ink-200 px-5 py-3 text-xs text-ink-500">
+      The platform holds the gateway account; each school sends under its own
+      registered name. A school with no approved Sender ID is blocked from
+      sending rather than falling back to anyone else's.
+    </p>
+  </div>
+{% endif %}
+{% endblock %}

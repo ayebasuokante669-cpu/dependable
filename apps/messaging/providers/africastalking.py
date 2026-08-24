@@ -16,27 +16,35 @@ from .base import (
     Channel,
     DeliveryStatus,
     MessagingProvider,
+    ProviderKey,
     ProviderNotConfigured,
     SendResult,
 )
 
 
 class AfricasTalkingProvider(MessagingProvider):
-    key = "africastalking"
+    key = ProviderKey.AFRICASTALKING
     label = "Africa's Talking"
     # Their WhatsApp product is a separate chat API with a different contract;
     # claiming it here would let a bursar pick a channel that cannot be carried.
     channels = (Channel.SMS,)
 
-    def __init__(self):
+    def __init__(self, identity=None):
+        super().__init__(identity)
         self.username = getattr(settings, "AFRICASTALKING_USERNAME", "")
-        self.api_key = getattr(settings, "AFRICASTALKING_API_KEY", "")
-        self.sender_id = getattr(settings, "MESSAGING_SENDER_ID", "")
         self.base_url = getattr(
             settings, "AFRICASTALKING_BASE_URL", "https://api.africastalking.com"
         )
 
+    @property
+    def api_key(self) -> str:
+        """The school's own key if it has one, otherwise the platform's."""
+        if self.identity is not None and self.identity.api_key:
+            return self.identity.api_key
+        return getattr(settings, "AFRICASTALKING_API_KEY", "")
+
     def check(self) -> None:
+        super().check()
         missing = [
             name
             for name, value in (
@@ -52,16 +60,12 @@ class AfricasTalkingProvider(MessagingProvider):
             )
 
     def payload(self, recipient: str, message: str, channel: str) -> dict:
-        body = {
+        return {
             "username": self.username,
             "to": to_international(recipient),
             "message": message,
+            "from": self.sender_id,
         }
-        if self.sender_id:
-            # Optional for them: without it the message goes out on a shared
-            # short code rather than the school's name.
-            body["from"] = self.sender_id
-        return body
 
     def send(self, recipient: str, message: str, channel: str) -> SendResult:
         self.check()

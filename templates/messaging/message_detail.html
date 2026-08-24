@@ -43,6 +43,14 @@
             <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Campus</dt>
             <dd class="mt-1 text-sm text-ink-900">{{ message.branch.name }}</dd>
           </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Sent as
+            </dt>
+            <dd class="numeric mt-1 text-sm text-ink-900">
+              {{ message.sent_as|default:"—" }}
+            </dd>
+          </div>
         </dl>
       </div>
     </section>
@@ -185,7 +193,9 @@
       </dl>
       {% if message.provider %}
         <p class="border-t border-ink-200 px-5 py-3 text-xs text-ink-500">
-          Carried by <span class="font-medium">{{ message.provider }}</span>.
+          Carried by <span class="font-medium">{{ message.provider }}</span>{% if message.sent_as %},
+          sent as <span class="font-medium">{{ message.sent_as }}</span>{% endif %}.
+          Both are recorded as they were at send time.
         </p>
       {% endif %}
     </section>

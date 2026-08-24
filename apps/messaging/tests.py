@@ -30,14 +30,23 @@ from apps.students.models import Sex, Student, StudentStatus
 
 from . import audiences, dispatch
 from .forms import ComposeForm
-from .models import AudienceType, Message, MessageRecipient, MessageStatus
+from .models import (
+    AudienceType,
+    Message,
+    MessageRecipient,
+    MessageStatus,
+    SchoolMessagingConfig,
+    SenderIdStatus,
+)
 from .providers import (
     AfricasTalkingProvider,
     Channel,
     ConsoleProvider,
     DeliveryStatus,
     MessagingProvider,
+    ProviderKey,
     ProviderNotConfigured,
+    SenderIdentity,
     SendResult,
     TermiiProvider,
     get_provider,
@@ -96,6 +105,17 @@ class MessagingTestCase(TestCase):
         )
 
         # JSS 1A costs 50,000 a term. Primary 1 is deliberately left unpriced.
+        # Every branch here can send: identity is exercised in
+        # tests_identity.py, and a batch that cannot go out would make every
+        # audience and delivery assertion below untestable.
+        SchoolMessagingConfig.all_objects.create(
+            school=cls.alpha,
+            branch=None,
+            sender_id="Alpha",
+            provider=ProviderKey.BULKSMSNIGERIA,
+            status=SenderIdStatus.APPROVED,
+        )
+
         cls.jss1_fees = FeeStructure.all_objects.create(
             school_class=cls.jss1, term=cls.north_term
         )
@@ -323,41 +343,63 @@ class ProviderSelectionTests(TestCase):
 
 
 class StubProviderTests(TestCase):
-    """The unfinished providers must refuse loudly, never pretend to send."""
+    """The unfinished providers must refuse loudly, never pretend to send.
 
-    @override_settings(TERMII_API_KEY="", MESSAGING_SENDER_ID="")
+    They take their sender from the school's identity, exactly as the live
+    BulkSMS Nigeria provider does, so the day either of them is finished the
+    per-tenant Sender ID already flows through it.
+    """
+
+    identity = SenderIdentity(sender_id="Fulfilled", provider_key="termii")
+
+    @override_settings(TERMII_API_KEY="")
     def test_termii_without_credentials_is_not_configured(self):
-        provider = TermiiProvider()
+        provider = TermiiProvider(self.identity)
         self.assertFalse(provider.is_configured)
         with self.assertRaises(ProviderNotConfigured):
             provider.check()
 
-    @override_settings(TERMII_API_KEY="key", MESSAGING_SENDER_ID="Fulfilled")
+    @override_settings(TERMII_API_KEY="key")
+    def test_termii_without_a_sender_id_is_not_configured(self):
+        with self.assertRaises(ProviderNotConfigured) as caught:
+            TermiiProvider().check()
+        self.assertIn("Sender ID", str(caught.exception))
+
+    @override_settings(TERMII_API_KEY="key")
     def test_termii_builds_an_international_payload(self):
-        payload = TermiiProvider().payload("08031234567", "Hi", Channel.SMS)
+        payload = TermiiProvider(self.identity).payload(
+            "08031234567", "Hi", Channel.SMS
+        )
 
         self.assertEqual(payload["to"], "2348031234567")
         self.assertEqual(payload["from"], "Fulfilled")
         self.assertEqual(payload["channel"], "generic")
 
-    @override_settings(TERMII_API_KEY="key", MESSAGING_SENDER_ID="Fulfilled")
+    @override_settings(TERMII_API_KEY="key")
     def test_termii_reports_failure_rather_than_a_false_success(self):
-        result = TermiiProvider().send("08031234567", "Hi", Channel.SMS)
+        result = TermiiProvider(self.identity).send(
+            "08031234567", "Hi", Channel.SMS
+        )
         self.assertEqual(result.status, DeliveryStatus.FAILED)
 
     @override_settings(AFRICASTALKING_USERNAME="", AFRICASTALKING_API_KEY="")
     def test_africastalking_without_credentials_is_not_configured(self):
-        self.assertFalse(AfricasTalkingProvider().is_configured)
+        self.assertFalse(AfricasTalkingProvider(self.identity).is_configured)
 
     @override_settings(
         AFRICASTALKING_USERNAME="alpha", AFRICASTALKING_API_KEY="key"
     )
     def test_africastalking_payload_uses_the_plus_form(self):
-        payload = AfricasTalkingProvider().payload("08031234567", "Hi", Channel.SMS)
+        payload = AfricasTalkingProvider(self.identity).payload(
+            "08031234567", "Hi", Channel.SMS
+        )
         self.assertEqual(payload["to"], "+2348031234567")
+        self.assertEqual(payload["from"], "Fulfilled")
 
     def test_africastalking_does_not_claim_whatsapp(self):
-        self.assertFalse(AfricasTalkingProvider().supports(Channel.WHATSAPP))
+        self.assertFalse(
+            AfricasTalkingProvider(self.identity).supports(Channel.WHATSAPP)
+        )
 
 
 class FailingProvider(MessagingProvider):
@@ -755,10 +797,11 @@ class ViewTests(MessagingTestCase):
         self.send_two_messages()
         self.client.force_login(self.north_bursar)
 
-        with self.assertNumQueries(6):
-            # session, user, count for pagination, the annotated page, and the
-            # two the tenant middleware needs. The point of the assertion is
-            # that it does not grow with the number of messages on the page.
+        with self.assertNumQueries(7):
+            # session, user, count for pagination, the annotated page, the two
+            # the tenant middleware needs, and one for the school's messaging
+            # identity. The point of the assertion is that none of them grows
+            # with the number of messages on the page.
             response = self.client.get(reverse("messaging:index"))
 
         rows = list(response.context["messages_sent"])

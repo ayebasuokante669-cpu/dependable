@@ -7,9 +7,15 @@ paid gateway, and the school should never have to guess which one they are on.
   <p class="card mb-5 border-partial/30 bg-partial-soft px-4 py-3 text-sm text-partial-strong">
     <span class="font-semibold">Console provider.</span>
     Messages are written to the server log and marked delivered — nothing
-    reaches a phone yet. Every screen, count and delivery row below is real;
-    only the gateway is pending. Set <code>MESSAGING_PROVIDER</code> once the
-    SMS account is approved.
+    reaches a phone yet. Every screen, count, Sender ID and delivery row below
+    is real; only the gateway is pending. Clear <code>MESSAGING_PROVIDER</code>
+    once the SMS account is live and each school sends through its own gateway.
+  </p>
+{% elif provider.is_override %}
+  <p class="card mb-5 px-4 py-3 text-sm text-ink-600">
+    <span class="font-semibold">All schools are on {{ provider.label }}.</span>
+    <code>MESSAGING_PROVIDER</code> is set, so it overrides the gateway on each
+    school's own messaging identity. Their Sender IDs are still their own.
   </p>
 {% elif not provider.is_configured %}
   <p class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm text-overdue-strong">

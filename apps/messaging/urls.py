@@ -16,5 +16,13 @@ urlpatterns = [
         views.RecipientCountView.as_view(),
         name="recipient_count",
     ),
+    # Who this school sends as. Before <int:pk>, so "identity" is never read
+    # as a message id.
+    path("identity/", views.MessagingIdentityView.as_view(), name="identity"),
+    path(
+        "identity/<int:pk>/edit/",
+        views.MessagingIdentityUpdateView.as_view(),
+        name="identity_update",
+    ),
     path("<int:pk>/", views.MessageDetailView.as_view(), name="message_detail"),
 ]

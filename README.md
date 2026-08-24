@@ -495,20 +495,18 @@ going out, and a row recording what became of it.
 ```
 apps/messaging/providers/
   base.py             MessagingProvider: send(recipient, message, channel)
-  console.py          the default -- logs it and marks it delivered
+                      + SenderIdentity, the school this provider sends as
+  console.py          the default -- logs it, Sender ID included, and marks
+                      it delivered
+  bulksmsnigeria.py   the real gateway: POST /api/v2/sms, bearer token
   termii.py           stub: reads TERMII_API_KEY, builds the payload
   africastalking.py   stub: reads AFRICASTALKING_*, builds the payload
   __init__.py         PROVIDERS registry and get_provider()
 ```
 
-Nothing above `providers/` imports a vendor. Swapping gateways is one settings
-line:
-
-```bash
-MESSAGING_PROVIDER=console          # default: no credentials needed
-MESSAGING_PROVIDER=termii           # + TERMII_API_KEY, MESSAGING_SENDER_ID
-MESSAGING_PROVIDER=africastalking   # + AFRICASTALKING_USERNAME / _API_KEY
-```
+Nothing above `providers/` imports a vendor. Who a message comes from is not the
+provider's decision either — see [Each school sends under its own
+name](#each-school-sends-under-its-own-name).
 
 The console provider is not a mock — it is the default, deliberately. The whole
 feature has to work end to end before anyone signs an SMS contract, and a demo
@@ -517,10 +515,11 @@ row you see running on it is the same code path a real gateway will drive. An
 unknown `MESSAGING_PROVIDER` raises rather than falling back, because a school
 that thinks it is sending real SMS must not quietly be writing to a log file.
 
-The two stubs are complete except for the HTTP call: they read their settings,
-assemble the real payload (Termii wants `2348031234567`, Africa's Talking wants
-`+2348031234567`), and refuse to send without credentials instead of returning
-a false success.
+Termii and Africa's Talking remain stubs, complete except for the HTTP call:
+they read their settings, assemble the real payload (Termii wants
+`2348031234567`, Africa's Talking wants `+2348031234567`), take their sender
+from the school's identity like BulkSMS Nigeria does, and refuse to send without
+credentials instead of returning a false success.
 
 ### Two models
 
@@ -529,7 +528,10 @@ Message  --<  MessageRecipient
 ```
 
 **`Message`** — one press of Send: body, channel, audience description, how the
-audience was chosen, sender, provider, and a rollup status.
+audience was chosen, sender, provider, a rollup status, and `sent_as` — the
+Sender ID the batch actually went out under, snapshotted like the recipients'
+phone numbers. A school that renames its Sender ID next term has not
+retroactively sent last term's reminders under the new name.
 
 **`MessageRecipient`** — one row per parent, with the phone number and parent
 name *snapshotted at send time*, the per-recipient delivery status
@@ -587,6 +589,127 @@ installed. See [Payments](#payments).
 The live count is a small endpoint rather than a framework, and it runs the same
 `resolve()` the send path runs. With scripting off, the count still renders on
 load and the form still sends — the endpoint only saves a round trip.
+
+### Each school sends under its own name
+
+The platform (SCHOOLCORD) holds the account with the SMS gateway and pays for
+the units. Each school registers its **own** alphanumeric Sender ID against it,
+so a parent at Dap Group of Schools sees a message from `Dapgroup`, not from the
+platform and not from another school.
+
+**`SchoolMessagingConfig`** — one per school: the Sender ID, the gateway it is
+registered with, an approval status, and optional credentials.
+
+```
+Platform:   SCHOOLCORD  (holds the BulkSMS Nigeria master account)
+School:     Dap Group of Schools
+Sender ID:  Dapgroup
+Provider:   BulkSMS Nigeria
+```
+
+`api_key` and `account_reference` are nullable and blank for the pilot: the
+master account sends on every school's behalf, under the school's own name. A
+school that later takes out its own gateway account fills them in and the send
+path does not change — `BulkSMSNigeriaProvider.api_token` already prefers the
+school's key over the platform's.
+
+`branch` is nullable and part of the uniqueness rule, so a school that later
+wants a different Sender ID per campus can have one. A row with no branch is the
+school's default; a row with one overrides it for that campus.
+`apps/messaging/identity.py` is the only place that ordering is written down.
+
+### Nothing sends under a name that is not the school's
+
+A Sender ID is not usable until a gateway has approved it, so `resolve()` either
+returns the school's identity or raises `SenderIdentityUnavailable` with a
+sentence naming who fixes it:
+
+* no config at all — "Dap Group of Schools has no Sender ID set up yet…"
+* pending — "…is still awaiting approval, so nothing can be sent under it yet."
+* rejected / suspended — the same, plus the note the platform recorded.
+
+There is deliberately **no fallback**. Not the platform's name, not a blank
+sender, and certainly not another school's: the first two get the batch rejected
+by the gateway or ignored by parents, and the third is a tenancy breach a parent
+would see on their own handset.
+
+Resolution happens *before* anything is written, so a school that cannot send
+gets no `Message` row at all — the log never shows a batch that was never really
+sendable. The compose screen catches the same exception and keeps the draft.
+
+### Which gateway carries it
+
+Two decisions, not one:
+
+| | Where it lives | What it means |
+| --- | --- | --- |
+| The school's gateway | `SchoolMessagingConfig.provider` | Where its Sender ID is registered. Two schools can be on two different gateways. |
+| The platform override | `MESSAGING_PROVIDER` | When set, it wins over every school's choice. |
+
+`MESSAGING_PROVIDER` defaults to `console`, so a fresh checkout sends nothing
+anywhere. Clear it (`MESSAGING_PROVIDER=`) in production and each school goes out
+through its own gateway. An override is not a fallback — it is the switch for
+development, for tests, and for the day a gateway is down.
+
+The Sender ID travels regardless: on the console provider the log line reads
+
+```
+[SMS] from Fulfilled [Fulfilled Academy] via BulkSMS Nigeria to 08118836702: ...
+```
+
+— the school's name, the gateway that *would* have carried it, and the message.
+That is why per-tenant identity is testable with no credentials and no money
+spent.
+
+### BulkSMS Nigeria
+
+`providers/bulksmsnigeria.py` is the real implementation, replacing the stub.
+`POST /api/v2/sms` with a bearer token, the school's Sender ID as `from`, and
+`dnd=2` so reminders still reach the many Nigerian numbers on the Do-Not-Disturb
+register. It uses `urllib` from the standard library rather than pulling in
+`requests`: one POST with a JSON body does not justify a dependency the school's
+server then has to keep patched, and `urllib` gives us the timeout, which is the
+part that actually matters when a gateway is slow.
+
+Their API answers `200` for messages it then refuses, with the refusal in
+`error`, so a 2xx is not on its own a success. And accepting a message means
+**sent**, never **delivered** — whether a handset received it arrives later on
+their webhook, and reporting it as delivered would make the log lie about the
+one thing a bursar chasing a parent needs it for.
+
+### The identity screen
+
+`/messaging/identity/` serves two readers at different scopes. A school sees its
+own Sender ID, the gateway, the approval status, and a preview of how it lands
+on a parent's handset. The platform owner sees every school — **including the
+ones with nothing registered**, since a roll that only lists the schools already
+set up hides exactly the ones needing action — and registers or approves from
+`/messaging/identity/<school>/edit/`.
+
+| | View own identity | Register & approve |
+| --- | --- | --- |
+| Bursar | | |
+| Principal | yes | |
+| School owner | yes | |
+| Platform owner | yes | yes |
+
+Approving is platform-only because the platform is the party that actually
+submits a Sender ID to the gateway. A school approving its own would be marking
+its own homework, and the gateway would reject the first message anyway.
+
+Two schools cannot register the same Sender ID: gateways do let unrelated
+accounts hold similar names, but on one platform it means parents cannot tell
+which school texted them, and it is almost always a copy-paste from the row
+above.
+
+### Seeding
+
+```bash
+python manage.py seed_messaging_identity          # Fulfilled Academy -> "Fulfilled"
+python manage.py seed_messaging_identity --school "Dap Group of Schools" \
+    --sender-id Dapgroup --provider bulksmsnigeria
+python manage.py seed_messaging_identity --pending  # seed the blocked state
+```
 
 ### Permissions
 
@@ -864,9 +987,12 @@ apps/fees/           Term, FeeStructure, FeeComponent, screens, and pricing.py
 apps/students/       Student, its screens, the derived fee position (fees.py),
                      validators.py, roster.py, and the Excel import
                      (importer.py validates, workbook.py reads and writes .xlsx)
-apps/messaging/      Message and MessageRecipient, audiences.py (who a filter
-                     means), dispatch.py (record then deliver), and
-                     providers/ (the interface, console, Termii, Africa's Talking)
+apps/messaging/      SchoolMessagingConfig (each school's Sender ID),
+                     Message and MessageRecipient, audiences.py (who a filter
+                     means), identity.py (who a message is from),
+                     dispatch.py (record then deliver), validators.py, and
+                     providers/ (the interface, console, BulkSMS Nigeria,
+                     Termii, Africa's Talking)
 apps/payments/       Payment, balances.py (every derived figure), its screens,
                      and seed_payments
 templates/           base.html, 403.html, partials/, core/ (landing, signup,

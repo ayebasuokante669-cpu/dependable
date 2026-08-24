@@ -1,0 +1,34 @@
+{% comment %}
+Who this school's messages go out as. Shown on the messaging screens because
+the Sender ID is the first thing a parent sees, and the first thing that stops
+a batch when it is not approved.
+
+Expects: identity (from views._identity_banner).
+{% endcomment %}
+{% if identity.resolved %}
+  <p class="card mb-5 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3
+            text-sm text-ink-600">
+    <span>Parents will see this from</span>
+    <span class="numeric font-semibold text-brand-900">{{ identity.sender_id }}</span>
+    <span class="text-ink-500">via {{ identity.provider_label }}</span>
+    {% if not identity.own_credentials %}
+      <span class="chip">on the platform account</span>
+    {% endif %}
+    {% if "view_messaging_identity" in capabilities %}
+      <a href="{% url 'messaging:identity' %}"
+         class="ml-auto text-xs font-semibold text-brand-800 hover:underline">
+        Messaging identity
+      </a>
+    {% endif %}
+  </p>
+{% elif identity.reason %}
+  <p class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+            text-overdue-strong">
+    <span class="font-semibold">Sending is blocked.</span>
+    {{ identity.reason }}
+    {% if "view_messaging_identity" in capabilities %}
+      <a href="{% url 'messaging:identity' %}" class="font-semibold underline">
+        Messaging identity</a>.
+    {% endif %}
+  </p>
+{% endif %}

@@ -15,13 +15,14 @@ message to one branch, because a batch belongs to a branch.
 from __future__ import annotations
 
 from django import forms
+from django.core.exceptions import ValidationError
 
 from apps.academics.models import Class
 from apps.core.forms import StyledFormMixin
 from apps.schools.models import Branch
 from apps.students.models import Student, StudentStatus
 
-from .models import AudienceType
+from .models import AudienceType, SchoolMessagingConfig, SenderIdStatus
 from .providers import Channel
 
 #: Where an SMS starts costing a second segment. Not enforced -- a school may
@@ -152,3 +153,108 @@ class ComposeForm(StyledFormMixin, forms.Form):
                     f"reaches one campus's parents only.",
                 )
         return cleaned
+
+
+class MessagingIdentityForm(StyledFormMixin, forms.ModelForm):
+    """Register or amend one school's Sender ID. Platform staff only.
+
+    A ``ModelForm`` over ``SchoolMessagingConfig`` that also knows how to
+    create the row: the school is passed in rather than chosen, because this
+    form is always reached from one school's page and offering a school
+    dropdown would be an opportunity to file Dap Group's Sender ID against
+    somebody else.
+
+    Approving is a status choice rather than a separate button so that the
+    reason for a rejection is captured in the same submission as the rejection
+    -- a status of "rejected" with nothing in ``status_note`` tells the school
+    nothing they can act on.
+    """
+
+    class Meta:
+        model = SchoolMessagingConfig
+        fields = [
+            "sender_id",
+            "provider",
+            "status",
+            "status_note",
+            "api_key",
+            "account_reference",
+        ]
+        widgets = {
+            "sender_id": forms.TextInput(
+                attrs={"placeholder": "Dapgroup", "autocomplete": "off",
+                       "autocapitalize": "none", "spellcheck": "false"}
+            ),
+            "status_note": forms.TextInput(
+                attrs={"placeholder": "Gateway rejected: name too close to a bank"}
+            ),
+            "api_key": forms.TextInput(
+                attrs={"placeholder": "Leave blank to use the platform account",
+                       "autocomplete": "off"}
+            ),
+            "account_reference": forms.TextInput(attrs={"autocomplete": "off"}),
+        }
+
+    def __init__(self, *args, school=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.school = school
+        self.was_created = kwargs.get("instance") is None
+        self.fields["status_note"].label = "Note"
+        self.fields["api_key"].label = "School's own API key"
+        self.fields["account_reference"].label = "Sub-account reference"
+        self.fields["sender_id"].widget.attrs["maxlength"] = (
+            self.fields["sender_id"].max_length
+        )
+
+    def clean_sender_id(self):
+        from .validators import normalise_sender_id
+
+        sender_id = normalise_sender_id(self.cleaned_data["sender_id"])
+
+        # Two schools sharing a Sender ID is not a database error -- gateways
+        # do let unrelated accounts register similar names -- but on one
+        # platform it means parents cannot tell which school texted them, and
+        # it is almost always a copy-paste from the school above in the list.
+        clash = SchoolMessagingConfig.all_objects.filter(
+            sender_id__iexact=sender_id
+        ).exclude(school=self.school)
+        if self.instance.pk:
+            clash = clash.exclude(pk=self.instance.pk)
+        other = clash.select_related("school").first()
+        if other is not None:
+            raise ValidationError(
+                f'"{sender_id}" is already registered to {other.school.name}. '
+                f"Two schools cannot send under the same name."
+            )
+        return sender_id
+
+    def clean(self):
+        cleaned = super().clean()
+        status = cleaned.get("status")
+        note = (cleaned.get("status_note") or "").strip()
+
+        if status in {SenderIdStatus.REJECTED, SenderIdStatus.SUSPENDED} and not note:
+            self.add_error(
+                "status_note",
+                "Say why. The school sees this, and it is the only thing that "
+                "tells them what to do next.",
+            )
+        return cleaned
+
+    def save(self, commit=True, *, user=None):
+        config = super().save(commit=False)
+        config.school = self.school
+        # School-wide by design; per-branch identities are the documented
+        # extension, not something this screen sets by accident.
+        config.branch = None
+
+        if config.status == SenderIdStatus.APPROVED:
+            # approve() stamps who and when, and clears a stale rejection note.
+            config.approve(by=user, save=False)
+        else:
+            config.approved_by = None
+            config.approved_at = None
+
+        if commit:
+            config.save()
+        return config

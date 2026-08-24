@@ -127,6 +127,11 @@ ICONS: dict[str, list[str]] = {
         " 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189"
         " 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z",
     ],
+    "identity": [
+        "M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975"
+        "m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966"
+        " 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
+    ],
     "cog": [
         "M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281"
         "c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456"
@@ -239,6 +244,9 @@ NAVIGATION: tuple[NavSection, ...] = (
         label="Communication",
         items=(
             NavItem("Messaging", "messaging:index", "chat", ALL_ROLES),
+            # What parents see the school's messages come from. Read-only for
+            # a school; the platform owner registers and approves it here.
+            NavItem("Sender ID", "messaging:identity", "identity", _LEADERSHIP),
         ),
     ),
     NavSection(
