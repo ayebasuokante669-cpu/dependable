@@ -26,6 +26,7 @@ from typing import Iterable
 
 from django.apps import apps as django_apps
 from django.db.models import Sum
+from django.utils import timezone
 
 from apps.fees.models import FeeComponent, FeeStructure, Term
 
@@ -33,25 +34,33 @@ ZERO = Decimal("0")
 
 
 class FeeState:
-    """The four states a student's fees can be in on screen.
+    """The states a student's fees can be in on screen.
 
     ``UNPRICED`` is not a payment state -- it means nobody has set fees for that
     class this term, which is a setup gap the school needs to see rather than a
     zero balance to be reassured by.
+
+    ``OVERDUE`` is not a fifth position either: it is ``UNPAID`` or ``PARTIAL``
+    after the term's due date has passed. A term with no due date set never
+    produces it, because a deadline nobody stated is not one a parent can have
+    missed.
     """
 
     UNPRICED = "unpriced"
     PAID = "paid"
     PARTIAL = "partial"
     UNPAID = "unpaid"
+    OVERDUE = "overdue"
 
 
-#: Design-system pill class and label for each state.
+#: Design-system pill class and label for each state -- the four payment-status
+#: colours from the token set, and nothing invented alongside them.
 STATE_DISPLAY = {
     FeeState.UNPRICED: ("status-unpaid", "No fees set"),
     FeeState.PAID: ("status-paid", "Paid"),
     FeeState.PARTIAL: ("status-partial", "Part paid"),
     FeeState.UNPAID: ("status-unpaid", "Unpaid"),
+    FeeState.OVERDUE: ("status-overdue", "Overdue"),
 }
 
 
@@ -75,11 +84,27 @@ class FeePosition:
         return max(self.expected - self.paid, ZERO)
 
     @property
+    def due_date(self):
+        """When this term's fees were expected, or ``None`` if never stated."""
+        return getattr(self.term, "due_date", None)
+
+    @property
+    def is_overdue(self) -> bool:
+        """Something is still owed and the school's own deadline has passed."""
+        if self.outstanding <= ZERO or self.due_date is None:
+            return False
+        return timezone.localdate() > self.due_date
+
+    @property
     def state(self) -> str:
         if not self.is_priced:
             return FeeState.UNPRICED
         if self.expected <= ZERO or self.paid >= self.expected:
             return FeeState.PAID
+        # Overdue outranks the amount-based states: a bursar looking at this
+        # column needs the deadline to be the thing that stands out.
+        if self.is_overdue:
+            return FeeState.OVERDUE
         if self.paid > ZERO:
             return FeeState.PARTIAL
         return FeeState.UNPAID

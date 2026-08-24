@@ -28,6 +28,9 @@ class Capability(str, Enum):
     MANAGE_STUDENTS = "manage_students"
     VIEW_MESSAGES = "view_messages"
     SEND_MESSAGES = "send_messages"
+    VIEW_PAYMENTS = "view_payments"
+    RECORD_PAYMENTS = "record_payments"
+    VOID_PAYMENTS = "void_payments"
 
 
 #: Owner- and principal-level roles: set up the school, who attends it, and what
@@ -42,6 +45,9 @@ _LEADERSHIP = frozenset(
         Capability.MANAGE_STUDENTS,
         Capability.VIEW_MESSAGES,
         Capability.SEND_MESSAGES,
+        Capability.VIEW_PAYMENTS,
+        Capability.RECORD_PAYMENTS,
+        Capability.VOID_PAYMENTS,
     }
 )
 
@@ -51,10 +57,16 @@ _LEADERSHIP = frozenset(
 #: the setup screens; the money-movement capabilities land with the payments
 #: layer.
 #:
-#: Messaging is the exception, and the reason it is: chasing a fee is the
-#: bursar's job, so they send parent messages at the same level as a principal.
-#: Nothing in messaging edits school data -- it only reads the roster the
+#: Messaging and payments are the exceptions, and the reason is the same:
+#: taking money and chasing it is the bursar's actual job. They record and
+#: confirm payments and send parent reminders at the same level as a principal.
+#: Neither edits school setup -- both only read the roster and the pricing the
 #: bursar can already see.
+#:
+#: Voiding is the one money action they do not hold. Reversing confirmed money
+#: is a supervisory act, so it sits with the principal and the owner. If the
+#: school would rather the bursar could undo their own mistakes, add
+#: VOID_PAYMENTS here -- the screens follow the capability table.
 _BURSAR = frozenset(
     {
         Capability.VIEW_ACADEMICS,
@@ -62,6 +74,8 @@ _BURSAR = frozenset(
         Capability.VIEW_STUDENTS,
         Capability.VIEW_MESSAGES,
         Capability.SEND_MESSAGES,
+        Capability.VIEW_PAYMENTS,
+        Capability.RECORD_PAYMENTS,
     }
 )
 

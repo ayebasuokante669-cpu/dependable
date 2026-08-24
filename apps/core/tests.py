@@ -220,11 +220,18 @@ class NavigationTests(TestCase):
         self.assertIn("Platform", labels)
 
     def test_unbuilt_destinations_render_as_unavailable(self):
+        """The shell stays honest while feature screens are still being built.
+
+        The pair moves as features land: Payments was the unbuilt half of this
+        assertion until the payments app shipped, and Reports is next.
+        """
         sections = {s.label: s.items for s in nav_for(Role.SCHOOL_OWNER, "/")}
         students = next(i for i in sections["School"] if i.label == "Students")
         payments = next(i for i in sections["Finance"] if i.label == "Payments")
+        reports = next(i for i in sections["Overview"] if i.label == "Reports")
         self.assertTrue(students.available)   # roster screens exist now
-        self.assertFalse(payments.available)  # feature screen not built yet
+        self.assertTrue(payments.available)   # and payments screens do too
+        self.assertFalse(reports.available)   # feature screen not built yet
 
     def test_dashboard_is_marked_active_on_its_own_path(self):
         from django.urls import reverse

@@ -1,0 +1,70 @@
+{% comment %}
+One student's payment rows. Shared by the student detail page's card and the
+full history screen, so the two can never show the same money differently.
+
+Expects: payments (a list), and optionally can_record.
+{% endcomment %}
+{% load money %}
+
+{% if payments %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="table-head">
+        <tr>
+          <th scope="col" class="px-5 py-3 font-semibold">Receipt</th>
+          <th scope="col" class="px-5 py-3 font-semibold">Paid</th>
+          <th scope="col" class="px-5 py-3 text-right font-semibold">Amount</th>
+          <th scope="col" class="px-5 py-3 font-semibold">For</th>
+          <th scope="col" class="px-5 py-3 font-semibold">Method</th>
+          <th scope="col" class="px-5 py-3 font-semibold">Status</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-ink-200">
+        {% for payment in payments %}
+          <tr class="{% if payment.status == 'void' %}bg-ink-50/60{% endif %}">
+            <td class="numeric whitespace-nowrap px-5 py-3">
+              <a href="{{ payment.get_absolute_url }}"
+                 class="text-brand-800 hover:underline">{{ payment.receipt_number }}</a>
+            </td>
+            <td class="whitespace-nowrap px-5 py-3 text-ink-700">
+              {{ payment.date_paid|date:"j M Y" }}
+            </td>
+            <td class="numeric whitespace-nowrap px-5 py-3 text-right
+                       {% if payment.status == 'void' %}text-ink-400 line-through
+                       {% else %}font-medium text-ink-900{% endif %}">
+              {{ payment.amount|naira }}
+            </td>
+            <td class="whitespace-nowrap px-5 py-3 text-ink-700">
+              {{ payment.get_label_display }}
+              {% if payment.reference %}
+                <span class="numeric block text-xs text-ink-500">
+                  {{ payment.reference }}
+                </span>
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap px-5 py-3 text-ink-700">
+              {{ payment.get_method_display }}
+            </td>
+            <td class="whitespace-nowrap px-5 py-3">
+              <span class="status-pill {{ payment.pill_class }}">
+                {{ payment.get_status_display }}
+              </span>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="empty-state">
+    <p class="text-sm text-ink-600">Nothing recorded yet</p>
+    <p class="mx-auto mt-1 max-w-md text-sm">
+      Payments taken at the bursary window, and receipts confirmed from the
+      pending queue, both list here.
+    </p>
+    {% if can_record %}
+      <a href="{% url 'payments:record' %}?student={{ student.pk }}"
+         class="btn btn-secondary mt-5 text-sm">Record a payment</a>
+    {% endif %}
+  </div>
+{% endif %}

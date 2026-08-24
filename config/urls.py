@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
@@ -19,5 +21,11 @@ urlpatterns = [
     path("fees/", include("apps.fees.urls")),
     path("students/", include("apps.students.urls")),
     path("messaging/", include("apps.messaging.urls")),
+    path("payments/", include("apps.payments.urls")),
     path("", include("apps.core.urls")),
 ]
+
+if settings.DEBUG:
+    # Uploaded receipts. In production these are served by the web server or
+    # object storage; Django deliberately refuses to do it with DEBUG off.
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

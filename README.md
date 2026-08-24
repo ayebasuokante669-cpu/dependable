@@ -569,11 +569,10 @@ A class with no fee structure this term is **not** chased. Nobody has said what
 it costs, so there is no balance, and texting those parents would be the
 platform inventing a debt.
 
-Until the payments app lands, `apps/students/fees.py` reports every student as
-having paid nothing, which is honest — nothing has been recorded. `_paid_amounts()`
-resolves the payments app through the app registry rather than importing it, so
-this module keeps working without it and starts telling the real story the day
-it arrives.
+`apps/students/fees.py` gets those confirmed amounts from the payments app
+through `_paid_amounts()`, which resolves it via the app registry rather than
+importing it — so the roster keeps rendering whether or not payments is
+installed. See [Payments](#payments).
 
 ### Screens
 
@@ -597,6 +596,138 @@ messaging edits school data — it only reads the roster they can already see.
 
 Nothing new is seeded; messaging runs off the existing students and their parent
 contacts.
+
+## Payments
+
+At `/payments/`. The core of the product, and for the pilot it is **manual**:
+the school keeps banking into its own account and the bursar records each
+payment against a student. No gateway, no card, no settlement.
+
+### One model
+
+**`Payment`** — branch-owned, belongs to a student and a term. Amount, date
+paid, label, method, reference, source, status, an optional receipt
+attachment, and the audit trail (recorded / confirmed / voided, by whom and
+when).
+
+Two fields exist now specifically so a later change is not a rewrite:
+
+* **`source`** — manual / gateway / bank-import. Every row is manual today.
+  When a gateway or a bank-statement import starts creating rows, the ones a
+  human typed stay distinguishable from the ones a machine reconciled, which is
+  the first question anyone will ask when the two disagree.
+* **`gateway_provider` / `gateway_reference`** — null on every row, waiting.
+
+`term` is a foreign key rather than something worked out from the date: a
+payment made in the holidays for next term is still that term's money, and only
+the person recording it knows which.
+
+### Balance is derived, never stored
+
+```
+expected = the class's FeeStructure total for the term
+paid     = the sum of that student's CONFIRMED payments for that term
+balance  = expected - paid
+```
+
+Not on the student, not on the term, not on the payment. It lives in
+`apps/payments/balances.py` and is computed every time it is asked. Because
+`paid_by_student()` is the single definition of "paid", confirming a receipt or
+voiding a payment moves the student's balance, the outstanding list, the
+bursar's dashboard and messaging's "parents who owe" in the same instant, with
+no recalculation step anywhere.
+
+Status derives too: **paid** (balance ≤ 0), **partial**, **unpaid**, and
+**overdue** — which is not a fifth state but unpaid-or-partial past the term's
+`due_date`. A term with no due date set never produces it: a deadline nobody
+stated is not one a parent can have missed. The four existing payment-status
+colours carry all of them.
+
+An overpayment is a credit, not a negative balance.
+
+### Only confirmed money counts
+
+`pending` is the receipt handed in but not yet checked — the client's flow of
+"someone uploads a receipt, the bursar confirms who and what it is for". A
+pending payment sits in the queue, shows on the student's page, and changes no
+balance at all until someone confirms it. The confirm step is the *same form*
+as recording, deliberately: the bursar has to be able to correct the student,
+the label and the amount against the slip at the moment they confirm.
+
+### Labelling is descriptive
+
+School Fees / Uniform / Books / Development / Other, set from the receipt or
+from what the parent said. It does **not** split the balance — that stays one
+combined figure. Per-label accounting would mean deciding what happens when a
+parent pays 50,000 against a 30,000 uniform charge, and nobody has asked for
+that answer.
+
+### A voided payment is never deleted
+
+It keeps its row, stops counting, and records who voided it and why. Voiding
+asks for a reason and a tickbox, and the screen shows what the balance will
+become before you press it. Money that was recorded and then reversed is a fact
+about the account; erasing it is how a ledger stops being one.
+
+Students are protected too: a student with payments against them cannot be
+deleted from the roster — the screen says so and offers "withdraw instead",
+which keeps the history and stops the billing.
+
+### Screens
+
+| URL | What it is |
+| --- | --- |
+| `/payments/` | Branch-wide list, filterable by label, status, method and date, with confirmed and pending totals for the filter. |
+| `/payments/record/` | Record a payment. Student picked by typing; balance shown beside the amount. |
+| `/payments/pending/` | The receipt queue: the slip alongside the figures it has to agree with. |
+| `/payments/outstanding/` | Who owes, most owed first, with one click to message them. |
+| `/payments/<id>/` | One payment, its attachment, its trail, and the balance it moved. |
+| `/payments/<id>/receipt/` | A printable receipt with the running balance. |
+| `/payments/<id>/void/` | Reverse it, with a reason. |
+| `/payments/student/<id>/` | A student's full history. Their detail page shows the most recent eight. |
+
+The student picker is a text input backed by a native `<datalist>`, not a long
+`<select>` or a JS autocomplete: it is how the job is actually done — the bursar
+has a receipt with an admission number on it and types it — and the browser's
+own search matches a surname too. The receipt is plain HTML with a print
+stylesheet rather than a generated PDF; the browser already knows how to print
+and how to save as PDF, and a PDF library would be a dependency the school has
+to keep working for a page that is one page long.
+
+### Permissions
+
+| | View | Record & confirm | Void |
+| --- | --- | --- | --- |
+| Bursar | yes | yes | |
+| Principal | yes | yes | yes |
+| School owner | yes | yes | yes |
+
+Voiding is supervisory: it reverses confirmed money. If the school would rather
+the bursar could undo their own mistakes, add `VOID_PAYMENTS` to `_BURSAR` in
+`apps/core/permissions.py` — the screens follow the capability table and nothing
+else changes.
+
+### Seeding
+
+```bash
+python manage.py seed_payments            # needs seed_students to have run
+python manage.py seed_payments --replace  # clear this term's payments and reseed
+```
+
+The spread is chosen so every state is actually on screen: students paid in
+full (in one payment and in two instalments), part paid, untouched, two pending
+receipts with attachments, and one voided payment with its reason. Amounts come
+from each student's own class fee structure rather than being hard-coded, so
+re-pricing a class re-seeds sensible figures.
+
+**Overdue is the one status the seed does not produce, and cannot.** It is a
+property of the *term*, not of a student: the moment a term's `due_date` is in
+the past, every unpaid and part-paid balance at that branch turns overdue at
+once. Seeding one would therefore hide the unpaid and part-paid states behind a
+wall of red rather than adding a fourth colour beside them. Set a due date on
+the term (Django admin → Terms) and the overdue pill appears everywhere it
+should. The behaviour itself is covered by tests in
+`apps/payments/tests.py::OverdueTests`.
 
 ## The public side and signing in
 
@@ -736,10 +867,12 @@ apps/students/       Student, its screens, the derived fee position (fees.py),
 apps/messaging/      Message and MessageRecipient, audiences.py (who a filter
                      means), dispatch.py (record then deliver), and
                      providers/ (the interface, console, Termii, Africa's Talking)
+apps/payments/       Payment, balances.py (every derived figure), its screens,
+                     and seed_payments
 templates/           base.html, 403.html, partials/, core/ (landing, signup,
                      onboarding, dashboards), academics/, fees/, students/,
-                     messaging/, registration/ (_auth_base.html plus login,
-                     password reset and password change)
+                     messaging/, payments/, registration/ (_auth_base.html plus
+                     login, password reset and password change)
 static/src/app.css   design tokens and components (Tailwind source)
 static/css/app.css   compiled output (committed)
 ```

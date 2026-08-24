@@ -45,18 +45,30 @@
     </div>
     <div class="card p-5">
       <div class="text-sm font-medium text-ink-600">Collected</div>
-      <div class="numeric mt-2 text-3xl font-semibold text-ink-400">
+      <div class="numeric mt-2 text-3xl font-semibold
+                  {% if collected_total %}text-paid-strong{% else %}text-ink-400{% endif %}">
         {{ collected_total|naira }}
       </div>
-      <div class="mt-1 text-xs text-ink-500">Payments not recorded yet</div>
+      <div class="mt-1 text-xs text-ink-500">
+        Confirmed payments this term
+        {% if pending_count %}
+          &middot;
+          <a href="{% url 'payments:pending' %}" class="font-medium text-partial-strong
+                    hover:underline">
+            {{ pending_total|naira }} pending
+          </a>
+        {% endif %}
+      </div>
     </div>
     <div class="card p-5">
       <div class="text-sm font-medium text-ink-600">Outstanding</div>
       <div class="numeric mt-2 text-3xl font-semibold text-overdue-strong">
-        {{ expected_total|naira }}
+        {{ outstanding_total|naira }}
       </div>
       <div class="mt-1 text-xs text-ink-500">
-        The whole term fee until payments land
+        <a href="{% url 'payments:outstanding' %}" class="hover:underline">
+          Expected less confirmed
+        </a>
       </div>
     </div>
   </div>

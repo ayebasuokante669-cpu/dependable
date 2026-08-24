@@ -345,11 +345,48 @@ class BursarDashboardView(RoleDashboardMixin, TemplateView):
         context["student_count"] = Student.objects.filter(
             status=StudentStatus.ACTIVE
         ).count()
-        # Honest rather than decorative: nothing has been collected because
-        # nothing can be recorded yet.
-        context["collected_total"] = ZERO
+        context.update(
+            with_outstanding(collection_summary(term), expected_total)
+        )
         context["page_title"] = "Finance dashboard"
         return context
+
+
+def collection_summary(term) -> dict:
+    """What has actually come in against ``term``, and what is still waiting.
+
+    Resolved through the app registry rather than imported: the dashboards
+    shipped before payments did, and this screen must render whether or not
+    that app is installed. Confirmed money only -- pending receipts are
+    reported separately, because a bursar needs to know the difference between
+    money counted and money merely handed in.
+    """
+    from django.apps import apps as django_apps
+
+    summary = {"collected_total": ZERO, "pending_total": ZERO, "pending_count": 0}
+    if term is None or not django_apps.is_installed("apps.payments"):
+        return summary
+
+    from apps.payments.models import Payment, PaymentStatus
+
+    totals = Payment.objects.filter(term=term).aggregate(
+        collected=Sum("amount", filter=Q(status=PaymentStatus.CONFIRMED)),
+        pending=Sum("amount", filter=Q(status=PaymentStatus.PENDING)),
+        pending_count=Count("id", filter=Q(status=PaymentStatus.PENDING)),
+    )
+    summary["collected_total"] = totals["collected"] or ZERO
+    summary["pending_total"] = totals["pending"] or ZERO
+    summary["pending_count"] = totals["pending_count"] or 0
+    return summary
+
+
+def with_outstanding(summary: dict, expected_total) -> dict:
+    """Add the derived outstanding figure. Never negative: overpayment across
+    a branch is a credit sitting somewhere, not a negative debt."""
+    summary["outstanding_total"] = max(
+        expected_total - summary["collected_total"], ZERO
+    )
+    return summary
 
 
 # ===========================================================================

@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ page_obj.paginator.count }} student{{ page_obj.paginator.count|pluralize }}
+    still owe{{ page_obj.paginator.count|pluralize:"s," }}
+    {% if term %}&middot; {{ term.name }}{% endif %}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'payments:index' %}" class="btn btn-ghost text-sm">
+    <span class="hidden sm:inline">All</span> payments
+  </a>
+  {% if can_send %}
+    {# The same derivation this page uses, so the reminder reaches exactly the
+       families listed below. #}
+    <a href="{% url 'messaging:fee_reminder' %}" class="btn btn-primary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.375
+                 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375
+                 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03
+                 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41
+                 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457
+                 -.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25
+                 9-8.25s9 3.694 9 8.25Z" />
+      </svg>
+      <span class="hidden sm:inline">Message these parents</span>
+      <span class="sm:hidden">Remind</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+  {% if rows %}
+    <div class="mb-5 grid gap-4 sm:grid-cols-3">
+      <div class="card p-5">
+        <div class="text-sm font-medium text-ink-600">Still owed</div>
+        <div class="numeric mt-2 text-3xl font-semibold text-overdue-strong">
+          {{ owed_total|naira }}
+        </div>
+        <div class="mt-1 text-xs text-ink-500">Across this page's students</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-sm font-medium text-ink-600">Expected from them</div>
+        <div class="numeric mt-2 text-3xl font-semibold text-brand-900">
+          {{ expected_total|naira }}
+        </div>
+        <div class="mt-1 text-xs text-ink-500">Their classes' fee structures</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-sm font-medium text-ink-600">Due by</div>
+        <div class="mt-2 text-lg font-semibold text-brand-900">
+          {% if term.due_date %}{{ term.due_date|date:"j F Y" }}
+          {% else %}Not set{% endif %}
+        </div>
+        <div class="mt-1 text-xs text-ink-500">
+          {% if term.due_date %}
+            Balances past this date read as overdue
+          {% else %}
+            Set one on the term and unpaid balances start showing as overdue
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="table-head">
+            <tr>
+              <th scope="col" class="px-5 py-3 font-semibold">Student</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Class</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Parent</th>
+              <th scope="col" class="px-5 py-3 text-right font-semibold">Expected</th>
+              <th scope="col" class="px-5 py-3 text-right font-semibold">Paid</th>
+              <th scope="col" class="px-5 py-3 text-right font-semibold">Owed</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Status</th>
+              {% if can_record %}
+                <th scope="col" class="px-5 py-3 text-right font-semibold">Actions</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ink-200">
+            {% for row in rows %}
+              <tr>
+                <td class="px-5 py-3">
+                  <a href="{{ row.student.get_absolute_url }}"
+                     class="font-medium text-brand-800 hover:underline">
+                    {{ row.student.formal_name }}
+                  </a>
+                  <span class="numeric block text-xs text-ink-500">
+                    {{ row.student.admission_number }}
+                  </span>
+                </td>
+                <td class="whitespace-nowrap px-5 py-3 text-ink-700">
+                  {{ row.student.school_class.display_name }}
+                </td>
+                <td class="whitespace-nowrap px-5 py-3">
+                  <span class="text-ink-700">{{ row.student.parent_name }}</span>
+                  <a href="{{ row.student.parent_phone_link }}"
+                     class="numeric block text-xs text-brand-800 hover:underline">
+                    {{ row.student.parent_phone_display }}
+                  </a>
+                </td>
+                <td class="numeric whitespace-nowrap px-5 py-3 text-right text-ink-700">
+                  {{ row.position.expected|naira }}
+                </td>
+                <td class="numeric whitespace-nowrap px-5 py-3 text-right text-ink-700">
+                  {{ row.position.paid|naira }}
+                </td>
+                <td class="numeric whitespace-nowrap px-5 py-3 text-right
+                           font-semibold text-overdue-strong">
+                  {{ row.owed|naira }}
+                </td>
+                <td class="whitespace-nowrap px-5 py-3">
+                  <span class="status-pill {{ row.position.pill_class }}">
+                    {{ row.position.pill_label }}
+                  </span>
+                </td>
+                {% if can_record %}
+                  <td class="px-5 py-3 text-right">
+                    <a href="{% url 'payments:record' %}?student={{ row.student.pk }}"
+                       class="btn btn-ghost text-xs">Record payment</a>
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="border-t border-ink-200 px-5 py-3 text-xs text-ink-500">
+        Expected is the class's fee structure for the term; paid is confirmed
+        payments only. A class with no fee structure this term is not listed —
+        there is nothing yet to owe.
+      </p>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="mt-5 flex items-center justify-between gap-3" aria-label="Pagination">
+        <p class="text-sm text-ink-600">
+          {{ page_obj.start_index }}&ndash;{{ page_obj.end_index }}
+          of {{ page_obj.paginator.count }}
+        </p>
+        <div class="flex gap-2">
+          {% if page_obj.has_previous %}
+            <a href="{% querystring page=page_obj.previous_page_number %}"
+               class="btn btn-secondary text-sm">Previous</a>
+          {% else %}
+            <span class="btn btn-secondary text-sm opacity-50" aria-disabled="true">Previous</span>
+          {% endif %}
+          <span class="btn btn-ghost text-sm" aria-current="page">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+          </span>
+          {% if page_obj.has_next %}
+            <a href="{% querystring page=page_obj.next_page_number %}"
+               class="btn btn-secondary text-sm">Next</a>
+          {% else %}
+            <span class="btn btn-secondary text-sm opacity-50" aria-disabled="true">Next</span>
+          {% endif %}
+        </div>
+      </nav>
+    {% endif %}
+
+  {% else %}
+    <div class="card empty-state">
+      <p class="text-base font-medium text-ink-700">Nobody owes anything</p>
+      <p class="mx-auto mt-1 max-w-md text-sm">
+        Every student in a priced class has paid their fees for
+        {% if term %}{{ term.name }}{% else %}this term{% endif %} in full.
+        Students in classes with no fee structure are not counted — there is
+        nothing yet to owe.
+      </p>
+      <a href="{% url 'payments:index' %}" class="btn btn-secondary mt-5 text-sm">
+        See the payments
+      </a>
+    </div>
+  {% endif %}
+{% endblock %}

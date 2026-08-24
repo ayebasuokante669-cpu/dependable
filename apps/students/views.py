@@ -19,8 +19,11 @@ be the one that gets written.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.contrib import messages
 from django.db import IntegrityError
+from django.db.models import ProtectedError
 from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
@@ -156,8 +159,56 @@ class StudentDetailView(ReadStudentsMixin, DetailView):
             .exclude(pk=student.pk)
             .count()
         )
+        context.update(payment_history(student, self.request))
         context["page_title"] = student.full_name
         return context
+
+
+#: How many receipts the detail page shows before sending the reader to the
+#: full history. Enough that a typical term's payments fit; few enough that a
+#: student with three years of history does not bury the page.
+DETAIL_PAYMENTS = 8
+
+
+def payment_history(student, request) -> dict:
+    """The payment card's context, or an honest empty one.
+
+    Resolved through the app registry rather than imported, for the same reason
+    ``apps.students.fees`` does it: the roster shipped before payments did, and
+    a hard import would tie this screen's ability to render to an app that may
+    not be installed.
+    """
+    from django.apps import apps as django_apps
+
+    from apps.core.permissions import Capability, has_capability
+
+    context = {
+        "payments": [],
+        "payment_count": 0,
+        "more_payments": False,
+        "pending_total": None,
+        "can_record_payments": has_capability(
+            request.user, Capability.RECORD_PAYMENTS
+        ),
+    }
+    if not django_apps.is_installed("apps.payments"):
+        return context
+
+    from apps.payments.models import Payment, PaymentStatus
+
+    rows = Payment.objects.filter(student=student).select_related("term")
+    context["payment_count"] = rows.count()
+    context["payments"] = list(rows[:DETAIL_PAYMENTS])
+    context["more_payments"] = context["payment_count"] > DETAIL_PAYMENTS
+
+    # Surfaced next to the balance, because "I paid last week" and "the balance
+    # has not moved" are both true while a receipt sits in the pending queue.
+    pending = sum(
+        (p.amount for p in rows.filter(status=PaymentStatus.PENDING)),
+        Decimal("0"),
+    )
+    context["pending_total"] = pending or None
+    return context
 
 
 class StudentCreateView(ManageStudentsMixin, CreateView):
@@ -241,8 +292,26 @@ class StudentDeleteView(ManageStudentsMixin, DeleteView):
         return context
 
     def form_valid(self, form):
-        messages.success(self.request, f"{self.object.full_name} removed from the roster.")
-        return super().form_valid(form)
+        student = self.object
+        try:
+            response = super().form_valid(form)
+        except ProtectedError:
+            # Payments reference the student with PROTECT, so money already
+            # recorded against them stops the deletion. That is the right
+            # outcome -- deleting the row would strand the payments outside
+            # every balance -- but it has to arrive as a sentence, not a 500.
+            messages.error(
+                self.request,
+                f"{student.full_name} has payments recorded against them, so "
+                f"the record cannot be deleted. Withdraw them instead: the "
+                f"history stays and they stop being billed.",
+            )
+            return HttpResponseRedirect(
+                f"{reverse('students:student_update', args=[student.pk])}"
+                f"?status={StudentStatus.WITHDRAWN}"
+            )
+        messages.success(self.request, f"{student.full_name} removed from the roster.")
+        return response
 
 
 # ===========================================================================

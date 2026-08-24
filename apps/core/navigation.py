@@ -228,8 +228,11 @@ NAVIGATION: tuple[NavSection, ...] = (
             # (see Capability.MANAGE_FEES), so every role gets the link.
             NavItem("Fee Structures", "fees:structure_list", "money", ALL_ROLES),
             NavItem("Terms", "admin:fees_term_changelist", "calendar", _LEADERSHIP),
-            NavItem("Payments", "payments:index", "chart",
-                    (Role.PLATFORM_OWNER, Role.SCHOOL_OWNER, Role.BURSAR)),
+            # A bursar records and confirms; owner and principal level also
+            # view and void (see Capability.VOID_PAYMENTS), so every role gets
+            # the link.
+            NavItem("Payments", "payments:index", "money", ALL_ROLES),
+            NavItem("Outstanding", "payments:outstanding", "chart", ALL_ROLES),
         ),
     ),
     NavSection(

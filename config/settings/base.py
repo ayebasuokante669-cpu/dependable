@@ -50,6 +50,8 @@ INSTALLED_APPS = [
     "apps.students",
     # Outbound parent messaging (SMS/WhatsApp). Staff-side only.
     "apps.messaging",
+    # Money received, recorded against a student. Balances derive from here.
+    "apps.payments",
 ]
 
 MIDDLEWARE = [

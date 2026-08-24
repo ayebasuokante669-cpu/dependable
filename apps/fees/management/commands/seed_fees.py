@@ -71,7 +71,12 @@ class Command(BaseCommand):
             branch=branch,
             academic_year=TERM["academic_year"],
             sequence=TERM["sequence"],
-            defaults={"school": school, "name": TERM["name"]},
+            defaults={
+                "school": school,
+                "name": TERM["name"],
+                # Normally None -- see the comment on TERM in pricing.py.
+                "due_date": TERM.get("due_date"),
+            },
         )
         if TERM.get("is_current") and not term.is_current:
             term.is_current = True
