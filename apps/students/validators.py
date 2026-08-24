@@ -52,6 +52,20 @@ def validate_phone(value: str) -> None:
         )
 
 
+def to_international(value: str, *, plus: bool = True) -> str:
+    """Convert a stored number to international form: ``+2348031234567``.
+
+    What ``tel:`` links and every SMS gateway want. ``plus=False`` returns the
+    bare ``234...`` form that some gateways insist on instead. A number that is
+    not the expected eleven digits is handed back untouched rather than being
+    mangled into a plausible-looking wrong number.
+    """
+    digits = normalise_phone(value)
+    if len(digits) != 11 or not digits.startswith("0"):
+        return digits or ""
+    return f"{'+' if plus else ''}234{digits[1:]}"
+
+
 def format_phone(value: str) -> str:
     """Group a stored number for display: ``0803 123 4567``."""
     digits = normalise_phone(value)

@@ -484,6 +484,120 @@ across branches), dates of birth match the class, two Okonkwo siblings sit in
 Primary 1 and KG 2 sharing one guardian, and one student is withdrawn and one
 inactive so the status filter has something real to filter.
 
+## Parent messaging
+
+At `/messaging/`. Entirely staff-side and outbound: **parents never sign in.**
+The platform's whole relationship with a parent is an SMS or WhatsApp message
+going out, and a row recording what became of it.
+
+### The provider interface comes first
+
+```
+apps/messaging/providers/
+  base.py             MessagingProvider: send(recipient, message, channel)
+  console.py          the default -- logs it and marks it delivered
+  termii.py           stub: reads TERMII_API_KEY, builds the payload
+  africastalking.py   stub: reads AFRICASTALKING_*, builds the payload
+  __init__.py         PROVIDERS registry and get_provider()
+```
+
+Nothing above `providers/` imports a vendor. Swapping gateways is one settings
+line:
+
+```bash
+MESSAGING_PROVIDER=console          # default: no credentials needed
+MESSAGING_PROVIDER=termii           # + TERMII_API_KEY, MESSAGING_SENDER_ID
+MESSAGING_PROVIDER=africastalking   # + AFRICASTALKING_USERNAME / _API_KEY
+```
+
+The console provider is not a mock — it is the default, deliberately. The whole
+feature has to work end to end before anyone signs an SMS contract, and a demo
+that dies on a missing API key demos nothing. Every screen, count and delivery
+row you see running on it is the same code path a real gateway will drive. An
+unknown `MESSAGING_PROVIDER` raises rather than falling back, because a school
+that thinks it is sending real SMS must not quietly be writing to a log file.
+
+The two stubs are complete except for the HTTP call: they read their settings,
+assemble the real payload (Termii wants `2348031234567`, Africa's Talking wants
+`+2348031234567`), and refuse to send without credentials instead of returning
+a false success.
+
+### Two models
+
+```
+Message  --<  MessageRecipient
+```
+
+**`Message`** — one press of Send: body, channel, audience description, how the
+audience was chosen, sender, provider, and a rollup status.
+
+**`MessageRecipient`** — one row per parent, with the phone number and parent
+name *snapshotted at send time*, the per-recipient delivery status
+(pending / sent / delivered / failed), the provider's reference and any error.
+This is what makes the log real: a bursar needs to know that Mrs. Okonkwo's
+number bounced, not merely that "JSS 1A parents were messaged".
+
+`sent` and `delivered` are deliberately different states — a gateway accepting a
+message says nothing about whether a handset received it.
+
+`Message.status` is the one figure on the platform that is a stored rollup
+rather than derived, so the log can be listed and filtered without a join. It is
+never set by hand: `refresh_status()` recomputes it from the recipient rows, and
+a delivery report arriving days later calls it again. The rows stay the source
+of truth.
+
+### Audiences resolve in one place
+
+`apps/messaging/audiences.py` answers three questions that must never disagree —
+the live count on the compose screen, the rows actually written, and the
+description stored on the message. All three come out of one `resolve()` call,
+so the number the bursar saw *is* the batch that went out.
+
+Four filters: all parents at a campus, one class, hand-picked students, and
+parents who owe. Students who are not active, students with no number on file,
+and every other branch's parents are excluded — and a filter with nothing chosen
+resolves to *nobody*, never to everybody.
+
+### "Parents who owe" is the point
+
+The core use case is fee reminders, so `/messaging/reminders/` is the compose
+screen with that audience preset and a draft in the body. It selects students
+whose confirmed payments do not cover their class's fee structure for the
+current term — derived live, like every other fee figure here.
+
+A class with no fee structure this term is **not** chased. Nobody has said what
+it costs, so there is no balance, and texting those parents would be the
+platform inventing a debt.
+
+Until the payments app lands, `apps/students/fees.py` reports every student as
+having paid nothing, which is honest — nothing has been recorded. `_paid_amounts()`
+resolves the payments app through the app registry rather than importing it, so
+this module keeps working without it and starts telling the real story the day
+it arrives.
+
+### Screens
+
+| URL | What it is |
+| --- | --- |
+| `/messaging/` | The log: audience, channel, when, and "32 sent, 30 delivered, 2 failed". |
+| `/messaging/compose/` | Write, pick a channel and an audience, watch the count. |
+| `/messaging/reminders/` | The same screen, preset to the parents who owe. |
+| `/messaging/<id>/` | One batch, and what happened to every parent's copy. |
+| `/messaging/recipients/count/` | JSON, for the live count. |
+
+The live count is a small endpoint rather than a framework, and it runs the same
+`resolve()` the send path runs. With scripting off, the count still renders on
+load and the form still sends — the endpoint only saves a round trip.
+
+### Permissions
+
+Bursar, principal and owner can all send. Messaging is the one place a bursar is
+not read-only, and the reason is the job: chasing a fee is their work. Nothing in
+messaging edits school data — it only reads the roster they can already see.
+
+Nothing new is seeded; messaging runs off the existing students and their parent
+contacts.
+
 ## The public side and signing in
 
 Everything above assumed you were already signed in. This is how you get there.
@@ -619,10 +733,13 @@ apps/fees/           Term, FeeStructure, FeeComponent, screens, and pricing.py
 apps/students/       Student, its screens, the derived fee position (fees.py),
                      validators.py, roster.py, and the Excel import
                      (importer.py validates, workbook.py reads and writes .xlsx)
+apps/messaging/      Message and MessageRecipient, audiences.py (who a filter
+                     means), dispatch.py (record then deliver), and
+                     providers/ (the interface, console, Termii, Africa's Talking)
 templates/           base.html, 403.html, partials/, core/ (landing, signup,
                      onboarding, dashboards), academics/, fees/, students/,
-                     registration/ (_auth_base.html plus login, password reset
-                     and password change)
+                     messaging/, registration/ (_auth_base.html plus login,
+                     password reset and password change)
 static/src/app.css   design tokens and components (Tailwind source)
 static/css/app.css   compiled output (committed)
 ```

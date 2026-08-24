@@ -1,0 +1,19 @@
+{% comment %}
+Who is actually carrying these messages. Shown on every messaging screen: "it
+said it sent" means something very different on the console provider than on a
+paid gateway, and the school should never have to guess which one they are on.
+{% endcomment %}
+{% if provider.is_console %}
+  <p class="card mb-5 border-partial/30 bg-partial-soft px-4 py-3 text-sm text-partial-strong">
+    <span class="font-semibold">Console provider.</span>
+    Messages are written to the server log and marked delivered — nothing
+    reaches a phone yet. Every screen, count and delivery row below is real;
+    only the gateway is pending. Set <code>MESSAGING_PROVIDER</code> once the
+    SMS account is approved.
+  </p>
+{% elif not provider.is_configured %}
+  <p class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm text-overdue-strong">
+    <span class="font-semibold">{{ provider.label }} is selected but not configured.</span>
+    Nothing can be sent until its API credentials are set in the environment.
+  </p>
+{% endif %}

@@ -26,6 +26,8 @@ class Capability(str, Enum):
     MANAGE_FEES = "manage_fees"
     VIEW_STUDENTS = "view_students"
     MANAGE_STUDENTS = "manage_students"
+    VIEW_MESSAGES = "view_messages"
+    SEND_MESSAGES = "send_messages"
 
 
 #: Owner- and principal-level roles: set up the school, who attends it, and what
@@ -38,18 +40,28 @@ _LEADERSHIP = frozenset(
         Capability.MANAGE_FEES,
         Capability.VIEW_STUDENTS,
         Capability.MANAGE_STUDENTS,
+        Capability.VIEW_MESSAGES,
+        Capability.SEND_MESSAGES,
     }
 )
 
 #: A bursar collects against the fee structure but does not decide it, and
 #: records payments against the roster without owning it -- they need to find a
-#: student to take money from them, not to enrol or remove one. Read-only
-#: throughout; the money-movement capabilities land with the payments layer.
+#: student to take money from them, not to enrol or remove one. Read-only on
+#: the setup screens; the money-movement capabilities land with the payments
+#: layer.
+#:
+#: Messaging is the exception, and the reason it is: chasing a fee is the
+#: bursar's job, so they send parent messages at the same level as a principal.
+#: Nothing in messaging edits school data -- it only reads the roster the
+#: bursar can already see.
 _BURSAR = frozenset(
     {
         Capability.VIEW_ACADEMICS,
         Capability.VIEW_FEES,
         Capability.VIEW_STUDENTS,
+        Capability.VIEW_MESSAGES,
+        Capability.SEND_MESSAGES,
     }
 )
 
