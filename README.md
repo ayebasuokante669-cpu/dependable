@@ -69,7 +69,7 @@ the isolation hold. For a superuser: `python manage.py createsuperuser`.
 ### CSS
 
 The compiled stylesheet is committed, so the project runs without Node. To
-change the design tokens, edit `static/src/app.css` and rebuild:
+change the design tokens, edit `assets/app.css` and rebuild:
 
 ```bash
 npm install
@@ -972,22 +972,66 @@ all twelve became.
 
 ### Logos
 
+Two different marks, never interchangeable: **SCHOOLCORD's**, which says whose
+software this is, and **the school's**, which says whose school you are looking
+at.
+
+| Partial | What it draws |
+| --- | --- |
+| `partials/_brand_mark.html` | SCHOOLCORD's official logo, from `static/img/`. |
+| `partials/_school_logo.html` | A tenant's uploaded logo, or its initial square. |
+
+#### The product mark
+
+`static/img/schoolcord-logo.svg` is the primary asset, with
+`schoolcord-logo.png` as the fallback. Two points with one cord between them —
+the school and the parent on the same line — drawn in the brand tokens
+(`#EEF3FB` ground; `#0F2A52` / `#1B4680` / `#2E63B0` marks), so it sits inside
+the palette rather than beside it. A test asserts those four hex values are
+still in the file, so a logo swapped in later cannot quietly drift off-palette.
+
+It appears on the landing page, login, signup, password reset, onboarding, the
+platform dashboard, the sidebar of every signed-in screen, the favicon and the
+password-reset email.
+
+Served from `static/` rather than inlined: it is a real asset with a filename
+now, so one file gets replaced when the mark is revised, and browsers cache one
+request instead of re-parsing the same markup on every page. It carries its own
+light ground, so unlike the placeholder it replaced it needs no dark/light
+variant — it reads on the brand-900 sidebar and the white auth card alike.
+
+Format per surface, because the constraint differs:
+
+| Surface | Format | Why |
+| --- | --- | --- |
+| Screens | SVG, `onerror` → PNG | Crisp at any size; the fallback covers a blocked or missing SVG. |
+| Favicon | SVG, `alternate icon` → PNG | Every current browser prefers SVG and stays sharp at 16px. |
+| iOS home screen | PNG (`apple-touch-icon`) | Schools pin the dashboard on phones. |
+| Email | PNG only, absolute URL | Mail clients do not render SVG, and have no site to be relative to. |
+
+#### The school's mark
+
 `School.logo` is an optional upload; without one, a school renders as its
 initial in a coloured square — the same pattern the roster already uses for
 students. That fallback is the answer, not a placeholder: most schools will
 never upload a logo, and an initial square looks deliberate where a broken
 image does not.
 
-| Partial | What it draws |
-| --- | --- |
-| `partials/_brand_mark.html` | SCHOOLCORD's own mark. Inline SVG, so it cannot 404 and inherits `currentColor` for the dark sidebar and the white auth card alike. |
-| `partials/_school_logo.html` | A tenant's logo, or its initial square. |
+A school's own logo appears in its sidebar, on the platform roll, and on
+printed payment receipts — where the print stylesheet forces
+`print-color-adjust` so the fallback square is not dropped as a background
+colour.
 
-The product's mark appears on the landing page, login, signup, password reset,
-the sidebar and the platform dashboard. A school's own logo appears in its
-sidebar, on the platform roll, and on printed payment receipts — where the
-print stylesheet forces `print-color-adjust` so the fallback square is not
-dropped as a background colour.
+### The password-reset email
+
+Now multipart. The plain-text body Django has always sent is unchanged and
+still stands on its own; alongside it goes an HTML half with the logo in the
+header, written like email rather than like the rest of the app — tables for
+layout, every style inline, palette as literal hex, because mail clients strip
+`<style>` blocks and Outlook does not do flexbox.
+
+Clients that block remote images fall back to the `alt`, which is why it reads
+`SCHOOLCORD` and not "logo".
 
 It is a `FileField` with an image validator rather than an `ImageField`, which
 would pull in Pillow to read a header. The receipt upload on `payments.Payment`
@@ -1039,7 +1083,7 @@ once the URL name exists.
 
 ## Design tokens
 
-All declared in `static/src/app.css` under `@theme` (Tailwind v4), so each token
+All declared in `assets/app.css` under `@theme` (Tailwind v4), so each token
 is both a utility and a CSS custom property.
 
 - **Brand** — deep blue, `brand-50` … `brand-950` (`brand-900` = `#0f2547`).
@@ -1105,6 +1149,7 @@ templates/           base.html, 403.html, partials/, core/ (landing, signup,
                      onboarding, dashboards), academics/, fees/, students/,
                      messaging/, payments/, registration/ (_auth_base.html plus
                      login, password reset and password change)
-static/src/app.css   design tokens and components (Tailwind source)
+assets/app.css       design tokens and components (Tailwind source)
 static/css/app.css   compiled output (committed)
+static/img/          the SCHOOLCORD logo, SVG and PNG
 ```

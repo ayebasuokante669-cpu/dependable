@@ -12,6 +12,16 @@
 {% block content %}
 <div class="mx-auto max-w-3xl space-y-5">
 
+  <div class="flex flex-col items-center gap-3 pb-1 text-center">
+    {% include "partials/_brand_mark.html" with size="size-14" alt="SCHOOLCORD" %}
+    <div>
+      <p class="text-lg font-semibold text-brand-900">
+        Welcome to {{ product_name }}
+      </p>
+      <p class="text-sm text-ink-600">{{ product_tagline }}</p>
+    </div>
+  </div>
+
   {% if current_school %}
     <div class="card flex items-center gap-4 px-5 py-4">
       {% include "partials/_school_logo.html" with school=current_school size="size-12" %}

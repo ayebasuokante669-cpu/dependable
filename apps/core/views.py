@@ -101,9 +101,14 @@ class BrandedPasswordResetView(PasswordResetView):
 
     Silent is the operative word: an empty product name in an email is not an
     error anywhere, it just quietly ships "Reset your  password" to a customer.
+
+    The HTML half is sent multipart alongside the plain-text body Django has
+    always sent, so a client that refuses HTML -- or a reader who prefers it --
+    still gets a complete message rather than a blank one.
     """
 
     extra_email_context = branding()
+    html_email_template_name = "registration/password_reset_email_html.html"
 
 
 class SignupView(FormView):

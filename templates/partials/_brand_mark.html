@@ -1,27 +1,26 @@
-{% comment %}
-SCHOOLCORD's own mark: the product's logo, not a tenant's.
+{% load static %}{% comment %}
+SCHOOLCORD's official logo: the product's mark, not a tenant's.
 
-Inline SVG rather than a static file, for three reasons that all bit us before:
-it cannot 404, it inherits `currentColor` so the same mark works on the white
-auth card and on the dark sidebar, and it scales without a second asset.
+Two points with one cord between them -- the school and the parent on the same
+line. Built from the brand tokens (#EEF3FB ground, #0F2A52 / #1B4680 / #2E63B0
+marks), so it sits in the palette rather than beside it.
+
+Served from static as SVG with a PNG fallback rather than inlined, because it
+is now a real asset with a filename: one file to replace when the mark is
+revised, and one cached request instead of the same markup on every page.
+
+The mark carries its own light ground, so unlike the placeholder it replaced it
+needs no dark/light variant -- it reads on the brand-900 sidebar and on the
+white auth card alike. Any `tone` passed by a caller is ignored on purpose.
 
 Params:
-  size   Tailwind size class for the box. Default size-9.
-  tone   "dark" (default) draws the brand-blue square with a white glyph;
-         "light" draws a translucent square for use on the brand-blue sidebar.
+  size  Tailwind size class for the box. Default size-9.
+  alt   Override the alt text. Default "" -- the mark almost always sits beside
+        the wordmark, where announcing it twice helps nobody.
 {% endcomment %}
-<span class="grid {{ size|default:'size-9' }} shrink-0 place-items-center rounded-md
-             {% if tone == 'light' %}bg-white/15 text-white
-             {% else %}bg-brand-900 text-white{% endif %}"
-      aria-hidden="true">
-  <svg viewBox="0 0 24 24" fill="none" class="size-[62%]" stroke="currentColor"
-       stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-    {% comment %}
-    A mortarboard over a ledger rule: the two halves of what this does --
-    the school, and the money it runs on.
-    {% endcomment %}
-    <path d="M12 4 3 8.4l9 4.4 9-4.4L12 4Z" />
-    <path d="M6.6 10.8v4.3c0 .5.3 1 .8 1.2a11.4 11.4 0 0 0 9.2 0c.5-.2.8-.7.8-1.2v-4.3" />
-    <path d="M21 8.4v4.6" />
-  </svg>
-</span>
+<img src="{% static 'img/schoolcord-logo.svg' %}"
+     onerror="this.onerror=null;this.src='{% static 'img/schoolcord-logo.png' %}'"
+     alt="{{ alt|default:'' }}"
+     width="112" height="112"
+     class="{{ size|default:'size-9' }} shrink-0 rounded-md"
+     {% if not alt %}aria-hidden="true"{% endif %}>

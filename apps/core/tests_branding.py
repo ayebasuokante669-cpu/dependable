@@ -163,6 +163,143 @@ class PasswordResetBrandingTests(TestCase):
         self.assertIn(PRODUCT_NAME, mail.outbox[0].from_email)
 
 
+class ProductLogoTests(TestCase):
+    """SCHOOLCORD's own mark: the asset, and every surface it has to reach."""
+
+    SVG = pathlib.Path(settings.BASE_DIR) / "static" / "img" / "schoolcord-logo.svg"
+    PNG = pathlib.Path(settings.BASE_DIR) / "static" / "img" / "schoolcord-logo.png"
+
+    #: The brand tokens the mark is built from. Asserted so that a logo swapped
+    #: in later cannot quietly drift off the palette the rest of the UI uses.
+    BRAND_HEX = ("#EEF3FB", "#0F2A52", "#1B4680", "#2E63B0")
+
+    def test_both_asset_formats_are_present(self):
+        self.assertTrue(self.SVG.exists(), self.SVG)
+        self.assertTrue(self.PNG.exists(), self.PNG)
+        self.assertGreater(self.PNG.stat().st_size, 0)
+
+    def test_the_svg_is_drawn_in_the_brand_palette(self):
+        markup = self.SVG.read_text(encoding="utf-8")
+        for hex_value in self.BRAND_HEX:
+            with self.subTest(colour=hex_value):
+                self.assertIn(hex_value, markup)
+
+    def test_the_png_really_is_a_png(self):
+        # The 8-byte PNG signature, written as hex so the escapes in it
+        # cannot be mangled by whatever edits this file next.
+        signature = bytes.fromhex("89504e470d0a1a0a")
+        self.assertEqual(self.PNG.read_bytes()[:8], signature)
+
+    def test_the_hand_drawn_placeholder_it_replaced_is_gone(self):
+        response = self.client.get(reverse("login"))
+        self.assertNotContains(response, "M12 4 3 8.4l9 4.4 9-4.4L12 4Z")
+
+    def test_every_public_surface_shows_it(self):
+        for url in (
+            reverse("core:landing"),
+            reverse("login"),
+            reverse("core:signup"),
+            reverse("password_reset"),
+        ):
+            with self.subTest(url=url):
+                self.assertContains(
+                    self.client.get(url), "img/schoolcord-logo.svg"
+                )
+
+    def test_the_favicon_offers_svg_first_with_a_png_fallback(self):
+        body = self.client.get(reverse("login")).content.decode()
+        self.assertIn('rel="icon"', body)
+        self.assertIn('type="image/svg+xml"', body)
+        self.assertIn('rel="alternate icon"', body)
+        self.assertIn('rel="apple-touch-icon"', body)
+
+    def test_the_png_fallback_is_wired_for_browsers_that_refuse_the_svg(self):
+        body = self.client.get(reverse("login")).content.decode()
+        self.assertIn("img/schoolcord-logo.png", body)
+
+
+class ProductLogoOnSignedInSurfacesTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.school = School.all_objects.create(name="Sunrise Academy")
+        cls.branch = Branch.all_objects.create(school=cls.school, name="Main")
+        cls.owner = User.objects.create_user(
+            "logo.owner", password="pw", role=Role.SCHOOL_OWNER, school=cls.school
+        )
+        cls.platform = User.objects.create_user(
+            "logo.platform", password="pw", role=Role.PLATFORM_OWNER
+        )
+
+    def test_onboarding_introduces_the_product(self):
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse("core:onboarding"))
+
+        self.assertContains(response, "img/schoolcord-logo.svg")
+        self.assertContains(response, f"Welcome to {PRODUCT_NAME}")
+
+    def test_the_platform_dashboard_shows_it(self):
+        self.client.force_login(self.platform)
+        self.assertContains(
+            self.client.get(reverse("core:platform_overview")),
+            "img/schoolcord-logo.svg",
+        )
+
+    def test_the_sidebar_carries_it_on_every_signed_in_screen(self):
+        self.client.force_login(self.owner)
+        self.assertContains(
+            self.client.get(reverse("core:school_dashboard")),
+            "img/schoolcord-logo.svg",
+        )
+
+
+class PasswordResetEmailLogoTests(TestCase):
+    """The mail keeps its plain-text body and gains a branded HTML half."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.school = School.all_objects.create(name="Sunrise Academy")
+        cls.user = User.objects.create_user(
+            "reset.owner", email="reset@example.com", password="pw",
+            role=Role.SCHOOL_OWNER, school=cls.school,
+        )
+
+    def send(self):
+        self.client.post(reverse("password_reset"), {"email": self.user.email})
+        return mail.outbox[0]
+
+    def test_it_is_multipart_so_a_text_only_client_still_gets_everything(self):
+        message = self.send()
+
+        self.assertEqual(len(message.alternatives), 1)
+        self.assertEqual(message.alternatives[0][1], "text/html")
+        # The plain-text half must still stand on its own.
+        self.assertIn(PRODUCT_NAME, message.body)
+        self.assertIn("/accounts/reset/", message.body)
+
+    def test_the_html_half_carries_the_logo_at_an_absolute_url(self):
+        html = self.send().alternatives[0][0]
+
+        match = re.search(r'<img src="([^"]+)"', html)
+        self.assertIsNotNone(match, "no logo in the HTML email")
+        source = match.group(1)
+        # A mail client has no site to be relative to.
+        self.assertTrue(source.startswith("http"), source)
+        self.assertIn("img/schoolcord-logo.png", source)
+
+    def test_the_logo_is_a_png_because_email_clients_do_not_render_svg(self):
+        html = self.send().alternatives[0][0]
+        self.assertNotIn("schoolcord-logo.svg", html)
+
+    def test_a_client_that_blocks_images_still_sees_the_product_name(self):
+        html = self.send().alternatives[0][0]
+        self.assertIn(f'alt="{PRODUCT_NAME}"', html)
+
+    def test_the_html_renders_no_leftover_template_syntax(self):
+        html = self.send().alternatives[0][0]
+        self.assertNotIn("{%", html)
+        self.assertNotIn("{{", html)
+
+
 class SchoolLogoTests(TestCase):
     """Named away from "Bright Future Academy" on purpose: that string is the
     school-name field's own placeholder, so a test asserting it is absent from
@@ -230,7 +367,9 @@ class SchoolLogoTests(TestCase):
         self.assertEqual(response.status_code, 200)
         # The initial, not a broken image.
         self.assertContains(response, ">S</span>", html=False)
-        self.assertNotContains(response, "logo.png")
+        # Specifically no *uploaded* logo. Matching on "logo.png" would now
+        # catch the product's own favicon, which is on every page by design.
+        self.assertNotContains(response, f"{settings.MEDIA_URL}logos/")
 
     def test_a_school_only_ever_edits_its_own_profile(self):
         """There is no id in the URL; the object comes from the caller."""

@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
-/* Tailwind v4 scans these for class names. */
-@source "../../templates";
-@source "../../apps";
+/* Tailwind v4 scans these for class names. Paths are relative to this file,
+   which lives in assets/ rather than static/: it is a build *input*, and a
+   source file sitting inside STATICFILES_DIRS gets collected as if it were a
+   served asset -- where collectstatic's manifest storage then tries to resolve
+   `@import "tailwindcss"` as a URL and fails the deploy. */
+@source "../templates";
+@source "../apps";
 
 /* ==========================================================================
    Dependable design tokens
