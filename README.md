@@ -1,7 +1,17 @@
 
-# Dependable
+# SCHOOLCORD
 
 Multi-tenant school management SaaS.
+
+> **On the name.** This was built under two earlier names — "Dependable" (an
+> internal codename) and "Fulfilled Lite" (a working title). Both are gone from
+> everything a user or an admin sees. The product is **SCHOOLCORD**, and the
+> name now lives in exactly one file: `apps/core/branding.py`. A handful of
+> internal identifiers still carry the codename — the Postgres database name,
+> a contextvar, and `DependableUserManager`, which is serialised into
+> `accounts/0001_initial.py` — and are left alone deliberately: nobody sees
+> them, and rewriting an applied migration to rename a manager class buys
+> nothing. See [Branding and identity](#branding-and-identity).
 
 - **Step 1 — foundation:** tenancy, a custom user model, the query-scoping
   pattern, the design-system shell, and the admin.
@@ -13,8 +23,10 @@ Multi-tenant school management SaaS.
 - **Step 5 — the public side:** landing page, signup, login with a per-role
   landing, password reset, and the onboarding checklist that ties the four
   setup steps together.
-
-Payments are deliberately absent — that is the next branch.
+- **Step 6 — parent messaging:** SMS/WhatsApp to parents, each school sending
+  under its own registered Sender ID.
+- **Step 7 — payments:** money recorded against a student, with every balance
+  derived from confirmed payments.
 
 ## Running it
 
@@ -923,6 +935,99 @@ Then sign in as `fulfilled-academy.owner`, `.principal`, `.bursar` or
 `@example.com` address so the password-reset flow has somewhere to send; in dev
 the console backend prints the whole message, link included.
 
+## Branding and identity
+
+### One name, one file
+
+`apps/core/branding.py` holds `PRODUCT_NAME` and nothing else does. Settings
+imports it for `DEFAULT_FROM_EMAIL`, `config/urls.py` for the admin header, and
+a context processor puts it on every page — including the signed-out ones,
+which is why it is a separate processor from `core.context_processors.tenancy`:
+that one returns early for anonymous visitors, and the landing page and login
+form are exactly where the product's name matters most.
+
+The password-reset **email** is the one surface a context processor cannot
+reach. Django renders it from the form, with a plain context and no request, so
+`{{ product_name }}` there would silently render as nothing and ship "Reset
+your  password" to a customer. `BrandedPasswordResetView` hands it in through
+`extra_email_context`, and a test asserts the subject has no double space in it.
+
+### The comment bug this pass fixed
+
+Django's `{# ... #}` is **single-line only**. A comment that wraps onto a second
+line is not a comment at all — the lexer never recognises it, and the browser
+prints the developer's prose to the user. Twelve templates had one; the login
+page was telling every visitor what Django does with a bad password.
+
+Nothing fails when this happens: the template is valid, the page renders, the
+tests pass. So there are two guards, and they work differently on purpose:
+
+* `TemplateCommentSyntaxTests` reads every template's **source** and fails with
+  the file and line number of any `{#` whose `#}` is on another line;
+* `RenderedPageTests` reads the **rendered HTML** of every public page and
+  fails on any `{#`, `#}`, `{%`, old brand name, `TODO` or lorem ipsum.
+
+Multi-line comments belong in `{% comment %}...{% endcomment %}`, which is what
+all twelve became.
+
+### Logos
+
+`School.logo` is an optional upload; without one, a school renders as its
+initial in a coloured square — the same pattern the roster already uses for
+students. That fallback is the answer, not a placeholder: most schools will
+never upload a logo, and an initial square looks deliberate where a broken
+image does not.
+
+| Partial | What it draws |
+| --- | --- |
+| `partials/_brand_mark.html` | SCHOOLCORD's own mark. Inline SVG, so it cannot 404 and inherits `currentColor` for the dark sidebar and the white auth card alike. |
+| `partials/_school_logo.html` | A tenant's logo, or its initial square. |
+
+The product's mark appears on the landing page, login, signup, password reset,
+the sidebar and the platform dashboard. A school's own logo appears in its
+sidebar, on the platform roll, and on printed payment receipts — where the
+print stylesheet forces `print-color-adjust` so the fallback square is not
+dropped as a background colour.
+
+It is a `FileField` with an image validator rather than an `ImageField`, which
+would pull in Pillow to read a header. The receipt upload on `payments.Payment`
+made the same trade.
+
+Upload it at **Settings** (`/settings/`), which is also what the sidebar's
+Settings entry has been pointing at since the shell was built. The onboarding
+page prompts for it from the school card at the top.
+
+The school profile is deliberately **not** an onboarding checklist step: signup
+already sets the name, and a logo is optional, so any "done" test would either
+tick itself the moment the account existed or could never be ticked at all.
+
+### The admin
+
+Lightly skinned in `templates/admin/base_site.html` — brand blue through
+Django's own theme variables, the product name from `site_header`, and the
+house 8px corner. Not a rebuild: it is an internal tool, and the hex values are
+literal because the admin does not load `app.css`.
+
+### Demo data is obviously demo
+
+The genuine pilot tenant — **Fulfilled Academy**, its roster, its pricing — is
+untouched; it represents real pilot data. What changed is everything that was
+*filler* dressed as real:
+
+* `bootstrap_tenant` now creates **"Demo School"**, not "Northgate Academy".
+* The signup form's example is "Bright Future Academy", not the pilot school's
+  actual name.
+* Student and parent form placeholders are role words ("Surname", "Parent or
+  guardian name") rather than invented people.
+* **Every demo parent phone number moved to a sequential `0800` block.** They
+  were valid eleven-digit numbers on live Nigerian mobile prefixes — point
+  messaging at a real gateway with the seed loaded and fee reminders go to
+  strangers. `0800` is a Nigerian toll-free service range, not a handset range:
+  it satisfies the phone validator, reads as obviously invented, and cannot be
+  delivered to. A test asserts every one of them starts `0800`.
+
+Parent emails were already on `example.com`, which is reserved for this.
+
 ## Navigation
 
 `nav_for(role)` in `apps/core/navigation.py` is the server-side equivalent of a
@@ -976,7 +1081,8 @@ Django superusers bypass it.
 
 ```
 config/settings/     base / dev / prod, plus the database fallback logic
-apps/core/           tenancy.py, permissions.py, models.py, roles.py,
+apps/core/           branding.py (the product's one name), tenancy.py,
+                     permissions.py, models.py, roles.py,
                      navigation.py (incl. ROLE_HOME), middleware.py, admin.py,
                      forms.py (incl. SchoolSignupForm), views.py (landing,
                      signup, onboarding, the four role dashboards)

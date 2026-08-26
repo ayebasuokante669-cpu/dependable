@@ -10,9 +10,9 @@
 {% endblock %}
 
 {% block auth_body %}
-  {# Django puts a bad username/password on the form as a non-field error, and
+  {% comment %} Django puts a bad username/password on the form as a non-field error, and
      a disabled account as its own message. Rendering them rather than a fixed
-     sentence means the user is told which of the two actually happened. #}
+     sentence means the user is told which of the two actually happened. {% endcomment %}
   {% if form.non_field_errors %}
     <div class="mt-4 rounded-md border border-overdue/30 bg-overdue-soft px-3 py-2.5
                 text-sm text-overdue-strong" role="alert">

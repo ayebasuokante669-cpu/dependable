@@ -89,13 +89,13 @@ class SchoolSignupForm(StyledFormMixin, forms.Form):
         label="School name",
         max_length=200,
         widget=forms.TextInput(
-            attrs={"placeholder": "Fulfilled Academy", "autofocus": True}
+            attrs={"placeholder": "Bright Future Academy", "autofocus": True}
         ),
     )
     full_name = forms.CharField(
         label="Your name",
         max_length=150,
-        widget=forms.TextInput(attrs={"placeholder": "Ngozi Okonkwo"}),
+        widget=forms.TextInput(attrs={"placeholder": "Your full name"}),
         help_text="The proprietor or whoever will own the account.",
     )
     email = forms.EmailField(
@@ -209,3 +209,37 @@ class SchoolSignupForm(StyledFormMixin, forms.Form):
             job_title="Proprietor",
         )
         return school, branch, owner
+
+
+class SchoolProfileForm(StyledFormMixin, forms.ModelForm):
+    """A school's own identity: what it is called, and what it looks like.
+
+    The logo is the only genuinely new field here, and it is optional on
+    purpose -- most schools will never upload one, and the initial-in-a-square
+    fallback is a real answer rather than a gap. Clearing the checkbox removes
+    the file, which is the only way a school can undo a bad upload without
+    asking us.
+    """
+
+    class Meta:
+        model = School
+        fields = ["name", "logo", "contact_email", "contact_phone"]
+        widgets = {
+            "name": forms.TextInput(attrs={"placeholder": "Bright Future Academy"}),
+            "contact_email": forms.EmailInput(
+                attrs={"placeholder": "office@school.com", "autocomplete": "email"}
+            ),
+            "contact_phone": forms.TextInput(
+                attrs={"placeholder": "0803 123 4567", "inputmode": "tel"}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["name"].label = "School name"
+        self.fields["logo"].label = "School logo"
+        self.fields["contact_email"].label = "Office email"
+        self.fields["contact_phone"].label = "Office phone"
+
+    def clean_name(self):
+        return " ".join(self.cleaned_data["name"].split())

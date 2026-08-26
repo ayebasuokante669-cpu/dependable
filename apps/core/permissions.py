@@ -33,6 +33,7 @@ class Capability(str, Enum):
     VOID_PAYMENTS = "void_payments"
     VIEW_MESSAGING_IDENTITY = "view_messaging_identity"
     MANAGE_MESSAGING_IDENTITY = "manage_messaging_identity"
+    MANAGE_SCHOOL_PROFILE = "manage_school_profile"
 
 
 #: Owner- and principal-level roles: set up the school, who attends it, and what
@@ -51,6 +52,10 @@ _LEADERSHIP = frozenset(
         Capability.RECORD_PAYMENTS,
         Capability.VOID_PAYMENTS,
         Capability.VIEW_MESSAGING_IDENTITY,
+        # What the school is called and what its logo is: the proprietor's
+        # decision, and the principal's to correct. Not the bursar's -- they
+        # take money, they do not decide how the school presents itself.
+        Capability.MANAGE_SCHOOL_PROFILE,
     }
 )
 

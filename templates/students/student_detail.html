@@ -132,10 +132,10 @@
       </dl>
     </section>
 
-    {# ===== Payment history ==============================================
+    {% comment %} ===== Payment history ==============================================
        The slot the students branch left for payments, now filled. The table
        is the shared partial, so this card and the full history screen can
-       never show the same money two different ways. #}
+       never show the same money two different ways. {% endcomment %}
     <section class="card overflow-hidden">
       <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-3">
         <h2 class="text-sm font-semibold text-ink-900">Payment history</h2>
@@ -197,8 +197,8 @@
           </p>
         </div>
 
-        {# The balance block. `paid` is zero everywhere until payments exist,
-           so this reads honestly today and needs no layout change later. #}
+        {% comment %} The balance block. `paid` is zero everywhere until payments exist,
+           so this reads honestly today and needs no layout change later. {% endcomment %}
         <div class="border-t border-ink-200 bg-ink-50 px-5 py-4">
           <dl class="space-y-2 text-sm">
             <div class="flex items-baseline justify-between gap-3">

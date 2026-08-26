@@ -1,9 +1,14 @@
 """Create a school, a branch and one user per role -- enough to click around.
 
-    python manage.py bootstrap_tenant --name "St. Andrews College"
+    python manage.py bootstrap_tenant --name "Demo School"
+
+Everything this creates is obviously fake on purpose. The default school is
+"Demo School" rather than a plausible one, because a scaffold that looks like a
+customer is a scaffold somebody eventually mistakes for a customer -- and the
+genuine pilot tenant lives in the seed commands, not here.
 
 Every account is created with the same password (``--password``, default
-``dependable``), which is fine for a local scaffold and nowhere else.
+``demo-password``), which is fine for a local scaffold and nowhere else.
 """
 
 from __future__ import annotations
@@ -58,11 +63,11 @@ class Command(BaseCommand):
     help = "Create a demo school with a branch and one user per permission role."
 
     def add_arguments(self, parser):
-        parser.add_argument("--name", default="Northgate Academy")
+        parser.add_argument("--name", default="Demo School")
         parser.add_argument("--branch", default="Main Campus")
         parser.add_argument("--city", default="Lagos")
         parser.add_argument("--state", default="Lagos")
-        parser.add_argument("--password", default="dependable")
+        parser.add_argument("--password", default="demo-password")
 
     @transaction.atomic
     def handle(self, *args, **options):

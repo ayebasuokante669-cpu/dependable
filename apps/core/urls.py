@@ -19,4 +19,7 @@ urlpatterns = [
     path("finance/", views.BursarDashboardView.as_view(), name="bursar_dashboard"),
 
     path("welcome/", views.OnboardingView.as_view(), name="onboarding"),
+    # The school's own profile -- name, logo, office contacts. What the
+    # "Settings" nav entry has been waiting for.
+    path("settings/", views.SchoolSettingsView.as_view(), name="school_settings"),
 ]

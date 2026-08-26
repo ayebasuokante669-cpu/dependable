@@ -12,6 +12,27 @@
 {% block content %}
 <div class="mx-auto max-w-3xl space-y-5">
 
+  {% if current_school %}
+    <div class="card flex items-center gap-4 px-5 py-4">
+      {% include "partials/_school_logo.html" with school=current_school size="size-12" %}
+      <div class="min-w-0">
+        <p class="truncate text-base font-semibold text-ink-900">
+          {{ current_school.name }}
+        </p>
+        <p class="text-sm text-ink-600">
+          {% if current_school.logo %}
+            Your logo appears on your screens and on every receipt.
+          {% else %}
+            Add a logo under
+            <a href="{% url 'core:school_settings' %}"
+               class="font-medium text-brand-800 hover:underline">School settings</a>
+            and it appears here, in the sidebar and on receipts.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+  {% endif %}
+
   {% if setup.is_complete %}
     <div class="card border-paid/30 bg-paid-soft px-5 py-4 text-sm text-paid-strong">
       <p class="font-semibold">That is everything.</p>

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Fulfilled Lite — school management that starts with the fees{% endblock %}
+{% block title %}{{ product_name }} — {{ product_tagline|lower }}{% endblock %}
 
 {% block anonymous_content %}
 <div class="min-h-full bg-white">
@@ -9,10 +9,9 @@
   <header class="border-b border-ink-200">
     <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
       <a href="{% url 'core:landing' %}" class="flex items-center gap-2.5">
-        <span class="grid size-9 place-items-center rounded-md bg-brand-900
-                     font-semibold text-white">F</span>
+        {% include "partials/_brand_mark.html" %}
         <span class="text-base font-semibold tracking-tight text-brand-900">
-          Fulfilled Lite
+          {{ product_name }}
         </span>
       </a>
       <div class="flex items-center gap-2">
@@ -32,7 +31,7 @@
         Know what every child owes, and who has paid.
       </h1>
       <p class="mt-4 text-base text-ink-700 sm:text-lg">
-        Fulfilled Lite keeps your classes, your fee structure and your roster in
+        {{ product_name }} keeps your classes, your fee structure and your roster in
         one place, so a parent's question is answered in seconds instead of from
         three different notebooks.
       </p>
@@ -151,7 +150,7 @@
   <footer class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
     <div class="flex flex-col items-center justify-between gap-3 text-xs text-ink-500
                 sm:flex-row">
-      <p>Fulfilled Lite — school management, built on Dependable.</p>
+      <p>&copy; {% now "Y" %} {{ product_name }}. {{ product_tagline }}.</p>
       <p>
         Already have an account?
         <a href="{% url 'login' %}" class="font-medium text-brand-700 hover:underline">

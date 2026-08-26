@@ -14,8 +14,8 @@
     <span class="hidden sm:inline">All</span> payments
   </a>
   {% if can_send %}
-    {# The same derivation this page uses, so the reminder reaches exactly the
-       families listed below. #}
+    {% comment %} The same derivation this page uses, so the reminder reaches exactly the
+       families listed below. {% endcomment %}
     <a href="{% url 'messaging:fee_reminder' %}" class="btn btn-primary text-sm">
       <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
            stroke="currentColor" aria-hidden="true">

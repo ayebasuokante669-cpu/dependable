@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    How your school appears to staff, to parents, and on receipts
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  {% if not setup.is_complete %}
+    <a href="{{ setup.url }}" class="btn btn-ghost text-sm">
+      <span class="hidden sm:inline">Setup</span>
+      <span class="status-pill status-partial">
+        {{ setup.done_count }}/{{ setup.total }}
+      </span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<form method="post" enctype="multipart/form-data"
+      class="mx-auto grid max-w-4xl gap-5 lg:grid-cols-3">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="card border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                text-overdue-strong lg:col-span-3">
+      {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="space-y-5 lg:col-span-2">
+    <section class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-3">
+        <h2 class="text-sm font-semibold text-ink-900">School details</h2>
+      </div>
+      <div class="grid gap-4 px-5 py-5">
+        {% include "partials/_field.html" with field=form.name %}
+        <div class="grid gap-4 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.contact_email %}
+          {% include "partials/_field.html" with field=form.contact_phone %}
+        </div>
+      </div>
+    </section>
+
+    <section class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-3">
+        <h2 class="text-sm font-semibold text-ink-900">Logo</h2>
+        <p class="mt-0.5 text-xs text-ink-500">
+          Optional. Appears in your sidebar and on every payment receipt you
+          print. PNG, JPEG, WebP or SVG, under 2&nbsp;MB.
+        </p>
+      </div>
+      <div class="px-5 py-5">
+        {{ form.logo }}
+        {% for error in form.logo.errors %}
+          <p class="field-error">{{ error }}</p>
+        {% endfor %}
+        <p class="field-hint">
+          A square or wide image both work — it is scaled to fit, never cropped.
+          Without one, your school's initial is shown instead.
+        </p>
+      </div>
+    </section>
+  </div>
+
+  {% comment %}
+  A live-ish preview, rendered from the saved logo. Not a JS file-preview: the
+  point is to show the two places this actually lands, and a school that has
+  never uploaded one needs to see that the fallback is deliberate rather than
+  broken.
+  {% endcomment %}
+  <div class="space-y-5">
+    <section class="card overflow-hidden lg:sticky lg:top-20">
+      <div class="border-b border-ink-200 px-5 py-3">
+        <h2 class="text-sm font-semibold text-ink-900">How it looks</h2>
+      </div>
+
+      <div class="border-b border-ink-200 px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          In the sidebar
+        </p>
+        <div class="mt-2 flex items-center gap-2.5 rounded-md bg-brand-900 px-3 py-2.5">
+          {% include "partials/_school_logo.html" with school=object size="size-8" tone="light" %}
+          <div class="min-w-0">
+            <div class="truncate text-sm font-semibold text-white">
+              {{ object.name }}
+            </div>
+            <div class="mt-0.5 truncate text-xs text-brand-200">
+              All branches &middot; {{ object.get_plan_display }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          On a receipt
+        </p>
+        <div class="mt-2 flex items-center gap-3 rounded-md border border-ink-200
+                    px-3 py-3">
+          {% include "partials/_school_logo.html" with school=object size="size-10" %}
+          <div class="min-w-0">
+            <div class="truncate text-sm font-semibold text-brand-900">
+              {{ object.name }}
+            </div>
+            <div class="text-xs text-ink-500">Payment receipt</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-ink-200 px-5 py-4">
+        <button type="submit" class="btn btn-primary w-full text-sm">
+          Save changes
+        </button>
+      </div>
+    </section>
+
+    <section class="card p-5">
+      <h2 class="text-sm font-semibold text-ink-900">Who sees this</h2>
+      <ul class="mt-2 space-y-1.5 text-xs text-ink-600">
+        <li>Your staff, in the sidebar on every screen.</li>
+        <li>Parents, on receipts your bursar prints for them.</li>
+        <li>
+          Nobody at another school — your logo and details are yours alone.
+        </li>
+      </ul>
+    </section>
+  </div>
+</form>
+{% endblock %}

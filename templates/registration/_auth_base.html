@@ -13,10 +13,9 @@ Pages fill `auth_heading`, `auth_body` and optionally `auth_footer`.
 
     <a href="{% url 'core:landing' %}"
        class="mb-8 flex items-center justify-center gap-2.5">
-      <span class="grid size-10 place-items-center rounded-md bg-brand-900
-                   text-lg font-semibold text-white">F</span>
+      {% include "partials/_brand_mark.html" with size="size-10" %}
       <span class="text-xl font-semibold tracking-tight text-brand-900">
-        Fulfilled Lite
+        {{ product_name }}
       </span>
     </a>
 

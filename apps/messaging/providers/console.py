@@ -28,7 +28,7 @@ from .base import (
     SendResult,
 )
 
-logger = logging.getLogger("dependable.messaging")
+logger = logging.getLogger("schoolcord.messaging")
 
 
 class ConsoleProvider(MessagingProvider):

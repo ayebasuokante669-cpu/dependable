@@ -74,8 +74,8 @@
                   <span class="status-pill {{ message.pill_class }}">
                     {{ message.get_status_display }}
                   </span>
-                  {# The honest summary: accepted by the gateway, confirmed on a
-                     handset, and bounced are three different facts. #}
+                  {% comment %} The honest summary: accepted by the gateway, confirmed on a
+                     handset, and bounced are three different facts. {% endcomment %}
                   <span class="mt-1 block text-xs text-ink-500">
                     {{ message.sent }} sent,
                     {{ message.delivered }} delivered{% if message.failed %},
@@ -120,7 +120,7 @@
     <div class="card empty-state">
       <p class="text-base font-medium text-ink-700">No messages sent yet</p>
       <p class="mx-auto mt-1 max-w-md text-sm">
-        Parents do not sign in to Dependable — everything they hear from the
+        Parents do not sign in to {{ product_name }} — everything they hear from the
         school arrives as an SMS or a WhatsApp message sent from here, and every
         one of them is logged on this page.
       </p>

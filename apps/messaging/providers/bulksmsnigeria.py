@@ -39,7 +39,7 @@ from .base import (
     SendResult,
 )
 
-logger = logging.getLogger("dependable.messaging")
+logger = logging.getLogger("schoolcord.messaging")
 
 #: How long to wait on one send before giving up on it. A batch is sent in a
 #: request cycle, so a gateway that has stopped answering must fail that

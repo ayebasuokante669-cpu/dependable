@@ -345,7 +345,7 @@ class SendingUnderOwnIdentityTests(IdentityTestCase):
         """The whole feature is verifiable with no credentials because of this."""
         self.configure(self.dap, "Dapgroup")
 
-        with self.assertLogs("dependable.messaging", level="INFO") as logs:
+        with self.assertLogs("schoolcord.messaging", level="INFO") as logs:
             self.send_from(self.dap_main)
 
         line = "\n".join(logs.output)
@@ -358,7 +358,7 @@ class SendingUnderOwnIdentityTests(IdentityTestCase):
         self.configure(self.dap, "Dapgroup")
         self.configure(self.beta, "Betacol")
 
-        with self.assertLogs("dependable.messaging", level="INFO") as logs:
+        with self.assertLogs("schoolcord.messaging", level="INFO") as logs:
             dap_message = self.send_from(self.dap_main)
             beta_message = self.send_from(self.beta_main)
 
@@ -439,7 +439,7 @@ class ProviderIdentityTests(TestCase):
         self.assertTrue(ConsoleProvider().is_configured)
 
     def test_the_console_provider_says_when_no_identity_resolved(self):
-        with self.assertLogs("dependable.messaging", level="INFO") as logs:
+        with self.assertLogs("schoolcord.messaging", level="INFO") as logs:
             ConsoleProvider().send("08031234567", "Hi", Channel.SMS)
         self.assertIn("no Sender ID resolved", "\n".join(logs.output))
 

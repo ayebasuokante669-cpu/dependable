@@ -252,7 +252,7 @@ NAVIGATION: tuple[NavSection, ...] = (
     NavSection(
         label="Settings",
         items=(
-            NavItem("Settings", "settings:index", "cog", _LEADERSHIP),
+            NavItem("Settings", "core:school_settings", "cog", _LEADERSHIP),
         ),
     ),
 )

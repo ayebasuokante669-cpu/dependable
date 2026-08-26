@@ -11,6 +11,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+# Imported rather than repeated: the product name belongs in exactly one file,
+# and settings is not it. Safe at import time -- branding.py imports nothing.
+from apps.core.branding import PRODUCT_NAME, SUPPORT_EMAIL
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 load_dotenv(BASE_DIR / ".env")
@@ -81,6 +85,9 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.core.context_processors.tenancy",
+                # The product's own name, on signed-out pages too -- which is
+                # where it matters most.
+                "apps.core.branding.branding",
             ],
         },
     },
@@ -110,7 +117,7 @@ LOGOUT_REDIRECT_URL = "core:landing"
 # The From: on password-reset mail. In dev the console backend prints the whole
 # message, link included, so nothing has to be delivered for the flow to work.
 DEFAULT_FROM_EMAIL = os.environ.get(
-    "DEFAULT_FROM_EMAIL", "Fulfilled Lite <no-reply@dependable.example>"
+    "DEFAULT_FROM_EMAIL", f"{PRODUCT_NAME} <{SUPPORT_EMAIL}>"
 )
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 24 * 3  # three days
 

@@ -43,8 +43,8 @@
           <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
             What a parent sees
           </p>
-          {# A phone-ish preview, because "Sender ID" means nothing to a
-             proprietor until they see it where it lands. #}
+          {% comment %} A phone-ish preview, because "Sender ID" means nothing to a
+             proprietor until they see it where it lands. {% endcomment %}
           <div class="mt-2 max-w-sm rounded-xl border border-ink-200 bg-white p-3
                       shadow-card">
             <p class="text-sm font-semibold text-ink-900">{{ active.sender_id }}</p>

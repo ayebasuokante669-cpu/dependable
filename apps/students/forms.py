@@ -52,9 +52,9 @@ class StudentForm(StyledFormMixin, forms.ModelForm):
             "admission_number": forms.TextInput(
                 attrs={"placeholder": "FA/2025/001", "autocomplete": "off"}
             ),
-            "first_name": forms.TextInput(attrs={"placeholder": "Chinaza"}),
-            "last_name": forms.TextInput(attrs={"placeholder": "Okonkwo"}),
-            "other_names": forms.TextInput(attrs={"placeholder": "Adaeze"}),
+            "first_name": forms.TextInput(attrs={"placeholder": "First name"}),
+            "last_name": forms.TextInput(attrs={"placeholder": "Surname"}),
+            "other_names": forms.TextInput(attrs={"placeholder": "Middle names"}),
             # `type=date` gets the native picker on mobile, which is where the
             # front desk will actually type this.
             "date_of_birth": forms.DateInput(
@@ -63,7 +63,9 @@ class StudentForm(StyledFormMixin, forms.ModelForm):
             "date_admitted": forms.DateInput(
                 attrs={"type": "date"}, format="%Y-%m-%d"
             ),
-            "parent_name": forms.TextInput(attrs={"placeholder": "Mrs. Ngozi Okonkwo"}),
+            "parent_name": forms.TextInput(
+                attrs={"placeholder": "Parent or guardian name"}
+            ),
             "parent_phone": forms.TextInput(
                 attrs={
                     "placeholder": "0803 123 4567",

@@ -9,6 +9,18 @@
 {% block content %}
 <div class="space-y-5">
 
+  {% comment %}
+  The product's own mark, not a tenant's: this is the one screen where the
+  reader works for SCHOOLCORD rather than for a school.
+  {% endcomment %}
+  <div class="card flex items-center gap-4 px-5 py-4">
+    {% include "partials/_brand_mark.html" with size="size-12" %}
+    <div class="min-w-0">
+      <p class="text-base font-semibold text-ink-900">{{ product_name }}</p>
+      <p class="text-sm text-ink-600">{{ product_tagline }}</p>
+    </div>
+  </div>
+
   <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
     <div class="card p-5">
       <div class="text-sm font-medium text-ink-600">Schools</div>
@@ -48,7 +60,12 @@
         <tbody class="divide-y divide-ink-200">
           {% for school in schools %}
             <tr>
-              <td class="px-5 py-3 font-medium text-ink-900">{{ school.name }}</td>
+              <td class="px-5 py-3">
+                <div class="flex items-center gap-2.5">
+                  {% include "partials/_school_logo.html" with school=school size="size-8" %}
+                  <span class="font-medium text-ink-900">{{ school.name }}</span>
+                </div>
+              </td>
               <td class="px-5 py-3 text-ink-700">{{ school.get_plan_display }}</td>
               <td class="px-5 py-3">
                 <span class="status-pill

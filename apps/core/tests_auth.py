@@ -24,6 +24,7 @@ from django.urls import reverse
 
 from apps.academics.models import Class, Level
 from apps.core.navigation import home_url_for, nav_for
+from apps.core.branding import PRODUCT_NAME
 from apps.core.roles import Role
 from apps.schools.models import Branch, School
 
@@ -46,7 +47,7 @@ class PublicPagesTests(TestCase):
     def test_the_landing_page_is_reachable_signed_out(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Fulfilled Lite")
+        self.assertContains(response, PRODUCT_NAME)
 
     def test_it_offers_both_ways_in(self):
         response = self.client.get(reverse("core:landing"))
@@ -173,14 +174,20 @@ class SignupTests(TestCase):
 class SeededRoleTestCase(TestCase):
     """The demo tenant, built by the same command a developer runs."""
 
+    #: Passed to the command rather than read off its default, so renaming the
+    #: scaffold's password is not a test failure in four unrelated places.
+    password = "scaffold-password"
+
     @classmethod
     def setUpTestData(cls):
         call_command(
-            "bootstrap_tenant", "--name", "Fulfilled Academy", stdout=StringIO()
+            "bootstrap_tenant",
+            "--name", "Fulfilled Academy",
+            "--password", cls.password,
+            stdout=StringIO(),
         )
         cls.school = School.all_objects.get(name="Fulfilled Academy")
         cls.branch = Branch.all_objects.get(school=cls.school)
-        cls.password = "dependable"
 
     def sign_in(self, username: str):
         return self.client.post(
@@ -332,7 +339,10 @@ class PasswordResetTests(SeededRoleTestCase):
 
         self.assertEqual(len(mail.outbox), 1)
         message = mail.outbox[0]
-        self.assertIn("Fulfilled Lite", message.subject)
+        # The reset email renders without a request, so the product name
+        # only reaches it via BrandedPasswordResetView.extra_email_context.
+        self.assertIn(PRODUCT_NAME, message.subject)
+        self.assertIn(PRODUCT_NAME, message.body)
         self.assertEqual(message.to, [user.email])
 
         match = re.search(r"/accounts/reset/[^/]+/[^/\s]+/", message.body)

@@ -38,7 +38,7 @@ from .models import StudentStatus
 
 SHEET_NAME = "Students"
 REFERENCE_SHEET_NAME = "Classes"
-TEMPLATE_FILENAME = "dependable-student-import.xlsx"
+TEMPLATE_FILENAME = "schoolcord-student-import.xlsx"
 
 #: How far down to look for the header row. A school's own export often has a
 #: title and a blank line above the real headers; nobody has ten.
@@ -171,7 +171,7 @@ def _add_class_reference(workbook, sheet, class_names: list[str]) -> None:
     )
     validation.error = (
         "That class does not exist at this branch. Pick one from the list, or "
-        "set the class up in Dependable first."
+        "set the class up in SCHOOLCORD first."
     )
     validation.errorTitle = "Unknown class"
     # A warning, not a hard stop: a school pasting a column of 300 class names

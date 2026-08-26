@@ -98,8 +98,8 @@
 <template id="component-template">
   <div class="component-row px-5 py-3" data-row data-new="true">
     <div class="flex items-end gap-3">
-      {# __prefix__ is rewritten to the row index when the row is cloned, which
-         keeps each label tied to its own input. #}
+      {% comment %} __prefix__ is rewritten to the row index when the row is cloned, which
+         keeps each label tied to its own input. {% endcomment %}
       <div class="min-w-0 flex-1">
         <label class="field-label text-xs"
                for="id_{{ formset.prefix }}-__prefix__-name">Item</label>

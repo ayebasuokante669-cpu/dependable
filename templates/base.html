@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ page_title|default:"Dependable" }}{% endblock %} &middot; Dependable</title>
+  <title>{% block title %}{{ page_title|default:product_name }}{% endblock %} &middot; {{ product_name }}</title>
   <meta name="theme-color" content="#0f2547">
 
   {# Public Sans for UI, IBM Plex Mono for money, IDs and codes. #}

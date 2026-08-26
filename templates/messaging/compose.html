@@ -110,9 +110,9 @@
                   <span class="block text-sm font-medium text-ink-900">
                     {{ radio.choice_label }}
                   </span>
-                  {# One line of plain English per option. Written out rather
+                  {% comment %} One line of plain English per option. Written out rather
                      than looked up through a filter: four options, and the
-                     wording is a design decision, not data. #}
+                     wording is a design decision, not data. {% endcomment %}
                   <span class="block text-xs text-ink-500">
                     {% if radio.data.value == "all" %}
                       Every enrolled student's parent at this campus.
@@ -134,8 +134,8 @@
           {% endfor %}
         </fieldset>
 
-        {# Shown by the script when "One class" is picked; always rendered so
-           the form still works with scripting off. #}
+        {% comment %} Shown by the script when "One class" is picked; always rendered so
+           the form still works with scripting off. {% endcomment %}
         <div class="border-t border-ink-200 px-5 py-4" data-audience-panel="class">
           <label for="{{ form.school_class.id_for_label }}" class="field-label">
             {{ form.school_class.label }}

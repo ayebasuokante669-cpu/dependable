@@ -28,20 +28,22 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import LoginView, PasswordResetView
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
-from django.urls import reverse
-from django.views.generic import FormView, TemplateView
+from django.urls import reverse, reverse_lazy
+from django.views.generic import FormView, TemplateView, UpdateView
 
 from apps.academics.models import Class, Subject
 from apps.fees.models import FeeComponent, FeeStructure, Term
 from apps.schools.models import Branch, School
 from apps.students.models import Student, StudentStatus
 
-from .forms import SchoolSignupForm
+from .branding import branding
+from .forms import SchoolProfileForm, SchoolSignupForm
 from .navigation import home_url_for, home_url_name
+from .permissions import Capability, CapabilityRequiredMixin
 from .roles import Role, scope_for
 
 ZERO = Decimal("0")
@@ -85,6 +87,23 @@ class RoleAwareLoginView(LoginView):
         context = super().get_context_data(**kwargs)
         context["page_title"] = "Sign in"
         return context
+
+
+class BrandedPasswordResetView(PasswordResetView):
+    """Django's password reset, with the product name reaching the email.
+
+    The reset email and its subject are rendered by the *form*, not by a view,
+    and with a plain context rather than a request -- so context processors do
+    not run and ``{{ product_name }}`` in those two templates would silently
+    render as nothing. ``extra_email_context`` is Django's supported way to
+    hand them a value, and it keeps the name in one file rather than hardcoded
+    into the mail.
+
+    Silent is the operative word: an empty product name in an email is not an
+    error anywhere, it just quietly ships "Reset your  password" to a customer.
+    """
+
+    extra_email_context = branding()
 
 
 class SignupView(FormView):
@@ -421,6 +440,12 @@ def onboarding_steps(request) -> list[dict]:
 
     Every count goes through a scoped manager, so an owner sees their own
     school's progress and a principal their own branch's.
+
+    The school's own profile -- its name and logo -- is deliberately *not* a
+    step. Signup already sets the name, and a logo is optional, so any test of
+    "done" would either tick itself the moment the account existed or could
+    never be ticked at all. It is prompted from the school card at the top of
+    the onboarding page and from Settings instead.
     """
     User = get_user_model()
     return [
@@ -459,6 +484,44 @@ def onboarding_steps(request) -> list[dict]:
             "noun": "colleague",
         },
     ]
+
+
+class SchoolSettingsView(CapabilityRequiredMixin, UpdateView):
+    """The school's own profile: name, logo, office contact details.
+
+    The home the "Settings" nav entry has been pointing at since the shell was
+    built, and the place onboarding's last step sends a proprietor. Scoped to
+    the caller's own school by ``get_object`` rather than by a URL parameter --
+    there is exactly one school a school user can edit, and offering an id in
+    the URL would only invite guessing at somebody else's.
+    """
+
+    form_class = SchoolProfileForm
+    template_name = "core/school_settings.html"
+    capability = Capability.MANAGE_SCHOOL_PROFILE
+    success_url = reverse_lazy("core:school_settings")
+
+    def get_object(self, queryset=None):
+        from django.http import Http404
+
+        school = getattr(self.request.user, "school", None)
+        if school is None:
+            # Platform staff have no school of their own to configure. They
+            # edit any school through the admin, which is where cross-tenant
+            # work belongs.
+            raise Http404("This account is not attached to a school.")
+        return school
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "School settings"
+        context["setup"] = setup_progress(self.request)
+        return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f"{self.object.name} updated.")
+        return response
 
 
 class OnboardingView(LoginRequiredMixin, TemplateView):
