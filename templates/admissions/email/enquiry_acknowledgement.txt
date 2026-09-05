@@ -1,0 +1,19 @@
+{% comment %}Plain-text half. Signed by the school; the platform is nowhere in it.{% endcomment %}Dear {{ applicant.parent_name }},
+
+Thank you for enquiring about a place for {{ child }} at {{ school.name }}{% if branch %}, {{ branch.name }}{% endif %}.
+
+Your reference is {{ reference }}. Please quote it if you call or visit us.
+
+What you told us
+  Child:        {{ child }}
+  Applying for: {{ applying_for }}
+{% if expires_on %}
+We will be in touch shortly. Please note that this enquiry is held until {{ expires_on|date:"j F Y" }} - after that we will need you to enquire again.
+{% else %}
+We will be in touch shortly.
+{% endif %}
+{% if office_phone or office_email %}
+If you have any questions before then{% if office_phone %}, call us on {{ office_phone }}{% endif %}{% if office_email %}{% if office_phone %} or{% endif %} email {{ office_email }}{% endif %}.
+{% endif %}
+Warm regards,
+{{ school.name }}

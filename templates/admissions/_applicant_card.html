@@ -1,0 +1,45 @@
+{% comment %}
+One applicant, as they appear on the pipeline board.
+
+Params:
+  applicant  The Applicant. Required.
+{% endcomment %}
+<a href="{{ applicant.get_absolute_url }}"
+   class="block rounded-md border border-ink-200 bg-white p-3 transition-colors
+          hover:border-brand-300 hover:bg-brand-50">
+  <div class="flex items-start gap-2.5">
+    <span class="grid size-8 shrink-0 place-items-center rounded-md bg-brand-100
+                 text-xs font-semibold text-brand-800" aria-hidden="true">
+      {{ applicant.initials }}
+    </span>
+    <div class="min-w-0 flex-1">
+      <p class="truncate text-sm font-medium text-ink-900">{{ applicant.full_name }}</p>
+      <p class="truncate text-xs text-ink-500">
+        {{ applicant.applying_for }}
+        {% if applicant.branch and current_branch != applicant.branch %}
+          &middot; {{ applicant.branch.name }}
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="mt-2.5 flex flex-wrap items-center gap-1.5">
+    <span class="numeric text-[11px] text-ink-400">{{ applicant.reference }}</span>
+
+    {% if applicant.has_lapsed %}
+      {% comment %}
+      Derived, so the board is honest the moment the window closes rather than
+      only after the nightly sweep has run.
+      {% endcomment %}
+      <span class="status-pill status-overdue">Window closed</span>
+    {% elif applicant.days_left is not None %}
+      <span class="status-pill {% if applicant.days_left < 4 %}status-partial{% else %}status-unpaid{% endif %}">
+        {{ applicant.days_left }} day{{ applicant.days_left|pluralize }} left
+      </span>
+    {% endif %}
+
+    {% if applicant.status == "application" and applicant.requires_assessment and not applicant.has_sat_assessment %}
+      <span class="status-pill status-partial">Assessment due</span>
+    {% endif %}
+  </div>
+</a>

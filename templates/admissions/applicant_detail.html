@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    <span class="numeric">{{ applicant.reference }}</span>
+    &middot; {{ applicant.applying_for }}
+    {% if current_branch != applicant.branch %}&middot; {{ applicant.branch.name }}{% endif %}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'admissions:pipeline' %}" class="btn btn-ghost text-sm">
+    <span class="hidden sm:inline">Back to pipeline</span>
+    <span class="sm:hidden">Back</span>
+  </a>
+  {% if can_advance %}
+    <a href="{% url 'admissions:application' applicant.pk %}" class="btn btn-primary text-sm">
+      Start application
+    </a>
+  {% elif can_decide %}
+    <a href="{% url 'admissions:decision' applicant.pk %}" class="btn btn-primary text-sm">
+      Decide
+    </a>
+  {% elif can_enrol %}
+    <a href="{% url 'admissions:enrol' applicant.pk %}" class="btn btn-primary text-sm">
+      Enrol
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-5 lg:grid-cols-3">
+
+  {# ================= Left column ======================================== #}
+  <div class="space-y-5 lg:col-span-2">
+
+    {# ===== Who ========================================================== #}
+    <section class="card overflow-hidden">
+      <div class="flex items-center gap-4 border-b border-ink-200 px-5 py-4">
+        {% if applicant.passport_photo %}
+          <img src="{{ applicant.passport_photo.url }}" alt=""
+               class="size-12 shrink-0 rounded-lg border border-ink-200 object-cover">
+        {% else %}
+          <span class="grid size-12 shrink-0 place-items-center rounded-lg bg-brand-100
+                       text-base font-semibold text-brand-800" aria-hidden="true">
+            {{ applicant.initials }}
+          </span>
+        {% endif %}
+        <div class="min-w-0">
+          <h2 class="truncate text-base font-semibold text-ink-900">
+            {{ applicant.formal_name }}
+          </h2>
+          <p class="text-sm text-ink-600">
+            {{ applicant.get_sex_display }}
+            {% if applicant.age %}&middot; {{ applicant.age }} years old{% endif %}
+          </p>
+        </div>
+        <span class="ml-auto status-pill {{ applicant.status_pill }}">
+          {{ applicant.status_label }}
+        </span>
+      </div>
+
+      <dl class="grid gap-x-6 gap-y-4 px-5 py-5 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Reference
+          </dt>
+          <dd class="numeric mt-1 text-sm text-ink-900">{{ applicant.reference }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Applying for
+          </dt>
+          <dd class="mt-1 text-sm text-ink-900">
+            {{ applicant.applying_for }}
+            <span class="text-ink-500">({{ applicant.level_label }})</span>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Date of birth
+          </dt>
+          <dd class="mt-1 text-sm text-ink-900">
+            {{ applicant.date_of_birth|date:"j F Y"|default:"—" }}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Campus
+          </dt>
+          <dd class="mt-1 text-sm text-ink-900">{{ applicant.branch.name }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Previous school
+          </dt>
+          <dd class="mt-1 text-sm text-ink-900">
+            {{ applicant.previous_school|default:"—" }}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Came to us via
+          </dt>
+          <dd class="mt-1 text-sm text-ink-900">
+            {{ applicant.get_heard_about_display|default:"—" }}
+            <span class="text-ink-500">({{ applicant.get_source_display }})</span>
+          </dd>
+        </div>
+        {% if applicant.nationality or applicant.state_of_origin %}
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Nationality
+            </dt>
+            <dd class="mt-1 text-sm text-ink-900">
+              {{ applicant.nationality|default:"—" }}
+              {% if applicant.state_of_origin %}
+                <span class="text-ink-500">&middot; {{ applicant.state_of_origin }}</span>
+              {% endif %}
+            </dd>
+          </div>
+        {% endif %}
+      </dl>
+
+      {% if applicant.notes %}
+        <div class="border-t border-ink-200 px-5 py-4">
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Notes</dt>
+          <dd class="mt-1 whitespace-pre-line text-sm text-ink-800">{{ applicant.notes }}</dd>
+        </div>
+      {% endif %}
+    </section>
+
+    {# ===== Parent ====================================================== #}
+    <section class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Parent / guardian</h2>
+      </div>
+      <dl class="grid gap-x-6 gap-y-4 px-5 py-5 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Name</dt>
+          <dd class="mt-1 text-sm text-ink-900">{{ applicant.parent_name }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Phone</dt>
+          <dd class="numeric mt-1 text-sm">
+            <a href="{{ applicant.parent_phone_link }}"
+               class="text-brand-700 hover:underline">{{ applicant.parent_phone_display }}</a>
+            {% if applicant.whatsapp_link %}
+              <a href="{{ applicant.whatsapp_link }}" rel="noopener"
+                 class="ml-2 text-xs font-medium text-paid-strong hover:underline">WhatsApp</a>
+            {% endif %}
+          </dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Email</dt>
+          <dd class="mt-1 text-sm">
+            {% if applicant.parent_email %}
+              <a href="mailto:{{ applicant.parent_email }}"
+                 class="text-brand-700 hover:underline">{{ applicant.parent_email }}</a>
+            {% else %}
+              <span class="text-partial-strong">
+                None on file — the reminder and the decision cannot be emailed.
+              </span>
+            {% endif %}
+          </dd>
+        </div>
+        {% if applicant.address %}
+          <div class="sm:col-span-2">
+            <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Address
+            </dt>
+            <dd class="mt-1 whitespace-pre-line text-sm text-ink-900">{{ applicant.address }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+    </section>
+
+    {# ===== Requirements ================================================ #}
+    <section class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">
+          Requirements for {{ profile.level_label }}
+        </h2>
+        <p class="field-hint mt-0.5">
+          {% if profile.is_configured %}
+            This school's own requirement set for this level.
+          {% else %}
+            The platform default for this level. A school owner can change it
+            in admissions settings.
+          {% endif %}
+          {% if not profile.requires_assessment %}
+            {{ profile.level_label }} applicants do not sit an entrance
+            assessment.
+          {% endif %}
+        </p>
+      </div>
+      <ul class="divide-y divide-ink-200">
+        {% for line, met in applicant.requirement_checklist %}
+          <li class="flex items-center gap-3 px-5 py-3">
+            {% if met %}
+              <svg class="size-5 shrink-0 text-paid" fill="none" viewBox="0 0 24 24"
+                   stroke-width="2" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="m4.5 12.75 6 6 9-13.5" />
+              </svg>
+              <span class="sr-only">Received.</span>
+            {% elif line.is_required %}
+              <svg class="size-5 shrink-0 text-partial" fill="none" viewBox="0 0 24 24"
+                   stroke-width="2" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+              </svg>
+              <span class="sr-only">Outstanding.</span>
+            {% else %}
+              <svg class="size-5 shrink-0 text-ink-300" fill="none" viewBox="0 0 24 24"
+                   stroke-width="2" stroke="currentColor" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+              <span class="sr-only">Not supplied; optional.</span>
+            {% endif %}
+
+            <span class="min-w-0 flex-1 text-sm text-ink-900">{{ line.label }}</span>
+
+            {% if not line.is_required %}
+              <span class="chip">Optional</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      {% if missing %}
+        <div class="border-t border-ink-200 bg-partial-soft px-5 py-3 text-sm
+                    text-partial-strong">
+          Outstanding:
+          {% for line in missing %}{{ line.label }}{% if not forloop.last %}, {% endif %}{% endfor %}.
+        </div>
+      {% endif %}
+    </section>
+
+    {# ===== Assessment ================================================== #}
+    {% if profile.requires_assessment %}
+      <section class="card overflow-hidden">
+        <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
+          <h2 class="text-sm font-semibold text-ink-900">Entrance assessment</h2>
+          {% if can_assess %}
+            <a href="{% url 'admissions:assessment' applicant.pk %}"
+               class="btn btn-secondary text-xs">
+              {% if assessment and assessment.has_been_sat %}Edit{% else %}Schedule / record{% endif %}
+            </a>
+          {% endif %}
+        </div>
+        {% if assessment %}
+          <dl class="grid gap-x-6 gap-y-4 px-5 py-5 sm:grid-cols-3">
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                Scheduled
+              </dt>
+              <dd class="mt-1 text-sm text-ink-900">
+                {{ assessment.scheduled_for|date:"j F Y"|default:"Not booked" }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                Score
+              </dt>
+              <dd class="numeric mt-1 text-sm text-ink-900">
+                {% if assessment.score is not None %}
+                  {{ assessment.score|floatformat:"-2" }} / {{ assessment.max_score|floatformat:"-2" }}
+                  {% if assessment.percentage %}
+                    <span class="text-ink-500">({{ assessment.percentage }}%)</span>
+                  {% endif %}
+                {% else %}—{% endif %}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                Outcome
+              </dt>
+              <dd class="mt-1 text-sm text-ink-900">{{ assessment.get_outcome_display }}</dd>
+            </div>
+            {% if assessment.notes %}
+              <div class="sm:col-span-3">
+                <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                  Notes
+                </dt>
+                <dd class="mt-1 whitespace-pre-line text-sm text-ink-800">{{ assessment.notes }}</dd>
+              </div>
+            {% endif %}
+          </dl>
+        {% else %}
+          <div class="empty-state">
+            <p class="text-sm">Not scheduled yet.</p>
+          </div>
+        {% endif %}
+      </section>
+    {% endif %}
+  </div>
+
+  {# ================= Right column ======================================= #}
+  <div class="space-y-5">
+
+    {# ===== Where they stand ============================================ #}
+    <section class="card p-5">
+      <h2 class="text-sm font-semibold text-ink-900">Stage</h2>
+      <p class="mt-2">
+        <span class="status-pill {{ applicant.status_pill }}">{{ applicant.status_label }}</span>
+      </p>
+
+      <dl class="mt-4 space-y-3 text-sm">
+        <div class="flex justify-between gap-3">
+          <dt class="text-ink-500">Enquired</dt>
+          <dd class="text-ink-900">{{ applicant.created_at|date:"j M Y" }}</dd>
+        </div>
+        {% if applicant.status == "enquiry" and applicant.expires_at %}
+          <div class="flex justify-between gap-3">
+            <dt class="text-ink-500">Expires</dt>
+            <dd class="{% if applicant.has_lapsed %}font-semibold text-overdue-strong{% else %}text-ink-900{% endif %}">
+              {{ applicant.expires_at|date:"j M Y" }}
+              {% if applicant.has_lapsed %}(passed){% endif %}
+            </dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt class="text-ink-500">Reminder sent</dt>
+            <dd class="text-ink-900">
+              {{ applicant.reminder_sent_at|date:"j M Y"|default:"Not yet" }}
+            </dd>
+          </div>
+        {% endif %}
+        {% if applicant.applied_at %}
+          <div class="flex justify-between gap-3">
+            <dt class="text-ink-500">Applied</dt>
+            <dd class="text-ink-900">{{ applicant.applied_at|date:"j M Y" }}</dd>
+          </div>
+        {% endif %}
+        {% if applicant.decided_at %}
+          <div class="flex justify-between gap-3">
+            <dt class="text-ink-500">Decided</dt>
+            <dd class="text-ink-900">{{ applicant.decided_at|date:"j M Y" }}</dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt class="text-ink-500">Parent told</dt>
+            <dd class="text-ink-900">
+              {{ applicant.decision_sent_at|date:"j M Y"|default:"Not emailed" }}
+            </dd>
+          </div>
+        {% endif %}
+        {% if applicant.enrolled_at %}
+          <div class="flex justify-between gap-3">
+            <dt class="text-ink-500">Enrolled</dt>
+            <dd class="text-ink-900">{{ applicant.enrolled_at|date:"j M Y" }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+
+      {% if applicant.decision_note %}
+        <p class="mt-4 rounded-md bg-ink-50 px-3 py-2 text-sm text-ink-700">
+          {{ applicant.decision_note }}
+        </p>
+      {% endif %}
+
+      {% if applicant.student %}
+        <a href="{{ applicant.student.get_absolute_url }}"
+           class="btn btn-secondary mt-4 w-full text-sm">
+          View {{ applicant.student.first_name }} on the roster
+        </a>
+      {% endif %}
+    </section>
+
+    {# ===== Admission money ============================================= #}
+    {% if "view_admission_payments" in capabilities %}
+      <section class="card overflow-hidden">
+        <div class="border-b border-ink-200 px-5 py-4">
+          <h2 class="text-sm font-semibold text-ink-900">Admission fees</h2>
+          <p class="field-hint mt-0.5">
+            Charged once, at intake. Separate from what the class owes per term.
+          </p>
+        </div>
+
+        {% if schedule %}
+          <ul class="divide-y divide-ink-100">
+            {% for item in schedule.items.all %}
+              <li class="flex items-baseline justify-between gap-3 px-5 py-2 text-sm">
+                <span class="min-w-0 text-ink-700">
+                  {{ item.name }}
+                  {% if item.kind == "books" %}<span class="chip ml-1">Books</span>{% endif %}
+                </span>
+                <span class="numeric shrink-0 text-ink-900">{{ item.amount|naira }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+          <dl class="space-y-2 border-t border-ink-200 px-5 py-4 text-sm">
+            <div class="flex justify-between gap-3">
+              <dt class="text-ink-500">Due at intake</dt>
+              <dd class="numeric font-semibold text-ink-900">{{ schedule.compulsory_total|naira }}</dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-ink-500">Paid</dt>
+              <dd class="numeric text-paid-strong">{{ applicant.admission_paid|naira }}</dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-ink-500">Outstanding</dt>
+              <dd class="numeric font-semibold {% if applicant.admission_outstanding %}text-overdue-strong{% else %}text-paid-strong{% endif %}">
+                {{ applicant.admission_outstanding|naira }}
+              </dd>
+            </div>
+          </dl>
+        {% else %}
+          <div class="px-5 py-4 text-sm text-ink-600">
+            No admission fee sheet for {{ applicant.applying_for }} yet.
+            {% if applicant.admission_paid %}
+              <span class="numeric">{{ applicant.admission_paid|naira }}</span> has
+              been received.
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if payments %}
+          <ul class="divide-y divide-ink-100 border-t border-ink-200">
+            {% for payment in payments %}
+              <li class="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+                <div class="min-w-0">
+                  <p class="numeric text-ink-900">{{ payment.amount|naira }}</p>
+                  <p class="text-xs text-ink-500">
+                    {{ payment.received_on|date:"j M Y" }} &middot;
+                    {{ payment.get_method_display }}
+                  </p>
+                </div>
+                <span class="status-pill {{ payment.status_pill }}">
+                  {{ payment.get_status_display }}
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        {% if can_pay %}
+          <div class="border-t border-ink-200 p-4">
+            <a href="{% url 'admissions:payment_create' applicant.pk %}"
+               class="btn btn-secondary w-full text-sm">Record a payment</a>
+          </div>
+        {% endif %}
+      </section>
+    {% endif %}
+
+    {# ===== What is next ================================================ #}
+    {% if can_advance or can_assess or can_decide or can_enrol or can_withdraw %}
+      <section class="card p-5">
+        <h2 class="text-sm font-semibold text-ink-900">Next steps</h2>
+        <div class="mt-3 space-y-2">
+          {% if can_advance %}
+            <a href="{% url 'admissions:application' applicant.pk %}"
+               class="btn btn-primary w-full text-sm">Start the application</a>
+            <p class="field-hint">
+              Everything already captured is carried over — the application only
+              adds what is missing.
+            </p>
+          {% endif %}
+          {% if can_assess %}
+            <a href="{% url 'admissions:assessment' applicant.pk %}"
+               class="btn btn-secondary w-full text-sm">Schedule / record assessment</a>
+          {% endif %}
+          {% if can_decide %}
+            <a href="{% url 'admissions:decision' applicant.pk %}"
+               class="btn btn-primary w-full text-sm">Offer or refuse a place</a>
+          {% endif %}
+          {% if can_enrol %}
+            {% if blockers %}
+              <ul class="rounded-md border border-partial/30 bg-partial-soft px-3 py-2
+                         text-xs text-partial-strong">
+                {% for blocker in blockers %}<li>{{ blocker }}</li>{% endfor %}
+              </ul>
+            {% endif %}
+            <a href="{% url 'admissions:enrol' applicant.pk %}"
+               class="btn btn-primary w-full text-sm">Enrol as a student</a>
+          {% endif %}
+          {% if can_withdraw %}
+            <form method="post" action="{% url 'admissions:withdraw' applicant.pk %}"
+                  class="pt-1">
+              {% csrf_token %}
+              <input type="text" name="closing_note" class="field-input mb-2"
+                     placeholder="Why (optional)" maxlength="250">
+              <button type="submit" class="btn btn-ghost w-full text-sm">
+                Mark as withdrawn
+              </button>
+            </form>
+          {% endif %}
+        </div>
+      </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    <span class="numeric">{{ applicant.reference }}</span>
+    &middot; {{ applicant.applying_for }}
+    &middot; {{ profile.level_label }} requirements
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl">
+
+  {% comment %}
+  ===== What is already on file =========================================
+  The point of the screen, said out loud. There is deliberately nowhere on this
+  form to retype any of it, which is what keeps the two copies from ever
+  disagreeing.
+  {% endcomment %}
+  <section class="card mb-5 overflow-hidden">
+    <div class="border-b border-ink-200 bg-ink-50 px-5 py-3">
+      <h2 class="text-sm font-semibold text-ink-900">Carried over from the enquiry</h2>
+      <p class="field-hint mt-0.5">
+        Already on file, and not asked for again. Correct any of it on the
+        applicant record if it is wrong.
+      </p>
+    </div>
+    <dl class="grid gap-x-6 gap-y-3 px-5 py-4 sm:grid-cols-2">
+      {% for label, value in carried_over %}
+        <div class="flex justify-between gap-3 sm:block">
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            {{ label }}
+          </dt>
+          <dd class="text-sm text-ink-900 sm:mt-1">{{ value|default:"—" }}</dd>
+        </div>
+      {% endfor %}
+    </dl>
+  </section>
+
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    {# ===== What the application adds =================================== #}
+    <div class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Application details</h2>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        {% for field in form.detail_fields %}
+          {% include "partials/_field.html" with field=field %}
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ===== Documents, per level ======================================== #}
+    <div class="card mt-5 overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">
+          Documents for {{ profile.level_label }}
+        </h2>
+        <p class="field-hint mt-0.5">
+          {% if profile.is_configured %}
+            This school's own requirement set for this level.
+          {% else %}
+            The platform default for this level.
+          {% endif %}
+          {% if profile.requires_assessment %}
+            {{ profile.level_label }} applicants also sit an entrance
+            assessment, recorded separately.
+          {% else %}
+            {{ profile.level_label }} applicants do not sit an entrance
+            assessment.
+          {% endif %}
+        </p>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        {% for field, line in form.document_fields %}
+          <div>
+            <label for="{{ field.id_for_label }}" class="field-label">
+              {{ field.label }}
+              {% if line.is_required %}
+                <span class="text-overdue" aria-hidden="true">*</span>
+                <span class="sr-only">(required for {{ profile.level_label }})</span>
+              {% else %}
+                <span class="chip ml-1">Optional</span>
+              {% endif %}
+            </label>
+            {% if field.value %}
+              <p class="mb-1.5 text-xs text-paid-strong">Already on file — upload again to replace it.</p>
+            {% endif %}
+            {{ field }}
+            {% if field.help_text %}<p class="field-hint">{{ field.help_text }}</p>{% endif %}
+            {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+          </div>
+        {% empty %}
+          <p class="text-sm text-ink-500">
+            No documents are required at this level.
+          </p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <a href="{{ applicant.get_absolute_url }}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">Save application</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

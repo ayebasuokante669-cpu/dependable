@@ -1,0 +1,59 @@
+{% extends "admissions/email/_base.html" %}
+
+{% block body %}
+  <p style="margin:0 0 16px;">
+    A little while ago you enquired about a place for <strong>{{ child }}</strong>
+    at {{ school.name }}{% if branch %}, {{ branch.name }}{% endif %}. We have not
+    heard from you since, so this is a friendly reminder.
+  </p>
+
+  {% if expires_on %}
+    <p style="margin:0 0 16px;">
+      Your enquiry is held until <strong>{{ expires_on|date:"j F Y" }}</strong>{% if days_left and days_left > 0 %} — {{ days_left }} day{{ days_left|pluralize }} from now{% endif %}.
+      After that we would need you to start again.
+    </p>
+  {% endif %}
+{% endblock %}
+
+{% block panel %}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         style="background-color:#f6f8fb;border:1px solid #dfe4ed;border-radius:6px;
+                margin:8px 0 16px;">
+    <tr>
+      <td style="padding:16px 18px;">
+        <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:.05em;
+                  text-transform:uppercase;color:#6b7891;">Your reference</p>
+        <p style="margin:4px 0 12px;font-family:'IBM Plex Mono',Consolas,monospace;
+                  font-size:18px;font-weight:600;color:#0f2547;">{{ reference }}</p>
+
+        <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#435065;">
+          For {{ applying_for }} we will need:
+        </p>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:#435065;">
+          {% for line in requirements.required_documents %}
+            <li style="padding:1px 0;">{{ line.label }}</li>
+          {% endfor %}
+          {% if requirements.requires_assessment %}
+            <li style="padding:1px 0;">
+              An entrance assessment, which we will arrange with you
+            </li>
+          {% endif %}
+        </ul>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin:0 0 16px;">
+    To continue, please get in touch and we will take you through the
+    application.
+  </p>
+
+  {% if enquiry_url %}
+    <p style="margin:0 0 16px;">
+      <a href="{{ enquiry_url }}"
+         style="display:inline-block;background-color:#1d3f79;color:#ffffff;
+                text-decoration:none;padding:11px 20px;border-radius:6px;
+                font-size:14px;font-weight:600;">Visit {{ school.name }}</a>
+    </p>
+  {% endif %}
+{% endblock %}

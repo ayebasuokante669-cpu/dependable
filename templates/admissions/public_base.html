@@ -1,0 +1,79 @@
+{% load static %}<!doctype html>
+{% comment %}
+The school's page, not the platform's.
+
+This deliberately does NOT extend base.html. That template puts the product
+name in the <title>, the product mark in the header and the product's favicon
+in the tab — correct for every screen a member of staff sees, and wrong for
+every screen a parent sees. A mother following a link from a school's WhatsApp
+status has come to enquire about that school; introducing her to the software
+vendor instead answers a question she did not ask, and on a first visit reads
+like the wrong website.
+
+So: the school's name is the title, the school's logo is the mark, and
+SCHOOLCORD appears nowhere on the page. The one thing shared with the rest of
+the platform is the stylesheet, because the design system is what makes the
+form legible on a three-year-old Android phone and none of it is branded.
+
+Pages fill `heading`, `intro` and `body`.
+{% endcomment %}
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ page_title }}{% endblock %} &middot; {{ school.name }}</title>
+  <meta name="theme-color" content="#0f2547">
+  <meta name="robots" content="noindex">
+
+  {% if school.logo %}
+    <link rel="icon" href="{{ school.logo.url }}">
+  {% endif %}
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body class="h-full">
+
+<div class="min-h-full px-4 py-8 sm:py-12">
+  <div class="mx-auto w-full max-w-2xl">
+
+    {# ===== The school's own mark ======================================== #}
+    <header class="mb-8 flex flex-col items-center text-center">
+      {% include "partials/_school_logo.html" with school=school size="size-16" rounded="rounded-xl" %}
+      <h1 class="mt-4 text-2xl font-semibold tracking-tight text-brand-900">
+        {{ school.name }}
+      </h1>
+      {% block heading %}{% endblock %}
+    </header>
+
+    <div class="card p-6 sm:p-8">
+      {% block intro %}{% endblock %}
+      {% block body %}{% endblock %}
+    </div>
+
+    {# ===== The school's own contact details ============================= #}
+    {% if school.contact_phone or school.contact_email %}
+      <p class="mt-6 text-center text-sm text-ink-600">
+        Questions?
+        {% if school.contact_phone %}
+          Call <a href="tel:{{ school.contact_phone }}"
+                  class="font-medium text-brand-700 hover:underline">{{ school.contact_phone }}</a>{% if school.contact_email %} or{% endif %}
+        {% endif %}
+        {% if school.contact_email %}
+          email <a href="mailto:{{ school.contact_email }}"
+                   class="font-medium text-brand-700 hover:underline">{{ school.contact_email }}</a>
+        {% endif %}
+      </p>
+    {% endif %}
+
+    <p class="mt-8 text-center text-xs text-ink-400">
+      &copy; {% now "Y" %} {{ school.name }}
+    </p>
+  </div>
+</div>
+
+</body>
+</html>

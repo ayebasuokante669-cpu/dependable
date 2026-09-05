@@ -100,13 +100,21 @@ default to `config.settings.prod`.
 python manage.py test apps
 ```
 
-276 tests, covering the parts that must never regress: what each role can see,
+627 tests, covering the parts that must never regress: what each role can see,
 what each role may change, that a fee total always equals its live line items,
 that a student's expected fee is always read from their class rather than stored
 on them, that each senior arm carries exactly the subjects the school named,
 that a spreadsheet import reports every bad row, imports the good ones, and
 writes all-or-nothing, and that a signup builds exactly one school, branch and
-owner while each role lands on its own dashboard. The negative-path tests deliberately trigger
+owner while each role lands on its own dashboard.
+
+Admissions adds 106 of its own: that a public enquiry writes to the school in
+its URL and refuses another school's branch or class, that an enquiry becomes an
+application without a single field being re-asked, that KG skips the entrance
+exam while Primary and Senior sit it, that enrolment produces a Student in the
+right class and branch and keeps the link back, that admission fees and termly
+fees never touch, that a lapsed enquiry is closed rather than deleted, and that
+one school cannot see another's applicants. The negative-path tests deliberately trigger
 403s and 404s, so Django logs tracebacks during a passing run.
 
 ---
@@ -864,6 +872,274 @@ the term (Django admin → Terms) and the overdue pill appears everywhere it
 should. The behaviour itself is covered by tests in
 `apps/payments/tests.py::OverdueTests`.
 
+## Admissions and enquiries
+
+A paid add-on beyond the original scope. It is the pipeline a prospective child
+travels from the moment their parent taps a link on Instagram to the moment they
+appear on the register.
+
+### An applicant is its own entity, not a draft student
+
+This is the decision everything else follows from. A `Student` is a child on the
+roll: billed, counted in the head count, present in every report. A child whose
+parent filled in a form at midnight is none of those things, and the moment the
+two share a table every `Student.objects` query in the platform starts returning
+people who have never set foot in the school.
+
+So `Applicant` is its own model, and enrolment is a **conversion**:
+`apps/admissions/enrolment.py` creates the Student and links back to the
+applicant, which keeps its whole history. `applicant.student` is the link;
+`student.applicant` is the reverse.
+
+### One record, many stages
+
+An enquiry does not become a different row when it becomes an application. The
+status advances and the application stage *adds* fields:
+
+```
+enquiry ── application ── assessed ── offered ── enrolled
+   │                                     └───── rejected
+   ├── expired
+   └── withdrawn (from any open stage)
+```
+
+`ApplicationForm` is a ModelForm over the same row, and every field the parent
+already gave is deliberately **absent** from it — there is nowhere on that
+screen to retype a date of birth, so there is nowhere for the two copies to
+disagree. What the screen does show, at the top, is a read-only "carried over
+from the enquiry" panel, so the person filling it in can see the data is there.
+
+Nothing is ever deleted. A rejected applicant, a lapsed enquiry and a family who
+changed their mind are all facts about the intake — a school asking in March how
+many enquiries January's post brought and how many converted needs the ones that
+did not.
+
+### The public enquiry page
+
+`/<school-slug>/enquiry/` — the URL a school puts in its Instagram bio, its
+WhatsApp status or on its own website.
+
+It is the second place on the platform, after signup, that runs with **no tenant
+context at all**. A parent is anonymous, so every scoped manager would return
+nothing: an empty campus list, an empty class list. Every queryset there
+therefore goes through `all_objects` and is narrowed by hand to the school in
+the URL — and *that narrowing is the security boundary*. The school comes from
+the slug, never from anything the browser posts, which is why posting another
+school's branch or class id is refused rather than honoured.
+
+**The page is branded to the school and to nothing else.** It does not extend
+`base.html`, because that template puts the product name in the title and the
+product mark in the header — right for staff, wrong for a parent who has come to
+enquire about *their school*. The school's name is the title, its uploaded logo
+is the mark, and SCHOOLCORD appears nowhere. A test asserts that.
+
+The form is deliberately light — top of funnel only. Child's name, date of
+birth, sex, campus, class wanted, parent name, phone, email, previous school and
+how they heard about the school. A parent still deciding whether to enquire will
+abandon a form that asks for a birth certificate.
+
+Branch is a real, required field here, because the parent is outside the system
+and nothing else can know which campus they mean. On the staff walk-in form at
+`/admissions/new/` it is not asked at all: the person at the desk is standing in
+the campus the parent walked into, so it comes from their account. Both forms
+write to the same model, and differ only in `source`.
+
+### The validity window
+
+A fresh enquiry is good for a number of days set per school (21 by default), and
+`expires_at` is stamped on the first save. Two nightly commands act on it:
+
+```bash
+python manage.py send_enquiry_reminders   # run this one first
+python manage.py expire_enquiries
+```
+
+`send_enquiry_reminders` emails the parent once, after the school's own
+`reminder_after_days` (7 by default). `reminder_sent_at` is stamped **only on
+success**, so a send that failed is retried tomorrow rather than silently marked
+done — and never more than once per enquiry, because a second and third
+identical email is how a school's mail starts being marked as spam.
+
+`expire_enquiries` closes what has lapsed. It only ever expires rows still at
+the *enquiry* stage: once a family has filled in the application the window has
+done its job, and expiring somebody mid-assessment would be the platform closing
+a door the school is holding open. Both commands take `--dry-run`.
+
+`applicant.has_lapsed` is derived, not stored, so the board is honest the moment
+a window closes rather than only after the sweep has run.
+
+### Requirements are data, per level
+
+The client's rule is not one list. A passport photograph is asked of every
+applicant; an entrance examination is asked of Primary and Secondary and never
+of Nursery; the supporting documents differ again between a four-year-old
+starting Pre-KG and a fifteen-year-old transferring into SSS 2.
+
+So the requirement set is data rather than a chain of `if level ==`. Three
+layers answer "what does this applicant owe us?", narrowest first:
+
+1. the branch's own `RequirementSet` for that level,
+2. the school's set for that level (`branch` null — one policy, every campus),
+3. the defaults in `apps/admissions/requirements.py`.
+
+`requirements.profile_for(level, school=, branch=)` is the only function any
+caller needs. A school that has configured nothing gets a complete, sensible
+answer; a school that disagrees with one line changes that line.
+
+| Level | Photo | Birth cert. | Previous results | Transfer letter | Entrance exam |
+| --- | --- | --- | --- | --- | --- |
+| Nursery | required | required | not asked | not asked | **no** |
+| Primary | required | required | required | optional | yes |
+| Junior Secondary | required | required | required | required | yes |
+| Senior Secondary | required | required | required | required | yes |
+
+Nursery does not list previous results *at all* — not even as optional. A
+four-year-old has no previous school to produce a report from, and offering the
+upload would be asking for something that does not exist.
+
+The assessment screen 404s for a level that does not sit one. Skipping the exam
+is a URL that does not exist for that applicant, not a hidden button, so a
+bookmarked link cannot create a record the level has no use for.
+
+**Document fields are never hard-required on the form.** The front desk types
+the application while the parent goes to photocopy the birth certificate, and a
+form that refused to save until every paper was in hand would send them back to
+the paper book this feature exists to replace. "Required" is enforced where it
+matters — `applicant.missing_requirements`, which the detail screen lists and
+the decision screen shows the principal before they decide.
+
+### Admission fees are not termly fees
+
+`fees.FeeStructure` is what a class owes **per term** and is repriced every
+term. What a family pays to come in is charged **once**, at the door, and
+includes items — uniform, tracksuit, the book list — a returning child never
+pays again. Sharing a table would mean every termly total silently gaining an
+admission fee.
+
+So they are separate models with separate seeders, and neither command can touch
+the other's rows:
+
+| | Termly | Admission |
+| --- | --- | --- |
+| Set | `fees.FeeStructure` | `admissions.AdmissionFeeSchedule` |
+| Line | `fees.FeeComponent` | `admissions.AdmissionFeeItem` |
+| Money | `payments.Payment` (needs a Student) | `admissions.AdmissionPayment` (needs only an Applicant) |
+| Source | `apps/fees/pricing.py` | `apps/admissions/admission_pricing.py` |
+| Seeder | `seed_fees` | `seed_admission_fees` |
+
+`AdmissionPayment` exists because `payments.Payment` requires a `Student`, and
+the whole point of an admission fee is that it is paid by a family who does not
+have one yet. They stay separate after enrolment too, so a term's collection
+figure never quietly includes intake money. Tests assert the separation from
+both sides.
+
+Line items carry a `kind`: `admission` (the one-time fee, and the only thing
+enrolment is gated on), `intake` (tuition, uniform, sportswear, exam/dossier,
+tracksuit) and `books` (the compulsory book list, quoted as a separate add-on
+and excluded from "due at intake").
+
+Totals are never stored. `compulsory_total`, `admission_total`, `books_total`
+and `total` are all summed from the live line items, the same rule the termly
+structure follows.
+
+```bash
+python manage.py seed_admission_fees --school "Fulfilled Academy" --branch "Main Campus"
+```
+
+**The seeder refuses to price a sheet whose figures it does not have**, and
+names the missing lines instead. Seeding a zero would put a real-looking 0 in
+front of a parent and inventing a plausible figure would put a wrong one there;
+both are worse than a command that says which number it is waiting for. Fill the
+amounts into `admission_pricing.py` (replace each `PENDING` with `naira(...)`)
+and re-run.
+
+Where the school's own written total disagrees with its line items, the seeder
+charges the line items and prints a warning — no balancing line is invented.
+That is how Primary 1's 2,000 gap is handled in the termly file, and it is how
+the Pre-KG–KG3 gap is handled here: the sheet's written total is 81,000 while
+its own items sum to 82,000, and `client_total` records that so the warning
+fires the moment the figures land.
+
+### Enrolment
+
+On an offer plus a confirmed admission fee, `enrolment.enrol()` creates the
+Student in one transaction: names, sex, date of birth, parent contact and
+address copied across, admission number suggested from the branch's own series
+(`AS/2026/008` — the school's initials, the year, the next free number), class
+taken from the offer unless the front desk places them elsewhere.
+
+`enrol` calls `student.full_clean()` with **nothing excluded**, and that is
+load-bearing. The roster's uniqueness rule is
+`UniqueConstraint(Upper("admission_number"), "branch")`, and Django skips a
+constraint that mentions an excluded field — excluding `branch` (the obvious
+thing to do, since it is derived rather than typed) would silently turn the
+check off and let a duplicate through to the database as a 500.
+
+`enrolment.can_enrol()` returns *every* blocker as a list rather than raising on
+the first, so the screen shows all of them at once instead of revealing them one
+refresh at a time. The payment gate is a per-school setting: a school that
+admits first and collects afterwards turns it off.
+
+### Who does what
+
+| | Owner / Principal | Bursar |
+| --- | --- | --- |
+| See the pipeline | yes | **configurable**, off by default |
+| Move an applicant along | yes | never |
+| Offer or refuse a place | yes | **never**, whatever is configured |
+| See admission fees | yes | yes |
+| Record an admission payment | yes | yes |
+
+Every other capability on the platform is a fixed property of the role. This one
+is not, because whether a bursar sees applicants is the *school's* decision —
+some run the front desk out of the bursary, most do not. So
+`AdmissionsConfig.bursar_can_view_applicants` widens *viewing* only, and
+`apps/admissions/access.py` is the one place that ordering is expressed: the
+role table is the ceiling, and the school's toggle can only ever move a bursar
+up to reading the board.
+
+The sidebar consults the same answer the views do (`NavItem.capability`), so it
+never offers a bursar a link that would 403.
+
+### What the parent receives
+
+Three emails, all signed by the school. The platform is named nowhere in the
+body, and the one place it cannot be hidden — the envelope sender — carries the
+school's *display name* over our address, with `Reply-To` set to the school's
+own office email so a parent hitting reply reaches the school. Sending as
+`@theschool.com` from our servers would fail that domain's SPF and land in spam,
+which helps nobody.
+
+| Email | When |
+| --- | --- |
+| Acknowledgement | immediately on a public submission — carries the reference and the closing date |
+| Reminder | once, inside the window |
+| Decision | on an offer or a refusal, if the person deciding asks for it |
+
+The offer and the refusal are two templates, not one with the adjectives
+swapped. An offer tells the family what to do next and what is payable at
+intake; a refusal is short, says the decision is final for this intake, and does
+not dangle a reconsideration the school has not offered.
+
+Set `PUBLIC_BASE_URL` so the reminder can build an absolute link back to the
+school's enquiry page. Left blank the link is omitted rather than sent broken.
+
+### The screens
+
+| URL | What it is |
+| --- | --- |
+| `/<school-slug>/enquiry/` | The school's public enquiry page. Unauthenticated. |
+| `/admissions/` | The pipeline board — every applicant grouped by stage, filterable by campus, level, class and status. |
+| `/admissions/new/` | Walk-in enquiry, branch taken from the staff account. |
+| `/admissions/<id>/` | One applicant: what is captured, what is outstanding, what is next. |
+| `/admissions/<id>/application/` | Enquiry to application. Adds fields, re-asks for none. |
+| `/admissions/<id>/assessment/` | Schedule or record the entrance exam. 404s for a level that does not sit one. |
+| `/admissions/<id>/decision/` | Offer or refuse. Owner and principal only. |
+| `/admissions/<id>/enrol/` | The conversion. |
+| `/admissions/<id>/payment/` | Record an admission payment. |
+| `/admissions/fees/` | The intake fee sheets and what has been collected. |
+| `/admissions/settings/` | The window, the reminder, and who sees the pipeline. |
+
 ## The public side and signing in
 
 Everything above assumed you were already signed in. This is how you get there.
@@ -1145,10 +1421,20 @@ apps/messaging/      SchoolMessagingConfig (each school's Sender ID),
                      Termii, Africa's Talking)
 apps/payments/       Payment, balances.py (every derived figure), its screens,
                      and seed_payments
+apps/admissions/     the paid add-on: Applicant (enquiry through enrolment),
+                     Assessment, RequirementSet, AdmissionFeeSchedule and
+                     AdmissionPayment; requirements.py (what each level asks
+                     for), enrolment.py (applicant -> Student), access.py (the
+                     one capability a school configures), notifications.py
+                     (the parent emails), admission_pricing.py, the public
+                     enquiry page (public_urls.py) and the staff pipeline
 templates/           base.html, 403.html, partials/, core/ (landing, signup,
                      onboarding, dashboards), academics/, fees/, students/,
                      messaging/, payments/, registration/ (_auth_base.html plus
-                     login, password reset and password change)
+                     login, password reset and password change), admissions/
+                     (public_base.html -- the school-branded shell that
+                     deliberately does not extend base.html -- the pipeline,
+                     and email/ for the three parent emails)
 assets/app.css       design tokens and components (Tailwind source)
 static/css/app.css   compiled output (committed)
 static/img/          the SCHOOLCORD logo, SVG and PNG

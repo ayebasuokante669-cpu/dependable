@@ -1,0 +1,46 @@
+{% extends "admissions/email/_base.html" %}
+
+{% block body %}
+  <p style="margin:0 0 16px;">
+    Thank you for enquiring about a place for
+    <strong>{{ child }}</strong> at {{ school.name }}{% if branch %}, {{ branch.name }}{% endif %}.
+  </p>
+  <p style="margin:0 0 16px;">We will be in touch shortly.</p>
+{% endblock %}
+
+{% block panel %}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         style="background-color:#f6f8fb;border:1px solid #dfe4ed;border-radius:6px;
+                margin:8px 0 16px;">
+    <tr>
+      <td style="padding:16px 18px;">
+        <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:.05em;
+                  text-transform:uppercase;color:#6b7891;">Your reference</p>
+        <p style="margin:4px 0 0;font-family:'IBM Plex Mono',Consolas,monospace;
+                  font-size:20px;font-weight:600;color:#0f2547;">{{ reference }}</p>
+        <p style="margin:6px 0 0;font-size:13px;color:#5a6b85;">
+          Quote this if you call or visit us.
+        </p>
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+               style="margin-top:14px;font-size:13px;color:#435065;">
+          <tr>
+            <td style="padding:2px 0;color:#6b7891;">Child</td>
+            <td style="padding:2px 0;text-align:right;color:#1c2432;">{{ child }}</td>
+          </tr>
+          <tr>
+            <td style="padding:2px 0;color:#6b7891;">Applying for</td>
+            <td style="padding:2px 0;text-align:right;color:#1c2432;">{{ applying_for }}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  {% if expires_on %}
+    <p style="margin:0 0 16px;font-size:14px;color:#5a6b85;">
+      This enquiry is held until <strong>{{ expires_on|date:"j F Y" }}</strong>.
+      After that we would need you to enquire again.
+    </p>
+  {% endif %}
+{% endblock %}

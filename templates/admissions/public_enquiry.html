@@ -1,0 +1,99 @@
+{% extends "admissions/public_base.html" %}
+
+{% block title %}Enquire about a place{% endblock %}
+
+{% block heading %}
+  <p class="mt-1 text-sm text-ink-600">Enquire about a place</p>
+{% endblock %}
+
+{% block intro %}
+  {% if is_open %}
+    <p class="text-sm text-ink-600">
+      Tell us a little about your child and we will be in touch. It takes about
+      a minute — nothing is needed from you yet beyond the details below.
+    </p>
+  {% endif %}
+{% endblock %}
+
+{% block body %}
+
+  {% if not is_open %}
+    {% comment %}
+    A school that has not set up its campuses or classes cannot take an enquiry
+    yet. Saying so beats a dropdown the parent cannot get past.
+    {% endcomment %}
+    <div class="rounded-md border border-partial/30 bg-partial-soft px-4 py-3
+                text-sm text-partial-strong" role="status">
+      <p class="font-semibold">Online enquiries are not open yet.</p>
+      <p class="mt-1">
+        Please contact the school directly and they will be glad to help.
+      </p>
+    </div>
+    {% if not school.contact_phone and not school.contact_email %}
+      <p class="mt-3 text-sm text-ink-600">
+        The school has not published contact details here yet.
+      </p>
+    {% endif %}
+
+  {% else %}
+
+    {% if form.non_field_errors %}
+      <div class="mb-5 rounded-md border border-overdue/30 bg-overdue-soft px-3 py-2.5
+                  text-sm text-overdue-strong" role="alert">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6" novalidate>
+      {% csrf_token %}
+
+      {# ===== The child ==================================================== #}
+      <fieldset class="space-y-5">
+        <legend class="text-sm font-semibold text-ink-900">Your child</legend>
+
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.first_name %}
+          {% include "partials/_field.html" with field=form.last_name %}
+        </div>
+        {% include "partials/_field.html" with field=form.other_names %}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.sex %}
+          {% include "partials/_field.html" with field=form.date_of_birth %}
+        </div>
+      </fieldset>
+
+      {# ===== Where ======================================================== #}
+      <fieldset class="space-y-5 border-t border-ink-200 pt-6">
+        <legend class="text-sm font-semibold text-ink-900">
+          The place you are enquiring about
+        </legend>
+
+        {% include "partials/_field.html" with field=form.branch %}
+        {% include "partials/_field.html" with field=form.school_class %}
+        {% include "partials/_field.html" with field=form.previous_school %}
+      </fieldset>
+
+      {# ===== You ========================================================== #}
+      <fieldset class="space-y-5 border-t border-ink-200 pt-6">
+        <legend class="text-sm font-semibold text-ink-900">You</legend>
+
+        {% include "partials/_field.html" with field=form.parent_name %}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.parent_phone %}
+          {% include "partials/_field.html" with field=form.parent_email %}
+        </div>
+        {% include "partials/_field.html" with field=form.heard_about %}
+      </fieldset>
+
+      <button type="submit" class="btn btn-primary w-full">
+        Send enquiry
+      </button>
+
+      <p class="text-xs text-ink-500">
+        Your details are used by {{ school.name }} to contact you about a place
+        for your child, and for nothing else.
+      </p>
+    </form>
+
+  {% endif %}
+{% endblock %}

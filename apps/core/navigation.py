@@ -132,6 +132,22 @@ ICONS: dict[str, list[str]] = {
         "m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966"
         " 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
     ],
+    "clipboard": [
+        "M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108"
+        "c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0"
+        "c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75"
+        " 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15"
+        "c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08"
+        "C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125"
+        "v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375"
+        "c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008"
+        "v.008H6.75V15Zm0 3h.008v.008H6.75V18Z",
+    ],
+    "userplus": [
+        "M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0"
+        " 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109"
+        "A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z",
+    ],
     "cog": [
         "M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281"
         "c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456"
@@ -158,6 +174,11 @@ class NavItem:
     url_name: str
     icon: str
     roles: tuple[str, ...]
+    #: Optional extra gate. Where a role alone does not settle the question --
+    #: admissions, where a school decides whether its bursar sees the pipeline
+    #: -- the entry also names the capability the account must hold. Left blank
+    #: the entry is role-gated only, which is every other entry above.
+    capability: str = ""
 
 
 @dataclass(frozen=True)
@@ -241,6 +262,22 @@ NAVIGATION: tuple[NavSection, ...] = (
         ),
     ),
     NavSection(
+        label="Admissions",
+        items=(
+            # Capability-gated as well as role-gated: a bursar reaches the
+            # pipeline only where their school has switched it on, and the
+            # sidebar has to agree with what the view will actually allow.
+            NavItem("Applications", "admissions:pipeline", "clipboard", ALL_ROLES,
+                    capability="view_admissions"),
+            NavItem("New enquiry", "admissions:enquiry_create", "userplus",
+                    _LEADERSHIP, capability="manage_admissions"),
+            NavItem("Admission fees", "admissions:fee_schedules", "money", ALL_ROLES,
+                    capability="view_admission_payments"),
+            NavItem("Admissions settings", "admissions:settings", "cog",
+                    _LEADERSHIP, capability="manage_admissions"),
+        ),
+    ),
+    NavSection(
         label="Communication",
         items=(
             NavItem("Messaging", "messaging:index", "chat", ALL_ROLES),
@@ -279,18 +316,30 @@ def _resolve(item: NavItem, current_path: str, role: str | None = None) -> Resol
     )
 
 
-def nav_for(role: str | None, current_path: str = "") -> list[ResolvedSection]:
+def nav_for(
+    role: str | None,
+    current_path: str = "",
+    capabilities: frozenset[str] | set[str] = frozenset(),
+) -> list[ResolvedSection]:
     """Return the navigation tree a holder of ``role`` should see.
 
     Sections with no visible items are dropped, so a bursar simply never
     receives a "Platform" heading.
+
+    ``capabilities`` is the set of capability *strings* the account holds. Only
+    entries that declare one consult it; the rest are role-gated as before. It
+    defaults to empty, so a caller that does not pass it gets exactly the
+    role-only navigation and any capability-gated entry stays hidden -- the
+    safe direction for a default to fail in.
     """
     if not role:
         return []
     sections: list[ResolvedSection] = []
     for section in NAVIGATION:
         items = [
-            _resolve(i, current_path, role) for i in section.items if role in i.roles
+            _resolve(i, current_path, role)
+            for i in section.items
+            if role in i.roles and (not i.capability or i.capability in capabilities)
         ]
         if items:
             sections.append(ResolvedSection(label=section.label, items=items))

@@ -56,6 +56,10 @@ INSTALLED_APPS = [
     "apps.messaging",
     # Money received, recorded against a student. Balances derive from here.
     "apps.payments",
+    # Paid add-on: the enquiry-to-enrolment pipeline. Last, because it converts
+    # an applicant into a student and prices the intake against an academics
+    # class -- it depends on those apps, and nothing depends on it.
+    "apps.admissions",
 ]
 
 MIDDLEWARE = [
@@ -120,6 +124,14 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL", f"{PRODUCT_NAME} <{SUPPORT_EMAIL}>"
 )
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 24 * 3  # three days
+
+# --- Public links -------------------------------------------------------
+# Where this deployment answers from, e.g. https://app.schoolcord.com. Needed
+# only by mail: an email has no request to resolve a relative path against, so
+# the admissions reminder builds its "back to the school's enquiry page" link
+# from this. Left blank the link is omitted rather than sent broken, which is
+# why there is no invented default here.
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 
 # --- Messaging ----------------------------------------------------------
 # Which gateway carries parent SMS is normally each school's own choice, stored

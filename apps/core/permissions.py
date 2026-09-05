@@ -34,6 +34,16 @@ class Capability(str, Enum):
     VIEW_MESSAGING_IDENTITY = "view_messaging_identity"
     MANAGE_MESSAGING_IDENTITY = "manage_messaging_identity"
     MANAGE_SCHOOL_PROFILE = "manage_school_profile"
+    # Admissions. Four capabilities rather than the usual two, because the
+    # client drew two lines here that the view/manage pair cannot express:
+    # deciding on an application is narrower than working the pipeline, and
+    # taking admission money is available to a bursar who cannot see the
+    # pipeline at all.
+    VIEW_ADMISSIONS = "view_admissions"
+    MANAGE_ADMISSIONS = "manage_admissions"
+    DECIDE_ADMISSIONS = "decide_admissions"
+    VIEW_ADMISSION_PAYMENTS = "view_admission_payments"
+    RECORD_ADMISSION_PAYMENTS = "record_admission_payments"
 
 
 #: Owner- and principal-level roles: set up the school, who attends it, and what
@@ -56,6 +66,14 @@ _LEADERSHIP = frozenset(
         # decision, and the principal's to correct. Not the bursar's -- they
         # take money, they do not decide how the school presents itself.
         Capability.MANAGE_SCHOOL_PROFILE,
+        # Admissions: the principal and the owner run the pipeline and decide
+        # who is offered a place. The client was explicit that the decision is
+        # theirs and nobody else's.
+        Capability.VIEW_ADMISSIONS,
+        Capability.MANAGE_ADMISSIONS,
+        Capability.DECIDE_ADMISSIONS,
+        Capability.VIEW_ADMISSION_PAYMENTS,
+        Capability.RECORD_ADMISSION_PAYMENTS,
     }
 )
 
@@ -91,6 +109,19 @@ _BURSAR = frozenset(
         Capability.SEND_MESSAGES,
         Capability.VIEW_PAYMENTS,
         Capability.RECORD_PAYMENTS,
+        # Admission money is still money, and taking it is still the bursar's
+        # job -- so these two are granted flatly, exactly as the termly pair
+        # above are. What is deliberately absent is VIEW_ADMISSIONS: by default
+        # a bursar sees the intake payments without seeing the pipeline. A
+        # school whose bursar also runs the front desk turns that on per school
+        # (AdmissionsConfig.bursar_can_view_applicants), which is why it cannot
+        # be a fixed entry in this table -- see apps/admissions/access.py.
+        #
+        # DECIDE_ADMISSIONS is not grantable to a bursar at all. Who is offered
+        # a place is the principal's call, and the client asked for that line
+        # to hold regardless of how the rest is configured.
+        Capability.VIEW_ADMISSION_PAYMENTS,
+        Capability.RECORD_ADMISSION_PAYMENTS,
     }
 )
 

@@ -31,6 +31,11 @@ urlpatterns = [
     path("students/", include("apps.students.urls")),
     path("messaging/", include("apps.messaging.urls")),
     path("payments/", include("apps.payments.urls")),
+    path("admissions/", include("apps.admissions.urls")),
+    # The school's own public enquiry page, at /<school-slug>/enquiry/. Before
+    # the core include so a two-segment public route can never be shadowed by a
+    # catch-all added there later.
+    path("", include("apps.admissions.public_urls")),
     path("", include("apps.core.urls")),
 ]
 

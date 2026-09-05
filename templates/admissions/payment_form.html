@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    <span class="numeric">{{ applicant.reference }}</span>
+    &middot; {{ applicant.parent_name }}
+    &middot; {{ applicant.applying_for }}
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl">
+
+  <div class="card mb-5 px-5 py-4 text-sm text-ink-700">
+    <p>
+      Admission money, recorded against the application rather than against a
+      student — {{ applicant.first_name }} is not on the roll yet. It stays
+      separate from termly payments after enrolment too, so a term's collection
+      figure never quietly includes intake money.
+    </p>
+    {% if schedule %}
+      <dl class="mt-3 space-y-1">
+        <div class="flex justify-between gap-3">
+          <dt class="text-ink-500">Due at intake</dt>
+          <dd class="numeric text-ink-900">{{ schedule.compulsory_total|naira }}</dd>
+        </div>
+        <div class="flex justify-between gap-3">
+          <dt class="text-ink-500">Confirmed so far</dt>
+          <dd class="numeric text-paid-strong">{{ applicant.admission_paid|naira }}</dd>
+        </div>
+      </dl>
+    {% endif %}
+  </div>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Payment</h2>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.amount %}
+          {% include "partials/_field.html" with field=form.received_on %}
+        </div>
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.method %}
+          {% include "partials/_field.html" with field=form.status %}
+        </div>
+        {% include "partials/_field.html" with field=form.reference %}
+        {% include "partials/_field.html" with field=form.note %}
+      </div>
+    </div>
+
+    <div class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <a href="{% url 'admissions:fee_schedules' %}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">Record payment</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

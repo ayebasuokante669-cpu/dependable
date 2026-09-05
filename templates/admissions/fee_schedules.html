@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    What each class charges to come in — charged once, and separate from termly
+    fees.
+  </p>
+{% endblock %}
+
+{% block content %}
+
+  {# ===== Collected ===================================================== #}
+  <div class="mb-5 grid gap-4 sm:grid-cols-3">
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Confirmed</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-paid-strong">
+        {{ collected_total|naira }}
+      </div>
+      <div class="mt-1 text-xs text-ink-500">Admission money received</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Pending</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-partial-strong">
+        {{ pending_total|naira }}
+      </div>
+      <div class="mt-1 text-xs text-ink-500">
+        {{ pending_count }} receipt{{ pending_count|pluralize }} awaiting a check
+      </div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Fee sheets</div>
+      <div class="mt-2 text-3xl font-semibold text-brand-900">{{ schedules|length }}</div>
+      <div class="mt-1 text-xs text-ink-500">
+        Seeded with <span class="numeric">manage.py seed_admission_fees</span>
+      </div>
+    </div>
+  </div>
+
+  {% if schedules %}
+    <div class="space-y-5">
+      {% for schedule in schedules %}
+        <section class="card overflow-hidden">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b
+                      border-ink-200 px-5 py-4">
+            <div class="min-w-0">
+              <h2 class="text-sm font-semibold text-ink-900">
+                {{ schedule.school_class.display_name }}
+              </h2>
+              <p class="field-hint mt-0.5">
+                {{ schedule.academic_year }}
+                {% if current_branch != schedule.branch %}
+                  &middot; {{ schedule.branch.name }}
+                {% endif %}
+                {% if schedule.note %}&middot; {{ schedule.note }}{% endif %}
+              </p>
+            </div>
+            <div class="text-right">
+              <p class="numeric text-lg font-semibold text-brand-900">
+                {{ schedule.compulsory_total|naira }}
+              </p>
+              <p class="text-xs text-ink-500">due at intake</p>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="table-head">
+                <tr>
+                  <th class="px-5 py-2 font-medium">Item</th>
+                  <th class="px-5 py-2 font-medium">Kind</th>
+                  <th class="px-5 py-2 text-right font-medium">Amount</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-ink-100">
+                {% for item in schedule.items.all %}
+                  <tr>
+                    <td class="px-5 py-2 text-ink-900">{{ item.name }}</td>
+                    <td class="px-5 py-2">
+                      <span class="chip">{{ item.get_kind_display }}</span>
+                    </td>
+                    <td class="numeric px-5 py-2 text-right text-ink-900">
+                      {{ item.amount|naira }}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot class="border-t border-ink-200 bg-ink-50">
+                <tr>
+                  <td class="px-5 py-2 font-medium text-ink-700" colspan="2">
+                    Admission fee only
+                  </td>
+                  <td class="numeric px-5 py-2 text-right text-ink-900">
+                    {{ schedule.admission_total|naira }}
+                  </td>
+                </tr>
+                {% if schedule.books_total %}
+                  <tr>
+                    <td class="px-5 py-2 font-medium text-ink-700" colspan="2">
+                      Compulsory books (add-on)
+                    </td>
+                    <td class="numeric px-5 py-2 text-right text-ink-900">
+                      {{ schedule.books_total|naira }}
+                    </td>
+                  </tr>
+                {% endif %}
+                <tr>
+                  <td class="px-5 py-2 font-semibold text-ink-900" colspan="2">
+                    Everything
+                  </td>
+                  <td class="numeric px-5 py-2 text-right font-semibold text-ink-900">
+                    {{ schedule.total|naira }}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card">
+      <div class="empty-state">
+        <p class="font-medium text-ink-700">No admission fee sheets yet.</p>
+        <p class="mx-auto mt-2 max-w-lg text-sm">
+          Seed them with
+          <span class="numeric">manage.py seed_admission_fees</span>, or add
+          them one class at a time in the admin. They are entirely separate from
+          the termly fee structure — seeding one never touches the other.
+        </p>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if recent_payments %}
+    <section class="card mt-5 overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Recent admission payments</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="table-head">
+            <tr>
+              <th class="px-5 py-2 font-medium">Applicant</th>
+              <th class="px-5 py-2 font-medium">Received</th>
+              <th class="px-5 py-2 font-medium">Method</th>
+              <th class="px-5 py-2 font-medium">Status</th>
+              <th class="px-5 py-2 text-right font-medium">Amount</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ink-100">
+            {% for payment in recent_payments %}
+              <tr>
+                <td class="px-5 py-2.5">
+                  {% if "view_admissions" in capabilities %}
+                    <a href="{{ payment.applicant.get_absolute_url }}"
+                       class="font-medium text-brand-700 hover:underline">
+                      {{ payment.applicant.full_name }}
+                    </a>
+                  {% else %}
+                    {{ payment.applicant.full_name }}
+                  {% endif %}
+                  <span class="numeric block text-xs text-ink-400">
+                    {{ payment.applicant.reference }}
+                  </span>
+                </td>
+                <td class="px-5 py-2.5 text-ink-700">{{ payment.received_on|date:"j M Y" }}</td>
+                <td class="px-5 py-2.5 text-ink-700">{{ payment.get_method_display }}</td>
+                <td class="px-5 py-2.5">
+                  <span class="status-pill {{ payment.status_pill }}">
+                    {{ payment.get_status_display }}
+                  </span>
+                </td>
+                <td class="numeric px-5 py-2.5 text-right text-ink-900">
+                  {{ payment.amount|naira }}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}
