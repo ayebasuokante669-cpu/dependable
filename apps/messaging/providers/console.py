@@ -23,6 +23,7 @@ import logging
 from .base import (
     Channel,
     DeliveryStatus,
+    MessagePurpose,
     MessagingProvider,
     ProviderKey,
     SendResult,
@@ -41,13 +42,27 @@ class ConsoleProvider(MessagingProvider):
     # ID is visible here rather than silently fine.
     requires_sender_id = False
 
-    def send(self, recipient: str, message: str, channel: str) -> SendResult:
+    def send(
+        self,
+        recipient: str,
+        message: str,
+        channel: str,
+        *,
+        purpose: str = MessagePurpose.TRANSACTIONAL,
+    ) -> SendResult:
+        # The purpose is logged rather than ignored: on a real gateway it
+        # decides whether a message reaches a DND number at all, so a demo or a
+        # test run on this provider should show the routing that would have
+        # applied rather than hiding the one field most likely to be wrong.
         logger.info(
-            "[%s] from %s via %s to %s: %s",
+            "[%s] from %s via %s to %s (%s): %s",
             Channel(channel).label,
             self.describe_sender(),
             self.describe_gateway(),
             recipient,
+            MessagePurpose(purpose).label.lower()
+            if purpose in MessagePurpose.values
+            else purpose,
             message,
         )
         # A reference the log screen can show, shaped like a provider id so the

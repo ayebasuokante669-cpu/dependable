@@ -51,6 +51,26 @@
               {{ message.sent_as|default:"—" }}
             </dd>
           </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Route
+            </dt>
+            <dd class="mt-1 text-sm text-ink-900">
+              {{ message.get_purpose_display }}
+              {% comment %}
+              Worth showing on the log, not just on the compose screen: "why
+              did only half these parents get it?" is answered here when a
+              batch went out promotional by mistake.
+              {% endcomment %}
+              <span class="block text-xs text-ink-500">
+                {% if message.purpose == "transactional" %}
+                  Reaches Do-Not-Disturb numbers
+                {% else %}
+                  Not delivered to Do-Not-Disturb numbers
+                {% endif %}
+              </span>
+            </dd>
+          </div>
         </dl>
       </div>
     </section>

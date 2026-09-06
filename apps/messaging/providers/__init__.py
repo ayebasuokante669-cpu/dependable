@@ -28,6 +28,7 @@ from .africastalking import AfricasTalkingProvider
 from .base import (
     Channel,
     DeliveryStatus,
+    MessagePurpose,
     MessagingProvider,
     ProviderKey,
     ProviderNotConfigured,
@@ -97,6 +98,7 @@ __all__ = [
     "ConsoleProvider",
     "DEFAULT_PROVIDER",
     "DeliveryStatus",
+    "MessagePurpose",
     "MessagingProvider",
     "PROVIDERS",
     "ProviderKey",

@@ -39,6 +39,7 @@ from .models import Message, MessageRecipient
 from .providers import (
     Channel,
     DeliveryStatus,
+    MessagePurpose,
     MessagingProvider,
     SenderIdentity,
     SendResult,
@@ -56,6 +57,7 @@ def record(
     sender=None,
     provider_key: str = "",
     identity: SenderIdentity | None = None,
+    purpose: str = MessagePurpose.TRANSACTIONAL,
 ) -> Message:
     """Write the batch as queued. Sends nothing.
 
@@ -68,6 +70,7 @@ def record(
         school_id=branch.school_id,
         body=body,
         channel=channel,
+        purpose=purpose,
         audience=audience.description,
         audience_type=audience.type,
         sender=sender,
@@ -150,7 +153,14 @@ def _send_one(
             f"{Channel(message.channel).label}."
         )
     try:
-        return provider.send(recipient.phone, message.body, message.channel)
+        return provider.send(
+            recipient.phone,
+            message.body,
+            message.channel,
+            # Read off the batch, not passed in: a send resumed days later must
+            # be routed exactly as the first half of it was.
+            purpose=message.purpose,
+        )
     except Exception as exc:  # noqa: BLE001 -- see the docstring above
         return SendResult.failure(f"{type(exc).__name__}: {exc}")
 
@@ -173,6 +183,7 @@ def send(
     branch,
     sender=None,
     provider: MessagingProvider | None = None,
+    purpose: str = MessagePurpose.TRANSACTIONAL,
 ) -> Message:
     """Record a batch and deliver it. What the compose screen calls.
 
@@ -192,5 +203,6 @@ def send(
         sender=sender,
         provider_key=provider.key,
         identity=identity,
+        purpose=purpose,
     )
     return deliver(message, provider)

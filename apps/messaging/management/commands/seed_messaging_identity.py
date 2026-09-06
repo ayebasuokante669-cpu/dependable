@@ -2,13 +2,13 @@
 
     python manage.py seed_messaging_identity
     python manage.py seed_messaging_identity --school "Dap Group of Schools" \\
-        --sender-id Dapgroup --provider bulksmsnigeria --approve
+        --sender-id Dapgroup --provider termii --approve
 
 Idempotent: matches on the school's default (school-wide) config and updates it
 rather than creating a second one.
 
 Defaults to the pilot school, Fulfilled Academy, sending as "Fulfilled" through
-BulkSMS Nigeria on the platform's master account. ``--approve`` is on by
+Termii on the platform's master account. ``--approve`` is on by
 default because a seeded school that cannot send is a demo that stops at the
 first Send button; pass ``--pending`` to seed the not-yet-approved state
 instead, which is what a real school looks like on day one.
@@ -27,7 +27,7 @@ from apps.schools.models import School
 #: The pilot school and the name its parents will see.
 DEFAULT_SCHOOL = "Fulfilled Academy"
 DEFAULT_SENDER_ID = "Fulfilled"
-DEFAULT_PROVIDER = ProviderKey.BULKSMSNIGERIA
+DEFAULT_PROVIDER = ProviderKey.TERMII
 
 
 class Command(BaseCommand):

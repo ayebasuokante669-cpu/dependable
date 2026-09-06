@@ -23,7 +23,7 @@ from apps.schools.models import Branch
 from apps.students.models import Student, StudentStatus
 
 from .models import AudienceType, SchoolMessagingConfig, SenderIdStatus
-from .providers import Channel
+from .providers import Channel, MessagePurpose
 
 #: Where an SMS starts costing a second segment. Not enforced -- a school may
 #: have a good reason to send a long message -- but shown as it is typed,
@@ -53,6 +53,21 @@ class ComposeForm(StyledFormMixin, forms.Form):
         choices=Channel.choices,
         initial=Channel.SMS,
         widget=forms.RadioSelect,
+    )
+    purpose = forms.ChoiceField(
+        label="What kind of message",
+        choices=MessagePurpose.choices,
+        initial=MessagePurpose.TRANSACTIONAL,
+        widget=forms.RadioSelect,
+        # Not required, and that is deliberate. A missing purpose must not
+        # block a fee reminder, and it must not quietly become promotional
+        # either -- see clean_purpose. The field exists to let a school opt
+        # *out* of the transactional route, not to make them opt in.
+        required=False,
+        help_text="Fee reminders, results and notices are transactional: they "
+        "reach parents who have Do-Not-Disturb switched on, at any hour. Only "
+        "mark a message promotional if it is genuinely advertising — the "
+        "promotional route is blocked for DND numbers and refused overnight.",
     )
     audience_type = forms.ChoiceField(
         label="Send to",
@@ -115,6 +130,21 @@ class ComposeForm(StyledFormMixin, forms.Form):
         # Collapse the trailing newline a textarea leaves behind: it costs a
         # character of a paid SMS segment and shows up as a blank line.
         return self.cleaned_data["body"].strip()
+
+    def clean_purpose(self):
+        """Anything that is not explicitly promotional is transactional.
+
+        The same rule the Termii provider applies to the route itself, applied
+        one layer earlier so the stored ``Message.purpose`` agrees with what
+        was actually sent. Failing towards the transactional route is the safe
+        direction: the cost of being wrong that way is a cheaper route not
+        used, and the cost of being wrong the other way is a fee reminder that
+        never reaches the parents who owe.
+        """
+        purpose = self.cleaned_data.get("purpose")
+        if purpose == MessagePurpose.PROMOTIONAL:
+            return MessagePurpose.PROMOTIONAL
+        return MessagePurpose.TRANSACTIONAL
 
     def clean_branch(self):
         branch = self.cleaned_data.get("branch")

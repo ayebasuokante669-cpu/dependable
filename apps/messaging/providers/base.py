@@ -52,6 +52,35 @@ class Channel(models.TextChoices):
     WHATSAPP = "whatsapp", "WhatsApp"
 
 
+class MessagePurpose(models.TextChoices):
+    """Why a message is being sent -- and therefore how it may be routed.
+
+    This is a *regulatory* distinction, not a label. Nigerian gateways carry
+    two routes, and which one a message is allowed on depends on what it is:
+
+    * **Transactional** -- a fee reminder, a receipt, an admission decision, a
+      closure notice. Something the parent's relationship with the school
+      entitles them to. It goes on the DND route, so it reaches the majority of
+      Nigerian subscribers who have Do-Not-Disturb switched on, and it is not
+      subject to the 8pm-8am curfew the generic route enforces.
+    * **Promotional** -- an open day, an offer, anything marketing. It goes on
+      the generic route, is blocked for DND numbers, and is refused overnight.
+
+    ``TRANSACTIONAL`` is the default because essentially everything a school
+    sends through this platform is. Putting a fee reminder on the generic route
+    would silently drop it for most of the parents it was meant for, and a
+    reminder that nobody receives is worse than one that was never sent -- the
+    school believes it has chased the debt.
+
+    Declared here rather than on the model for the same reason ``Channel`` is:
+    a provider needs it to build a request and must not import the ORM layer to
+    get it.
+    """
+
+    TRANSACTIONAL = "transactional", "Transactional"
+    PROMOTIONAL = "promotional", "Promotional"
+
+
 class DeliveryStatus(models.TextChoices):
     """Where one recipient's copy has got to.
 
@@ -157,7 +186,14 @@ class MessagingProvider(abc.ABC):
         return self.identity.sender_id if self.identity else ""
 
     @abc.abstractmethod
-    def send(self, recipient: str, message: str, channel: str) -> SendResult:
+    def send(
+        self,
+        recipient: str,
+        message: str,
+        channel: str,
+        *,
+        purpose: str = MessagePurpose.TRANSACTIONAL,
+    ) -> SendResult:
         """Send ``message`` to ``recipient`` over ``channel``.
 
         ``recipient`` is a canonical local Nigerian number (``08031234567``);
@@ -165,6 +201,13 @@ class MessagingProvider(abc.ABC):
         not a parameter -- it is ``self.identity``, fixed when the provider was
         built, so a single dispatch physically cannot send half its batch under
         one school's name and half under another's.
+
+        ``purpose`` *is* a parameter, and for the opposite reason: it belongs to
+        the message rather than to the school, and a gateway with a
+        transactional route needs it to choose one. Keyword-only and defaulting
+        to ``TRANSACTIONAL``, so a caller that has not thought about it gets the
+        route that actually reaches DND numbers rather than the one that
+        silently drops them.
 
         Must never raise for an ordinary delivery failure -- return
         :meth:`SendResult.failure` instead.

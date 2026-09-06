@@ -153,6 +153,18 @@ MESSAGING_PROVIDER = os.environ.get("MESSAGING_PROVIDER", "console")
 # The platform holds the account and pays for the units; each school sends
 # under its own Sender ID against it. A school that later takes out its own
 # account puts its key on its messaging config, which wins over these.
+#
+# Termii is the gateway. BulkSMS Nigeria declined to support one account
+# sending on behalf of many schools under each school's own Sender ID, which is
+# the arrangement this platform is built on; Termii supports it explicitly.
+TERMII_API_KEY = os.environ.get("TERMII_API_KEY", "")
+TERMII_BASE_URL = os.environ.get("TERMII_BASE_URL", "https://api.ng.termii.com")
+
+# --- Gateways kept but not the default ----------------------------------
+# BulkSMS Nigeria's integration is complete and still works; a school already
+# registered there keeps sending there, and MESSAGING_PROVIDER=bulksmsnigeria
+# moves the whole platform back. Keeping it is the point of the provider
+# abstraction -- see apps/messaging/providers/bulksmsnigeria.py.
 BULKSMSNIGERIA_API_TOKEN = os.environ.get("BULKSMSNIGERIA_API_TOKEN", "")
 BULKSMSNIGERIA_BASE_URL = os.environ.get(
     "BULKSMSNIGERIA_BASE_URL", "https://www.bulksmsnigeria.com"
@@ -160,9 +172,6 @@ BULKSMSNIGERIA_BASE_URL = os.environ.get(
 # DND routing: 2 sends via the corporate route so reminders still reach the
 # many Nigerian numbers on the Do-Not-Disturb register. See the provider.
 BULKSMSNIGERIA_DND = os.environ.get("BULKSMSNIGERIA_DND", "2")
-
-TERMII_API_KEY = os.environ.get("TERMII_API_KEY", "")
-TERMII_BASE_URL = os.environ.get("TERMII_BASE_URL", "https://api.ng.termii.com")
 
 AFRICASTALKING_USERNAME = os.environ.get("AFRICASTALKING_USERNAME", "")
 AFRICASTALKING_API_KEY = os.environ.get("AFRICASTALKING_API_KEY", "")

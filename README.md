@@ -100,7 +100,7 @@ default to `config.settings.prod`.
 python manage.py test apps
 ```
 
-627 tests, covering the parts that must never regress: what each role can see,
+656 tests, covering the parts that must never regress: what each role can see,
 what each role may change, that a fee total always equals its live line items,
 that a student's expected fee is always read from their class rather than stored
 on them, that each senior arm carries exactly the subjects the school named,
@@ -114,7 +114,16 @@ application without a single field being re-asked, that KG skips the entrance
 exam while Primary and Senior sit it, that enrolment produces a Student in the
 right class and branch and keeps the link back, that admission fees and termly
 fees never touch, that a lapsed enquiry is closed rather than deleted, and that
-one school cannot see another's applicants. The negative-path tests deliberately trigger
+one school cannot see another's applicants.
+
+Messaging adds a class of its own for the gateway: that a batch goes out under
+the school's own Sender ID on Termii's `dnd` route, that a success and a refusal
+map onto the right `MessageRecipient` rows, that nothing but an explicitly
+promotional message reaches the `generic` route -- a blank, a typo or a purpose
+nobody thought about all fall to `dnd` -- and that two schools sending in the
+same run never borrow each other's name. Termii is exercised against a recorded
+request rather than the network, so the assertions are about what the gateway
+would actually receive. The negative-path tests deliberately trigger
 403s and 404s, so Django logs tracebacks during a passing run.
 
 ---
@@ -514,12 +523,13 @@ going out, and a row recording what became of it.
 
 ```
 apps/messaging/providers/
-  base.py             MessagingProvider: send(recipient, message, channel)
-                      + SenderIdentity, the school this provider sends as
+  base.py             MessagingProvider: send(recipient, message, channel,
+                      purpose) + SenderIdentity, the school it sends as,
+                      + MessagePurpose, which route the message may take
   console.py          the default -- logs it, Sender ID included, and marks
                       it delivered
-  bulksmsnigeria.py   the real gateway: POST /api/v2/sms, bearer token
-  termii.py           stub: reads TERMII_API_KEY, builds the payload
+  termii.py           the gateway: POST /api/sms/send, dnd routing
+  bulksmsnigeria.py   kept and working, no longer the default
   africastalking.py   stub: reads AFRICASTALKING_*, builds the payload
   __init__.py         PROVIDERS registry and get_provider()
 ```
@@ -535,11 +545,17 @@ row you see running on it is the same code path a real gateway will drive. An
 unknown `MESSAGING_PROVIDER` raises rather than falling back, because a school
 that thinks it is sending real SMS must not quietly be writing to a log file.
 
-Termii and Africa's Talking remain stubs, complete except for the HTTP call:
-they read their settings, assemble the real payload (Termii wants
-`2348031234567`, Africa's Talking wants `+2348031234567`), take their sender
-from the school's identity like BulkSMS Nigeria does, and refuse to send without
-credentials instead of returning a false success.
+Africa's Talking remains a stub, complete except for the HTTP call: it reads
+its settings, assembles the real payload (it wants `+2348031234567`), takes its
+sender from the school's identity like the live providers do, and refuses to
+send without credentials instead of returning a false success.
+
+**The abstraction earned itself.** BulkSMS Nigeria declined to support
+send-on-behalf-of-schools — one master account, many schools, each under its own
+Sender ID — which is the arrangement this platform is built on. Moving to Termii
+was a provider file, a default, and a data migration. No view, form, model or
+template changed, and `providers/bulksmsnigeria.py` is still there and still
+works, because a gateway relationship that ended once can end again.
 
 ### Two models
 
@@ -621,17 +637,17 @@ platform and not from another school.
 registered with, an approval status, and optional credentials.
 
 ```
-Platform:   SCHOOLCORD  (holds the BulkSMS Nigeria master account)
+Platform:   SCHOOLCORD  (holds the Termii master account)
 School:     Dap Group of Schools
 Sender ID:  Dapgroup
-Provider:   BulkSMS Nigeria
+Provider:   Termii
 ```
 
 `api_key` and `account_reference` are nullable and blank for the pilot: the
 master account sends on every school's behalf, under the school's own name. A
 school that later takes out its own gateway account fills them in and the send
-path does not change — `BulkSMSNigeriaProvider.api_token` already prefers the
-school's key over the platform's.
+path does not change — `TermiiProvider.api_key` already prefers the school's key
+over the platform's.
 
 `branch` is nullable and part of the uniqueness rule, so a school that later
 wants a different Sender ID per campus can have one. A row with no branch is the
@@ -674,28 +690,86 @@ development, for tests, and for the day a gateway is down.
 The Sender ID travels regardless: on the console provider the log line reads
 
 ```
-[SMS] from Fulfilled [Fulfilled Academy] via BulkSMS Nigeria to 08118836702: ...
+[SMS] from Fulfilled [Fulfilled Academy] via Termii to 08118836702 (transactional): ...
 ```
 
 — the school's name, the gateway that *would* have carried it, and the message.
 That is why per-tenant identity is testable with no credentials and no money
 spent.
 
-### BulkSMS Nigeria
+### Termii
 
-`providers/bulksmsnigeria.py` is the real implementation, replacing the stub.
-`POST /api/v2/sms` with a bearer token, the school's Sender ID as `from`, and
-`dnd=2` so reminders still reach the many Nigerian numbers on the Do-Not-Disturb
-register. It uses `urllib` from the standard library rather than pulling in
+`providers/termii.py` is the live gateway. `POST /api/sms/send` with the school's
+Sender ID as `from`, the API key in the body, `type: plain`, and the route in
+`channel`. It uses `urllib` from the standard library rather than pulling in
 `requests`: one POST with a JSON body does not justify a dependency the school's
 server then has to keep patched, and `urllib` gives us the timeout, which is the
 part that actually matters when a gateway is slow.
 
-Their API answers `200` for messages it then refuses, with the refusal in
-`error`, so a 2xx is not on its own a success. And accepting a message means
-**sent**, never **delivered** — whether a handset received it arrives later on
-their webhook, and reporting it as delivered would make the log lie about the
-one thing a bursar chasing a parent needs it for.
+**One recipient per request, deliberately.** Termii has a bulk endpoint taking
+an array of numbers, and it returns a single `message_id` for the whole batch.
+Every `MessageRecipient` row here carries its own reference and its own status,
+and collapsing thirty-two rows onto one id would mean a bursar chasing one
+parent could not tell whether that parent's copy was the one that failed.
+
+Their API answers `200` for messages it then refuses, so a 2xx is not on its own
+a success: a `code` that is not `ok` is a failure, and so is a success with no
+`message_id` — without one there is nothing to reconcile a later delivery report
+against. Both response shapes are accepted, since the bulk endpoint answers with
+`code` and the single-send endpoint historically has not.
+
+Accepting a message means **sent**, never **delivered** — whether a handset
+received it arrives later on their webhook, and reporting it as delivered would
+make the log lie about the one thing a bursar chasing a parent needs it for.
+
+A master-account balance under 100 units logs a warning on every send. Units
+running out stops every school on the platform at once, and the first anyone
+would otherwise know is a batch of failures.
+
+### Transactional or promotional — the routing that has to be right
+
+Nigerian gateways carry two routes, and picking the wrong one does not fail
+loudly. It silently fails to arrive.
+
+| | Termii channel | Reaches DND numbers | 8pm–8am |
+| --- | --- | --- | --- |
+| Transactional | `dnd` | yes | allowed |
+| Promotional | `generic` | no | refused |
+
+Most Nigerian subscribers have Do-Not-Disturb switched on. A fee reminder put on
+`generic` reaches perhaps a third of the parents it was addressed to, at an hour
+of the school's choosing, and reports success for all of them — the school
+believes it has chased the debt. So `Message.purpose` is a stored field, it
+defaults to transactional, and `TermiiProvider.termii_channel` is written as
+"generic **if** promotional, else dnd" rather than as a lookup table: every value
+that is not the one promotional case — a blank, a typo, a purpose added later
+and not thought about — lands on the route that arrives.
+
+The compose screen asks, with transactional preselected, and the form's
+`clean_purpose` applies the same rule so the stored purpose agrees with what was
+actually sent. `purpose` is read off the batch at delivery, not passed in, so a
+send resumed days later is routed exactly as its first half was. The message log
+shows the route it went out on, which is what answers "why did only half these
+parents get it?".
+
+BulkSMS Nigeria expresses the same split as its numeric `dnd` flag rather than
+as a named route, so a promotional send there drops to `dnd=0`.
+
+### BulkSMS Nigeria — kept, not the default
+
+`providers/bulksmsnigeria.py` is complete and still tested. A school already
+registered there keeps sending there, and `MESSAGING_PROVIDER=bulksmsnigeria`
+moves the whole platform back. Keeping a working integration that has stopped
+being the default is the point of the interface — deleting it is how you find
+out a year later that you cannot go back.
+
+Migration `0004_move_configs_to_termii` moved existing school configs across.
+**It resets approved Sender IDs to pending**, on purpose: an approval is a fact
+about one gateway, and BulkSMS Nigeria having approved "Fulfilled" says nothing
+about whether Termii has. Carrying the status over would have the platform claim
+a registration that does not exist and bounce the first batch. Each moved row
+keeps its Sender ID and gets a note telling the school what happened; a platform
+administrator re-approves once Termii has registered the name.
 
 ### The identity screen
 
@@ -727,7 +801,7 @@ above.
 ```bash
 python manage.py seed_messaging_identity          # Fulfilled Academy -> "Fulfilled"
 python manage.py seed_messaging_identity --school "Dap Group of Schools" \
-    --sender-id Dapgroup --provider bulksmsnigeria
+    --sender-id Dapgroup --provider termii
 python manage.py seed_messaging_identity --pending  # seed the blocked state
 ```
 
@@ -1417,8 +1491,8 @@ apps/messaging/      SchoolMessagingConfig (each school's Sender ID),
                      Message and MessageRecipient, audiences.py (who a filter
                      means), identity.py (who a message is from),
                      dispatch.py (record then deliver), validators.py, and
-                     providers/ (the interface, console, BulkSMS Nigeria,
-                     Termii, Africa's Talking)
+                     providers/ (the interface, console, Termii, BulkSMS
+                     Nigeria, Africa's Talking)
 apps/payments/       Payment, balances.py (every derived figure), its screens,
                      and seed_payments
 apps/admissions/     the paid add-on: Applicant (enquiry through enrolment),

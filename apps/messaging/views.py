@@ -246,6 +246,7 @@ class ComposeView(SendMessagesMixin, FormView):
         message = dispatch.send(
             body=data["body"],
             channel=data["channel"],
+            purpose=data["purpose"],
             audience=audience,
             branch=branch,
             sender=self.request.user,

@@ -1,12 +1,24 @@
-"""BulkSMS Nigeria -- the pilot's real gateway.
+"""BulkSMS Nigeria -- kept, working, and no longer the default.
 
-The account model this implements is the one the platform actually has:
-SCHOOLCORD holds a single master account with BulkSMS Nigeria and pays for the
-units; each school registers its own alphanumeric Sender ID against that
-account. So the API token comes from the environment and the ``from`` on every
-request comes from the school's :class:`SenderIdentity`. A school that later
-takes out its own account supplies its own token on its config and the same
-code sends with it instead.
+**Why it is not the default any more.** BulkSMS Nigeria declined to support the
+arrangement this platform runs on: one master account sending on behalf of many
+schools, each under its own registered Sender ID. :mod:`.termii` supports it
+explicitly and is now what a new school's config defaults to.
+
+This file stays, complete and tested, on purpose. The whole reason messaging
+goes through a provider interface is that a gateway relationship can end -- as
+this one did -- without a view, a form or a model changing. A school still
+registered here keeps sending here; ``MESSAGING_PROVIDER=bulksmsnigeria`` still
+moves the whole platform back. Deleting a working integration the moment it
+stops being the default is how you find out, a year later, that you cannot go
+back.
+
+The account model it implements is the one the platform has with any gateway:
+SCHOOLCORD holds a single master account and pays for the units; each school
+registers its own alphanumeric Sender ID against that account. So the API token
+comes from the environment and the ``from`` on every request comes from the
+school's :class:`SenderIdentity`. A school that later takes out its own account
+supplies its own token on its config and the same code sends with it instead.
 
 Talks HTTP with ``urllib`` from the standard library rather than pulling in
 ``requests``. One POST with a JSON body and a bearer token does not justify a
@@ -33,6 +45,7 @@ from apps.students.validators import to_international
 from .base import (
     Channel,
     DeliveryStatus,
+    MessagePurpose,
     MessagingProvider,
     ProviderKey,
     ProviderNotConfigured,
@@ -53,6 +66,11 @@ TIMEOUT_SECONDS = 15
 #: School fee reminders have to reach parents who have switched DND on, which
 #: most Nigerian subscribers have, so 2 is the default and the only sane one.
 DEFAULT_DND = "2"
+
+#: What a genuinely promotional send drops to: the normal route, which DND
+#: numbers do not receive. Marketing is not entitled to the transactional path,
+#: and on most gateways using it for marketing is what gets a Sender ID pulled.
+PROMOTIONAL_DND = "0"
 
 
 class BulkSMSNigeriaProvider(MessagingProvider):
@@ -102,18 +120,36 @@ class BulkSMSNigeriaProvider(MessagingProvider):
     def endpoint(self) -> str:
         return f"{self.base_url}/api/v2/sms"
 
-    def payload(self, recipient: str, message: str) -> dict:
-        """The request body. Built and testable without an account."""
+    def payload(
+        self,
+        recipient: str,
+        message: str,
+        purpose: str = MessagePurpose.TRANSACTIONAL,
+    ) -> dict:
+        """The request body. Built and testable without an account.
+
+        BulkSMS Nigeria expresses the transactional/promotional split as the
+        numeric ``dnd`` flag rather than as a named route, so a promotional
+        send drops to 0 -- the normal path, which DND numbers do not receive --
+        and everything else keeps the configured DND-enabled route.
+        """
         return {
             "from": self.sender_id,
             "to": to_international(recipient, plus=False),
             "body": message,
-            "dnd": self.dnd,
+            "dnd": PROMOTIONAL_DND if purpose == MessagePurpose.PROMOTIONAL else self.dnd,
         }
 
-    def send(self, recipient: str, message: str, channel: str) -> SendResult:
+    def send(
+        self,
+        recipient: str,
+        message: str,
+        channel: str,
+        *,
+        purpose: str = MessagePurpose.TRANSACTIONAL,
+    ) -> SendResult:
         self.check()
-        payload = self.payload(recipient, message)
+        payload = self.payload(recipient, message, purpose)
 
         request = urllib.request.Request(
             self.endpoint,

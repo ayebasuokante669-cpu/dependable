@@ -23,7 +23,7 @@ from django.utils import timezone
 
 from apps.core.models import BranchScopedModel, TenantScopedModel
 
-from .providers import Channel, DeliveryStatus, ProviderKey
+from .providers import Channel, DeliveryStatus, MessagePurpose, ProviderKey
 from .validators import SENDER_ID_MAX_LENGTH, normalise_sender_id, validate_sender_id
 
 
@@ -85,7 +85,12 @@ class SchoolMessagingConfig(TenantScopedModel):
     provider = models.CharField(
         max_length=32,
         choices=ProviderKey.choices,
-        default=ProviderKey.BULKSMSNIGERIA,
+        # Termii, since they support one master account sending on behalf of
+        # many schools under each school's own Sender ID -- the arrangement
+        # this platform is built on, and the one BulkSMS Nigeria declined. A
+        # school already registered with another gateway keeps it; this only
+        # decides what a new registration starts as.
+        default=ProviderKey.TERMII,
         help_text="The gateway this Sender ID is registered with.",
     )
     status = models.CharField(
@@ -278,6 +283,24 @@ class Message(BranchScopedModel):
     body = models.TextField(help_text="What the parent receives.")
     channel = models.CharField(
         max_length=20, choices=Channel.choices, default=Channel.SMS
+    )
+    #: Transactional or promotional -- which gateway route this batch was
+    #: allowed on. Stored rather than inferred at send time, because it is the
+    #: answer to "why did this reach a DND number?" a year later, and because a
+    #: batch resumed after a half-finished send must be routed the same way the
+    #: first half was.
+    #:
+    #: Defaults to transactional, which is what essentially everything a school
+    #: sends through this platform is: fee reminders, admission decisions,
+    #: closure notices. Promotional is the deliberate exception, and the
+    #: compose screen makes the sender say so.
+    purpose = models.CharField(
+        max_length=20,
+        choices=MessagePurpose.choices,
+        default=MessagePurpose.TRANSACTIONAL,
+        help_text="Transactional messages use the gateway's DND route and "
+        "reach parents who have Do-Not-Disturb on. Promotional messages do "
+        "not, and are blocked overnight.",
     )
     audience = models.CharField(
         max_length=200,

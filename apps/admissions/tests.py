@@ -136,6 +136,23 @@ class AdmissionsTestCase(TestCase):
             school_id=user.school_id, branch_id=user.branch_id, role=user.role
         )
 
+    def assertWindowIs(self, applicant, *, days: int) -> None:
+        """The expiry is ``days`` from now, within a tolerance.
+
+        Asserting on ``(expires_at - now()).days`` is what this replaced, and
+        it was flaky: the model stamps the expiry from its own ``now()`` and
+        the test reads a later one, so the difference is a whisker under the
+        window and truncates to ``days - 1`` -- except when the two calls land
+        close enough together that it does not, and then it is ``days``. Which
+        of those you get depends on how busy the machine is.
+        """
+        expected = timezone.now() + timedelta(days=days)
+        drift = abs((applicant.expires_at - expected).total_seconds())
+        self.assertLess(
+            drift, 60,
+            f"expiry is {applicant.expires_at}, expected about {expected}",
+        )
+
     def make_applicant(self, **overrides) -> Applicant:
         data = {
             "branch": self.north,
@@ -270,7 +287,7 @@ class PublicEnquiryTests(AdmissionsTestCase):
         )
         applicant = Applicant.all_objects.get()
         self.assertIsNotNone(applicant.expires_at)
-        self.assertEqual((applicant.expires_at - timezone.now()).days, 4)
+        self.assertWindowIs(applicant, days=5)
 
     def test_the_parent_is_acknowledged_by_email(self):
         self.client.post(
@@ -991,9 +1008,8 @@ class ExpiryTests(AdmissionsTestCase):
     def test_an_enquiry_gets_a_window_by_default(self):
         applicant = self.make_applicant()
         self.assertIsNotNone(applicant.expires_at)
-        self.assertEqual(
-            (applicant.expires_at - timezone.now()).days,
-            AdmissionsConfig.DEFAULT_VALIDITY_DAYS - 1,
+        self.assertWindowIs(
+            applicant, days=AdmissionsConfig.DEFAULT_VALIDITY_DAYS
         )
 
     def test_a_lapsed_enquiry_reads_as_lapsed_before_the_sweep_runs(self):

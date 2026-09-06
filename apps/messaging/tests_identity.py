@@ -14,6 +14,9 @@ money spent, which is the whole point of that provider existing.
 
 from __future__ import annotations
 
+import io
+import json
+import urllib.error
 from io import StringIO
 from unittest import mock
 
@@ -38,6 +41,7 @@ from .identity import SenderIdentityUnavailable
 from .models import (
     AudienceType,
     Message,
+    MessageStatus,
     SchoolMessagingConfig,
     SenderIdStatus,
 )
@@ -46,9 +50,11 @@ from .providers import (
     Channel,
     ConsoleProvider,
     DeliveryStatus,
+    MessagePurpose,
     ProviderKey,
     ProviderNotConfigured,
     SenderIdentity,
+    TermiiProvider,
     get_provider,
 )
 from .validators import normalise_sender_id, validate_sender_id
@@ -60,7 +66,7 @@ class IdentityTestCase(TestCase):
     """Two schools, each with a branch, a class and a parent to message.
 
     Dap Group is the worked example from the brief: it sends as "Dapgroup"
-    through BulkSMS Nigeria on the platform's master account. Beta College
+    through Termii on the platform's master account. Beta College
     exists so every isolation assertion has a real second tenant to fail
     against rather than an empty one.
     """
@@ -124,7 +130,7 @@ class IdentityTestCase(TestCase):
             school=school,
             branch=branch,
             sender_id=sender_id,
-            provider=extra.pop("provider", ProviderKey.BULKSMSNIGERIA),
+            provider=extra.pop("provider", ProviderKey.TERMII),
             status=status,
             **extra,
         )
@@ -241,7 +247,7 @@ class ResolutionTests(IdentityTestCase):
         identity = identity_module.resolve_for_branch(self.dap_main)
 
         self.assertEqual(identity.sender_id, "Dapgroup")
-        self.assertEqual(identity.provider_key, ProviderKey.BULKSMSNIGERIA)
+        self.assertEqual(identity.provider_key, ProviderKey.TERMII)
         self.assertEqual(identity.school_name, "Dap Group of Schools")
         self.assertFalse(identity.uses_own_credentials)
 
@@ -352,7 +358,7 @@ class SendingUnderOwnIdentityTests(IdentityTestCase):
         self.assertIn("Dapgroup", line)
         self.assertIn("Dap Group of Schools", line)
         # And which gateway would have carried it, not just "console".
-        self.assertIn("BulkSMS Nigeria", line)
+        self.assertIn("Termii", line)
 
     def test_two_schools_send_under_their_own_names_in_the_same_run(self):
         self.configure(self.dap, "Dapgroup")
@@ -705,10 +711,25 @@ class IdentityScreenTests(IdentityTestCase):
 
 
 class IdentityFormTests(IdentityTestCase):
+    def test_a_new_registration_defaults_to_termii(self):
+        """What the settings screen offers a school that has not registered yet."""
+        form = MessagingIdentityForm(school=self.dap)
+        self.assertEqual(form.fields["provider"].initial, ProviderKey.TERMII)
+        self.assertIn("Termii", form["provider"].as_widget())
+
+    def test_another_gateway_can_still_be_chosen(self):
+        """Termii is the default, not the only option -- that is the point."""
+        form = MessagingIdentityForm(
+            data=self.data(provider=ProviderKey.BULKSMSNIGERIA), school=self.dap
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        config = form.save(user=self.platform)
+        self.assertEqual(config.provider, ProviderKey.BULKSMSNIGERIA)
+
     def data(self, **overrides):
         payload = {
             "sender_id": "Dapgroup",
-            "provider": ProviderKey.BULKSMSNIGERIA,
+            "provider": ProviderKey.TERMII,
             "status": SenderIdStatus.APPROVED,
             "status_note": "",
             "api_key": "",
@@ -932,7 +953,8 @@ class SeedCommandTests(IdentityTestCase):
 
         config = SchoolMessagingConfig.all_objects.get(school=self.dap)
         self.assertEqual(config.sender_id, "Dapgroup")
-        self.assertEqual(config.provider, ProviderKey.BULKSMSNIGERIA)
+        # Termii, since BulkSMS Nigeria declined the send-on-behalf model.
+        self.assertEqual(config.provider, ProviderKey.TERMII)
         self.assertTrue(config.is_usable)
         self.assertIn("approved", output)
 
@@ -968,3 +990,403 @@ class SeedCommandTests(IdentityTestCase):
     def test_an_unknown_school_is_a_clear_error(self):
         with self.assertRaises(CommandError):
             self.seed("--school", "Nowhere Academy")
+
+
+# ===========================================================================
+# Termii -- the gateway
+# ===========================================================================
+
+
+class FakeResponse:
+    """Enough of an ``http.client.HTTPResponse`` for ``urlopen``'s context use."""
+
+    def __init__(self, body: str):
+        self._body = body.encode("utf-8")
+
+    def read(self) -> bytes:
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class RecordingTransport:
+    """Stands in for ``urllib.request.urlopen`` and keeps what it was given.
+
+    The provider is tested against this rather than against the network for the
+    obvious reason, and against a recorded request rather than a mocked method
+    so the assertions are about *what Termii would receive* -- which is the only
+    thing that decides whether a parent gets the message.
+    """
+
+    def __init__(self, body='{"code": "ok", "message_id": "9122821270554876574", '
+                            '"message": "Successfully Sent", "balance": 412}',
+                 error=None):
+        self.body = body
+        self.error = error
+        self.requests = []
+
+    def __call__(self, request, timeout=None):
+        self.requests.append(request)
+        if self.error is not None:
+            raise self.error
+        return FakeResponse(self.body)
+
+    # -- what was actually sent --------------------------------------------
+
+    @property
+    def payload(self) -> dict:
+        return json.loads(self.requests[-1].data.decode("utf-8"))
+
+    @property
+    def url(self) -> str:
+        return self.requests[-1].full_url
+
+    @property
+    def payloads(self) -> list[dict]:
+        return [json.loads(r.data.decode("utf-8")) for r in self.requests]
+
+
+@override_settings(TERMII_API_KEY="master-key")
+class TermiiProviderTests(TestCase):
+    """The live gateway, exercised without touching the network.
+
+    The key is overridden for the whole class rather than per call, because
+    ``api_key`` is read at send time, not at construction -- which is what lets
+    a school's own key win over the platform's on the very same instance.
+    """
+
+    identity = SenderIdentity(
+        sender_id="Fulfilled",
+        provider_key=ProviderKey.TERMII,
+        school_name="Fulfilled Academy",
+    )
+
+    def provider(self, identity=None):
+        return TermiiProvider(identity or self.identity)
+
+    def send(self, transport, **kwargs):
+        options = {
+            "recipient": "08031234567",
+            "message": "Fees are due.",
+            "channel": Channel.SMS,
+        }
+        options.update(kwargs)
+        with mock.patch("urllib.request.urlopen", transport):
+            return self.provider(options.pop("identity", None)).send(
+                options.pop("recipient"),
+                options.pop("message"),
+                options.pop("channel"),
+                **options,
+            )
+
+    # -- credentials --------------------------------------------------------
+
+    @override_settings(TERMII_API_KEY="")
+    def test_without_credentials_it_is_not_configured(self):
+        provider = self.provider()
+        self.assertFalse(provider.is_configured)
+        with self.assertRaises(ProviderNotConfigured) as caught:
+            provider.check()
+        self.assertIn("TERMII_API_KEY", str(caught.exception))
+
+    def test_without_a_sender_id_it_refuses(self):
+        """A missing Sender ID is the school's problem and is named first."""
+        with self.assertRaises(ProviderNotConfigured) as caught:
+            TermiiProvider().check()
+        self.assertIn("Sender ID", str(caught.exception))
+
+    def test_a_school_with_its_own_key_uses_it_over_the_platforms(self):
+        own = SenderIdentity(
+            sender_id="Fulfilled",
+            provider_key=ProviderKey.TERMII,
+            api_key="school-key",
+        )
+        self.assertEqual(TermiiProvider(own).api_key, "school-key")
+        self.assertEqual(self.provider().api_key, "master-key")
+
+    def test_blank_school_credentials_fall_through_to_the_master_account(self):
+        """The pilot arrangement, asserted rather than assumed."""
+        transport = RecordingTransport()
+        self.send(transport)
+        self.assertEqual(transport.payload["api_key"], "master-key")
+
+    # -- the request --------------------------------------------------------
+
+    def test_it_posts_to_the_termii_send_endpoint(self):
+        transport = RecordingTransport()
+        self.send(transport)
+        self.assertEqual(transport.url, "https://api.ng.termii.com/api/sms/send")
+        self.assertEqual(transport.requests[-1].get_method(), "POST")
+
+    def test_the_message_goes_out_under_the_schools_own_sender_id(self):
+        transport = RecordingTransport()
+        self.send(transport)
+
+        payload = transport.payload
+        self.assertEqual(payload["from"], "Fulfilled")
+        self.assertEqual(payload["to"], "2348031234567")
+        self.assertEqual(payload["sms"], "Fees are due.")
+        self.assertEqual(payload["type"], "plain")
+
+    def test_a_second_school_sends_under_its_own_name_not_the_first(self):
+        """Two identities, two requests, two different senders."""
+        transport = RecordingTransport()
+        beta = SenderIdentity(
+            sender_id="Betacol",
+            provider_key=ProviderKey.TERMII,
+            school_name="Beta College",
+        )
+        self.send(transport)
+        self.send(transport, identity=beta)
+
+        self.assertEqual([p["from"] for p in transport.payloads],
+                         ["Fulfilled", "Betacol"])
+
+    # -- routing ------------------------------------------------------------
+
+    def test_school_messaging_defaults_to_the_dnd_route(self):
+        """The default has to be the route that reaches DND numbers."""
+        transport = RecordingTransport()
+        self.send(transport)
+        self.assertEqual(transport.payload["channel"], "dnd")
+
+    def test_a_transactional_message_uses_the_dnd_route(self):
+        transport = RecordingTransport()
+        self.send(transport, purpose=MessagePurpose.TRANSACTIONAL)
+        self.assertEqual(transport.payload["channel"], "dnd")
+
+    def test_only_a_promotional_message_uses_the_generic_route(self):
+        transport = RecordingTransport()
+        self.send(transport, purpose=MessagePurpose.PROMOTIONAL)
+        self.assertEqual(transport.payload["channel"], "generic")
+
+    def test_an_unrecognised_purpose_falls_to_dnd_not_generic(self):
+        """Fail towards the route that arrives.
+
+        A purpose added later and not thought about here, a blank, or a typo
+        must not silently drop a school's messages for every DND parent.
+        """
+        provider = self.provider()
+        for purpose in ("", "urgent", None, "TRANSACTIONAL"):
+            with self.subTest(purpose=purpose):
+                self.assertEqual(
+                    provider.termii_channel(Channel.SMS, purpose), "dnd"
+                )
+
+    def test_whatsapp_has_its_own_channel_whatever_the_purpose(self):
+        provider = self.provider()
+        for purpose in (MessagePurpose.TRANSACTIONAL, MessagePurpose.PROMOTIONAL):
+            with self.subTest(purpose=purpose):
+                self.assertEqual(
+                    provider.termii_channel(Channel.WHATSAPP, purpose), "whatsapp"
+                )
+
+    # -- their answers ------------------------------------------------------
+
+    def test_an_accepted_message_is_sent_not_delivered(self):
+        """Their queue accepting it says nothing about a handset receiving it."""
+        result = self.send(RecordingTransport())
+        self.assertEqual(result.status, DeliveryStatus.SENT)
+        self.assertEqual(result.reference, "9122821270554876574")
+        self.assertEqual(result.error, "")
+        self.assertTrue(result.ok)
+
+    def test_the_single_send_shape_without_a_code_is_still_a_success(self):
+        body = '{"message_id": "abc123", "message": "Successfully Sent", "balance": 9}'
+        result = self.provider().read_response(body)
+        self.assertEqual(result.status, DeliveryStatus.SENT)
+        self.assertEqual(result.reference, "abc123")
+
+    def test_a_code_that_is_not_ok_is_a_failure_with_the_reason(self):
+        body = '{"code": "invalid_sender", "message": "Sender ID not registered"}'
+        result = self.provider().read_response(body)
+        self.assertEqual(result.status, DeliveryStatus.FAILED)
+        self.assertIn("Sender ID not registered", result.error)
+        self.assertEqual(result.reference, "")
+
+    def test_a_success_with_no_message_id_is_refused_not_recorded(self):
+        """Nothing to reconcile a later delivery report against."""
+        result = self.provider().read_response('{"code": "ok"}')
+        self.assertEqual(result.status, DeliveryStatus.FAILED)
+        self.assertIn("message id", result.error.lower())
+
+    def test_a_non_json_body_is_a_clear_failure_not_a_crash(self):
+        result = self.provider().read_response("<html>502 Bad Gateway</html>")
+        self.assertEqual(result.status, DeliveryStatus.FAILED)
+        self.assertIn("not JSON", result.error)
+
+    def test_an_http_error_carries_termiis_own_explanation(self):
+        error = urllib.error.HTTPError(
+            "https://api.ng.termii.com/api/sms/send", 400, "Bad Request", {},
+            io.BytesIO(b'{"message": "Insufficient balance"}'),
+        )
+        result = self.send(RecordingTransport(error=error))
+        self.assertEqual(result.status, DeliveryStatus.FAILED)
+        self.assertIn("Insufficient balance", result.error)
+
+    def test_bad_credentials_name_the_setting_to_fix(self):
+        error = urllib.error.HTTPError(
+            "https://api.ng.termii.com/api/sms/send", 401, "Unauthorized", {},
+            io.BytesIO(b"{}"),
+        )
+        result = self.send(RecordingTransport(error=error))
+        self.assertIn("TERMII_API_KEY", result.error)
+
+    def test_an_unreachable_gateway_is_a_failed_row_not_an_exception(self):
+        result = self.send(
+            RecordingTransport(error=urllib.error.URLError("no route to host"))
+        )
+        self.assertEqual(result.status, DeliveryStatus.FAILED)
+        self.assertIn("Could not reach Termii", result.error)
+
+    def test_a_timeout_is_a_failed_row_not_an_exception(self):
+        result = self.send(RecordingTransport(error=TimeoutError()))
+        self.assertEqual(result.status, DeliveryStatus.FAILED)
+        self.assertIn("did not answer", result.error)
+
+    def test_the_log_masks_the_parents_number(self):
+        transport = RecordingTransport()
+        with self.assertLogs("schoolcord.messaging", level="INFO") as logs:
+            self.send(transport)
+        line = "\n".join(logs.output)
+        self.assertIn("...4567", line)
+        self.assertNotIn("2348031234567", line)
+
+    def test_a_low_balance_is_warned_about(self):
+        """Units running out stops every school at once; it should not be quiet."""
+        body = '{"code": "ok", "message_id": "x", "balance": 3}'
+        with self.assertLogs("schoolcord.messaging", level="WARNING") as logs:
+            self.provider().read_response(body)
+        self.assertIn("balance", "\n".join(logs.output).lower())
+
+
+@override_settings(TERMII_API_KEY="master-key", MESSAGING_PROVIDER="termii")
+class TermiiDispatchTests(IdentityTestCase):
+    """End to end: a real batch, through the real provider, over a fake socket.
+
+    This is the test that would catch the Sender ID being dropped somewhere
+    between the school's config and the wire -- which is the failure that
+    matters most, because it is invisible until a parent asks why an unknown
+    number is texting them about fees.
+    """
+
+    def test_a_batch_goes_out_under_that_schools_sender_id_on_the_dnd_route(self):
+        self.configure(self.dap, "Dapgroup", provider=ProviderKey.TERMII)
+        transport = RecordingTransport()
+
+        with mock.patch("urllib.request.urlopen", transport):
+            message = self.send_from(self.dap_main)
+
+        self.assertTrue(transport.payloads)
+        for payload in transport.payloads:
+            self.assertEqual(payload["from"], "Dapgroup")
+            self.assertEqual(payload["channel"], "dnd")
+        self.assertEqual(message.sent_as, "Dapgroup")
+        self.assertEqual(message.provider, ProviderKey.TERMII)
+
+    def test_the_provider_reference_lands_on_every_recipient_row(self):
+        self.configure(self.dap, "Dapgroup", provider=ProviderKey.TERMII)
+        transport = RecordingTransport()
+
+        with mock.patch("urllib.request.urlopen", transport):
+            message = self.send_from(self.dap_main)
+
+        rows = list(message.recipients.all())
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertEqual(row.status, DeliveryStatus.SENT)
+            self.assertEqual(row.provider_reference, "9122821270554876574")
+            self.assertEqual(row.error, "")
+            self.assertIsNotNone(row.sent_at)
+
+    def test_a_refusal_lands_on_the_row_as_a_readable_error(self):
+        self.configure(self.dap, "Dapgroup", provider=ProviderKey.TERMII)
+        transport = RecordingTransport(
+            body='{"code": "invalid_sender", "message": "Sender ID not registered"}'
+        )
+
+        with mock.patch("urllib.request.urlopen", transport):
+            message = self.send_from(self.dap_main)
+
+        for row in message.recipients.all():
+            self.assertEqual(row.status, DeliveryStatus.FAILED)
+            self.assertIn("Sender ID not registered", row.error)
+            self.assertEqual(row.provider_reference, "")
+            self.assertIsNone(row.sent_at)
+        self.assertEqual(message.status, MessageStatus.FAILED)
+
+    def test_two_schools_in_one_run_never_borrow_each_others_sender_id(self):
+        """The tenancy breach a parent would see on their own handset."""
+        self.configure(self.dap, "Dapgroup", provider=ProviderKey.TERMII)
+        self.configure(self.beta, "Betacol", provider=ProviderKey.TERMII)
+        transport = RecordingTransport()
+
+        with mock.patch("urllib.request.urlopen", transport):
+            self.send_from(self.dap_main)
+            dap_requests = len(transport.payloads)
+            self.send_from(self.beta_main)
+
+        senders = [p["from"] for p in transport.payloads]
+        self.assertTrue(dap_requests)
+        self.assertTrue(set(senders[:dap_requests]) == {"Dapgroup"})
+        self.assertTrue(set(senders[dap_requests:]) == {"Betacol"})
+
+    def test_a_school_with_no_approved_sender_id_never_reaches_the_gateway(self):
+        self.configure(
+            self.dap, "Dapgroup",
+            provider=ProviderKey.TERMII, status=SenderIdStatus.PENDING,
+        )
+        transport = RecordingTransport()
+
+        with mock.patch("urllib.request.urlopen", transport):
+            with self.assertRaises(SenderIdentityUnavailable):
+                self.send_from(self.dap_main)
+
+        self.assertEqual(transport.payloads, [])
+
+    def test_a_promotional_batch_is_the_only_thing_on_the_generic_route(self):
+        self.configure(self.dap, "Dapgroup", provider=ProviderKey.TERMII)
+        transport = RecordingTransport()
+
+        with mock.patch("urllib.request.urlopen", transport):
+            with self.as_user(self.user_for(self.dap_main)):
+                audience = audiences.resolve(AudienceType.ALL, branch=self.dap_main)
+                dispatch.send(
+                    body="Open day this Saturday.",
+                    channel=Channel.SMS,
+                    purpose=MessagePurpose.PROMOTIONAL,
+                    audience=audience,
+                    branch=self.dap_main,
+                )
+
+        for payload in transport.payloads:
+            self.assertEqual(payload["channel"], "generic")
+
+    def test_a_resumed_batch_keeps_the_route_it_was_recorded_with(self):
+        """Half a batch on one route and half on another is not a thing."""
+        self.configure(self.dap, "Dapgroup", provider=ProviderKey.TERMII)
+
+        with self.as_user(self.user_for(self.dap_main)):
+            audience = audiences.resolve(AudienceType.ALL, branch=self.dap_main)
+            identity = identity_module.resolve_for_branch(self.dap_main)
+            message = dispatch.record(
+                body="Open day this Saturday.",
+                channel=Channel.SMS,
+                purpose=MessagePurpose.PROMOTIONAL,
+                audience=audience,
+                branch=self.dap_main,
+                identity=identity,
+                provider_key=ProviderKey.TERMII,
+            )
+
+        transport = RecordingTransport()
+        with mock.patch("urllib.request.urlopen", transport):
+            dispatch.deliver(message)
+
+        self.assertTrue(transport.payloads)
+        for payload in transport.payloads:
+            self.assertEqual(payload["channel"], "generic")

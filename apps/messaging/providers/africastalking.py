@@ -15,6 +15,7 @@ from apps.students.validators import to_international
 from .base import (
     Channel,
     DeliveryStatus,
+    MessagePurpose,
     MessagingProvider,
     ProviderKey,
     ProviderNotConfigured,
@@ -67,11 +68,22 @@ class AfricasTalkingProvider(MessagingProvider):
             "from": self.sender_id,
         }
 
-    def send(self, recipient: str, message: str, channel: str) -> SendResult:
+    def send(
+        self,
+        recipient: str,
+        message: str,
+        channel: str,
+        *,
+        purpose: str = MessagePurpose.TRANSACTIONAL,
+    ) -> SendResult:
         self.check()
         # TODO(credentials): POST self.payload(...) to
         # f"{self.base_url}/version1/messaging" with an apiKey header, and read
-        # SMSMessageData.Recipients[0] for the status and messageId.
+        # SMSMessageData.Recipients[0] for the status and messageId. Africa's
+        # Talking expresses the transactional/promotional split as a
+        # bulkSMSMode flag and a sender-type on the account rather than as a
+        # channel, so `purpose` maps onto that rather than onto Termii's
+        # `channel` -- see TermiiProvider.termii_channel for the shape.
         return SendResult(
             status=DeliveryStatus.FAILED,
             error="Africa's Talking is selected but the integration is not live yet.",

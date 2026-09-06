@@ -343,44 +343,15 @@ class ProviderSelectionTests(TestCase):
 
 
 class StubProviderTests(TestCase):
-    """The unfinished providers must refuse loudly, never pretend to send.
+    """The one unfinished provider must refuse loudly, never pretend to send.
 
-    They take their sender from the school's identity, exactly as the live
-    BulkSMS Nigeria provider does, so the day either of them is finished the
-    per-tenant Sender ID already flows through it.
+    Africa's Talking takes its sender from the school's identity exactly as the
+    live providers do, so the day it is finished the per-tenant Sender ID
+    already flows through it. Termii used to be tested here; it is live now and
+    has its own class below.
     """
 
-    identity = SenderIdentity(sender_id="Fulfilled", provider_key="termii")
-
-    @override_settings(TERMII_API_KEY="")
-    def test_termii_without_credentials_is_not_configured(self):
-        provider = TermiiProvider(self.identity)
-        self.assertFalse(provider.is_configured)
-        with self.assertRaises(ProviderNotConfigured):
-            provider.check()
-
-    @override_settings(TERMII_API_KEY="key")
-    def test_termii_without_a_sender_id_is_not_configured(self):
-        with self.assertRaises(ProviderNotConfigured) as caught:
-            TermiiProvider().check()
-        self.assertIn("Sender ID", str(caught.exception))
-
-    @override_settings(TERMII_API_KEY="key")
-    def test_termii_builds_an_international_payload(self):
-        payload = TermiiProvider(self.identity).payload(
-            "08031234567", "Hi", Channel.SMS
-        )
-
-        self.assertEqual(payload["to"], "2348031234567")
-        self.assertEqual(payload["from"], "Fulfilled")
-        self.assertEqual(payload["channel"], "generic")
-
-    @override_settings(TERMII_API_KEY="key")
-    def test_termii_reports_failure_rather_than_a_false_success(self):
-        result = TermiiProvider(self.identity).send(
-            "08031234567", "Hi", Channel.SMS
-        )
-        self.assertEqual(result.status, DeliveryStatus.FAILED)
+    identity = SenderIdentity(sender_id="Fulfilled", provider_key="africastalking")
 
     @override_settings(AFRICASTALKING_USERNAME="", AFRICASTALKING_API_KEY="")
     def test_africastalking_without_credentials_is_not_configured(self):
@@ -401,6 +372,13 @@ class StubProviderTests(TestCase):
             AfricasTalkingProvider(self.identity).supports(Channel.WHATSAPP)
         )
 
+    @override_settings(AFRICASTALKING_USERNAME="alpha", AFRICASTALKING_API_KEY="k")
+    def test_africastalking_reports_failure_rather_than_a_false_success(self):
+        result = AfricasTalkingProvider(self.identity).send(
+            "08031234567", "Hi", Channel.SMS
+        )
+        self.assertEqual(result.status, DeliveryStatus.FAILED)
+
 
 class FailingProvider(MessagingProvider):
     """Fails one nominated number and delivers the rest."""
@@ -412,7 +390,7 @@ class FailingProvider(MessagingProvider):
     def __init__(self, bad_number: str):
         self.bad_number = bad_number
 
-    def send(self, recipient, message, channel):
+    def send(self, recipient, message, channel, *, purpose="transactional"):
         if recipient == self.bad_number:
             return SendResult.failure("Number not reachable.")
         return SendResult(status=DeliveryStatus.DELIVERED, reference="ref-1")
@@ -422,7 +400,7 @@ class ExplodingProvider(MessagingProvider):
     key = "exploding"
     label = "Exploding test provider"
 
-    def send(self, recipient, message, channel):
+    def send(self, recipient, message, channel, *, purpose="transactional"):
         raise RuntimeError("the network fell over")
 
 
