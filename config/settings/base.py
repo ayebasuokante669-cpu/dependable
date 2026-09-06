@@ -11,6 +11,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+# Imported rather than repeated: the product name belongs in exactly one file,
+# and settings is not it. Safe at import time -- branding.py imports nothing.
+from apps.core.branding import PRODUCT_NAME, SUPPORT_EMAIL
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 load_dotenv(BASE_DIR / ".env")
@@ -46,6 +50,16 @@ INSTALLED_APPS = [
     "apps.academics",
     # Onboarding step 3: terms and what each class owes.
     "apps.fees",
+    # Onboarding step 4: the student roster.
+    "apps.students",
+    # Outbound parent messaging (SMS/WhatsApp). Staff-side only.
+    "apps.messaging",
+    # Money received, recorded against a student. Balances derive from here.
+    "apps.payments",
+    # Paid add-on: the enquiry-to-enrolment pipeline. Last, because it converts
+    # an applicant into a student and prices the intake against an academics
+    # class -- it depends on those apps, and nothing depends on it.
+    "apps.admissions",
 ]
 
 MIDDLEWARE = [
@@ -75,6 +89,9 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.core.context_processors.tenancy",
+                # The product's own name, on signed-out pages too -- which is
+                # where it matters most.
+                "apps.core.branding.branding",
             ],
         },
     },
@@ -94,8 +111,73 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LOGIN_URL = "login"
+# The role-aware dispatcher, not a screen: it forwards to whichever dashboard
+# the signed-in role belongs on (apps/core/navigation.py::ROLE_HOME).
 LOGIN_REDIRECT_URL = "core:dashboard"
-LOGOUT_REDIRECT_URL = "login"
+# Signing out returns to the public front door rather than the login form --
+# "you are out" reads better than being asked to go straight back in.
+LOGOUT_REDIRECT_URL = "core:landing"
+
+# The From: on password-reset mail. In dev the console backend prints the whole
+# message, link included, so nothing has to be delivered for the flow to work.
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL", f"{PRODUCT_NAME} <{SUPPORT_EMAIL}>"
+)
+PASSWORD_RESET_TIMEOUT = 60 * 60 * 24 * 3  # three days
+
+# --- Public links -------------------------------------------------------
+# Where this deployment answers from, e.g. https://app.schoolcord.com. Needed
+# only by mail: an email has no request to resolve a relative path against, so
+# the admissions reminder builds its "back to the school's enquiry page" link
+# from this. Left blank the link is omitted rather than sent broken, which is
+# why there is no invented default here.
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+
+# --- Messaging ----------------------------------------------------------
+# Which gateway carries parent SMS is normally each school's own choice, stored
+# on its SchoolMessagingConfig alongside the Sender ID it registered there.
+#
+# MESSAGING_PROVIDER is the platform override: when set it wins over every
+# school's choice. It defaults to "console", which logs the message (Sender ID
+# included) and marks it delivered, so a fresh checkout sends nothing anywhere
+# and the whole feature still works with no credentials. Clear it in production
+# -- MESSAGING_PROVIDER= -- and each school goes out through its own gateway.
+MESSAGING_PROVIDER = os.environ.get("MESSAGING_PROVIDER", "console")
+
+# There is deliberately no platform-wide sender ID. Who a message comes from is
+# the school's own registered identity, resolved per send by
+# apps/messaging/identity.py -- a school with no approved Sender ID is refused
+# rather than falling back to a shared name.
+
+# --- Gateway master credentials -----------------------------------------
+# The platform holds the account and pays for the units; each school sends
+# under its own Sender ID against it. A school that later takes out its own
+# account puts its key on its messaging config, which wins over these.
+#
+# Termii is the gateway. BulkSMS Nigeria declined to support one account
+# sending on behalf of many schools under each school's own Sender ID, which is
+# the arrangement this platform is built on; Termii supports it explicitly.
+TERMII_API_KEY = os.environ.get("TERMII_API_KEY", "")
+TERMII_BASE_URL = os.environ.get("TERMII_BASE_URL", "https://api.ng.termii.com")
+
+# --- Gateways kept but not the default ----------------------------------
+# BulkSMS Nigeria's integration is complete and still works; a school already
+# registered there keeps sending there, and MESSAGING_PROVIDER=bulksmsnigeria
+# moves the whole platform back. Keeping it is the point of the provider
+# abstraction -- see apps/messaging/providers/bulksmsnigeria.py.
+BULKSMSNIGERIA_API_TOKEN = os.environ.get("BULKSMSNIGERIA_API_TOKEN", "")
+BULKSMSNIGERIA_BASE_URL = os.environ.get(
+    "BULKSMSNIGERIA_BASE_URL", "https://www.bulksmsnigeria.com"
+)
+# DND routing: 2 sends via the corporate route so reminders still reach the
+# many Nigerian numbers on the Do-Not-Disturb register. See the provider.
+BULKSMSNIGERIA_DND = os.environ.get("BULKSMSNIGERIA_DND", "2")
+
+AFRICASTALKING_USERNAME = os.environ.get("AFRICASTALKING_USERNAME", "")
+AFRICASTALKING_API_KEY = os.environ.get("AFRICASTALKING_API_KEY", "")
+AFRICASTALKING_BASE_URL = os.environ.get(
+    "AFRICASTALKING_BASE_URL", "https://api.africastalking.com"
+)
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")

@@ -1,0 +1,16 @@
+Dear {{ applicant.parent_name }},
+
+Thank you for applying to {{ school.name }}{% if branch %}, {{ branch.name }}{% endif %} for {{ child }}.
+
+After careful consideration we are not able to offer a place in {{ applying_for }} for this intake.
+{% if applicant.decision_note %}
+{{ applicant.decision_note }}
+{% endif %}
+We know this is disappointing, and we are grateful that you considered us. You would be very welcome to apply again for a future intake.
+
+Your reference for this application is {{ reference }}.
+{% if office_phone or office_email %}
+If you would like to talk it through{% if office_phone %}, call us on {{ office_phone }}{% endif %}{% if office_email %}{% if office_phone %} or{% endif %} email {{ office_email }}{% endif %}.
+{% endif %}
+Warm regards,
+{{ school.name }}

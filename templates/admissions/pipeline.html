@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ open_count }} live application{{ open_count|pluralize }}
+    {% if is_filtered %}matching{% endif %}
+    {% if total != open_count %}&middot; {{ total }} in all{% endif %}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  {% if "view_admission_payments" in capabilities %}
+    <a href="{% url 'admissions:fee_schedules' %}" class="btn btn-ghost text-sm">
+      <span class="hidden sm:inline">Admission fees</span>
+      <span class="sm:hidden">Fees</span>
+    </a>
+  {% endif %}
+  {% if "manage_admissions" in capabilities %}
+    <a href="{% url 'admissions:enquiry_create' %}" class="btn btn-primary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <span class="hidden sm:inline">New enquiry</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+  {% if lapsed_count %}
+    <div class="card mb-5 border-partial/30 bg-partial-soft px-4 py-3 text-sm
+                text-partial-strong">
+      <span class="font-semibold">{{ lapsed_count }}</span>
+      enquir{{ lapsed_count|pluralize:"y,ies" }} passed the validity window and
+      {{ lapsed_count|pluralize:"has,have" }} not been closed yet. They are
+      closed by <span class="numeric">manage.py expire_enquiries</span>, which
+      normally runs nightly.
+    </div>
+  {% endif %}
+
+  {# ===== Filters ======================================================== #}
+  <form method="get" class="card mb-5 p-4 sm:p-5">
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_auto]
+                lg:items-end">
+      {% for field in filter_form %}
+        <div>
+          <label for="{{ field.id_for_label }}" class="field-label">{{ field.label }}</label>
+          {{ field }}
+          {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+      <div class="flex gap-2">
+        <button type="submit" class="btn btn-secondary text-sm">Filter</button>
+        {% if is_filtered %}
+          <a href="{% url 'admissions:pipeline' %}" class="btn btn-ghost text-sm">Clear</a>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+
+  {% if total %}
+
+    {% comment %}
+    ===== The board =====================================================
+    Horizontally scrollable rather than wrapped: the stages are a sequence, and
+    a column that wraps onto a second row stops reading as one.
+    {% endcomment %}
+    <div class="-mx-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
+      <div class="grid min-w-[64rem] grid-cols-5 gap-4"
+           style="grid-template-columns: repeat({{ columns|length }}, minmax(0, 1fr));">
+        {% for column in columns %}
+          <section class="flex flex-col rounded-lg bg-ink-100/70 p-3">
+            <header class="mb-3 flex items-center justify-between gap-2">
+              <h2 class="text-xs font-semibold uppercase tracking-wide text-ink-600">
+                {{ column.label }}
+              </h2>
+              <span class="chip">{{ column.count }}</span>
+            </header>
+
+            <div class="space-y-2.5">
+              {% for applicant in column.applicants %}
+                {% include "admissions/_applicant_card.html" with applicant=applicant %}
+              {% empty %}
+                <p class="px-1 py-6 text-center text-xs text-ink-400">Nobody here</p>
+              {% endfor %}
+            </div>
+
+            {% if column.overflow %}
+              <a href="?status={{ column.status }}"
+                 class="mt-3 block rounded-md px-2 py-2 text-center text-xs
+                        font-medium text-brand-700 hover:bg-white">
+                {{ column.overflow }} more &rarr;
+              </a>
+            {% endif %}
+          </section>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if closed_counts %}
+      <div class="card mt-5 p-4 sm:p-5">
+        <h2 class="text-sm font-semibold text-ink-900">Closed</h2>
+        <p class="field-hint mt-0.5">
+          Kept, not deleted — this is how the intake is answered a term later.
+        </p>
+        <div class="mt-3 flex flex-wrap gap-2">
+          {% for row in closed_counts %}
+            <a href="?status={{ row.status }}" class="chip hover:bg-ink-200">
+              {{ row.label }} &middot; {{ row.count }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+  {% else %}
+
+    <div class="card">
+      <div class="empty-state">
+        {% if is_filtered %}
+          <p class="font-medium text-ink-700">Nothing matches those filters.</p>
+          <p class="mt-1 text-sm">
+            <a href="{% url 'admissions:pipeline' %}"
+               class="font-medium text-brand-700 hover:underline">Clear them</a>
+            to see every applicant.
+          </p>
+        {% else %}
+          <p class="font-medium text-ink-700">No applicants yet.</p>
+          <p class="mx-auto mt-2 max-w-lg text-sm">
+            Enquiries arrive two ways: a parent fills in your public enquiry
+            page, or the front desk captures a walk-in here.
+          </p>
+
+          {% if enquiry_links %}
+            <div class="mx-auto mt-5 max-w-xl space-y-3 text-left">
+              {% for row in enquiry_links %}
+                <div class="rounded-md border border-ink-200 bg-ink-50 px-4 py-3">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                    {{ row.school.name }} — public enquiry page
+                  </p>
+                  <p class="numeric mt-1 break-all text-sm text-brand-800">{{ row.url }}</p>
+                  <p class="mt-1 text-xs text-ink-500">
+                    Put this in your Instagram bio, your WhatsApp status or on
+                    your website. It shows your name and logo, not ours.
+                  </p>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          {% if "manage_admissions" in capabilities %}
+            <a href="{% url 'admissions:enquiry_create' %}"
+               class="btn btn-primary mt-5 text-sm">Capture a walk-in enquiry</a>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    A walk-in or a phone call, captured here instead of in a paper book.
+    {% if current_branch %}Campus: {{ current_branch.name }}.{% endif %}
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    {# ===== Child ======================================================== #}
+    <div class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">The child</h2>
+        <p class="field-hint mt-0.5">
+          Only what an enquiry needs. Documents and the rest are asked for when
+          this becomes an application.
+        </p>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.first_name %}
+          {% include "partials/_field.html" with field=form.last_name %}
+        </div>
+        {% include "partials/_field.html" with field=form.other_names %}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.sex %}
+          {% include "partials/_field.html" with field=form.date_of_birth %}
+        </div>
+      </div>
+    </div>
+
+    {# ===== Place ======================================================== #}
+    <div class="card mt-5 overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">The place</h2>
+        {% if not form.branch %}
+          <p class="field-hint mt-0.5">
+            The campus is your own, so it is not asked for.
+          </p>
+        {% endif %}
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        {% if form.branch %}
+          {% include "partials/_field.html" with field=form.branch %}
+        {% endif %}
+        {% include "partials/_field.html" with field=form.school_class %}
+        {% include "partials/_field.html" with field=form.previous_school %}
+      </div>
+    </div>
+
+    {# ===== Parent ======================================================= #}
+    <div class="card mt-5 overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Parent / guardian</h2>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        {% include "partials/_field.html" with field=form.parent_name %}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.parent_phone %}
+          {% include "partials/_field.html" with field=form.parent_email %}
+        </div>
+        {% include "partials/_field.html" with field=form.heard_about %}
+        {% include "partials/_field.html" with field=form.notes %}
+      </div>
+    </div>
+
+    <div class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <a href="{% url 'admissions:pipeline' %}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">Save enquiry</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

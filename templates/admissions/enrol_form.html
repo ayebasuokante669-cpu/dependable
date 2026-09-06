@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    <span class="numeric">{{ applicant.reference }}</span>
+    &middot; offered {{ applicant.applying_for }}
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl">
+
+  <div class="card mb-5 border-brand-200 bg-brand-50 px-5 py-4 text-sm text-brand-900">
+    <p class="font-semibold">This creates a student.</p>
+    <p class="mt-1">
+      {{ applicant.formal_name }} joins the roster in the class below, with
+      their name, date of birth and parent contact details copied across. The
+      application is kept and linked, so the history survives.
+    </p>
+  </div>
+
+  {% if blockers %}
+    <ul class="card mb-5 space-y-1 border-partial/30 bg-partial-soft px-5 py-4 text-sm
+               text-partial-strong">
+      {% for blocker in blockers %}<li>{{ blocker }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if schedule %}
+    <section class="card mb-5 overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-3">
+        <h2 class="text-sm font-semibold text-ink-900">Admission fees</h2>
+        <p class="field-hint mt-0.5">
+          Charged once at intake. The termly fee structure is untouched by this
+          and starts billing them from the current term as normal.
+        </p>
+      </div>
+      <dl class="space-y-2 px-5 py-4 text-sm">
+        <div class="flex justify-between gap-3">
+          <dt class="text-ink-500">Due at intake</dt>
+          <dd class="numeric text-ink-900">{{ schedule.compulsory_total|naira }}</dd>
+        </div>
+        <div class="flex justify-between gap-3">
+          <dt class="text-ink-500">Confirmed</dt>
+          <dd class="numeric text-paid-strong">{{ applicant.admission_paid|naira }}</dd>
+        </div>
+        <div class="flex justify-between gap-3 border-t border-ink-200 pt-2">
+          <dt class="font-medium text-ink-700">Outstanding</dt>
+          <dd class="numeric font-semibold {% if applicant.admission_outstanding %}text-overdue-strong{% else %}text-paid-strong{% endif %}">
+            {{ applicant.admission_outstanding|naira }}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  {% endif %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Enrolment</h2>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        {% include "partials/_field.html" with field=form.school_class %}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.admission_number %}
+          {% include "partials/_field.html" with field=form.date_admitted %}
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <a href="{{ applicant.get_absolute_url }}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">Enrol as a student</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

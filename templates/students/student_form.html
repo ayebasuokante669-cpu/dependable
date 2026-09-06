@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {% if form.instance.pk %}
+      <span class="numeric">{{ form.instance.admission_number }}</span>
+      &middot; {{ form.instance.school_class.display_name }}
+    {% else %}
+      Manual entry. For a roster you already keep in a spreadsheet, use the
+      <a href="{% url 'students:student_import' %}" class="font-medium text-brand-800 underline">Excel import</a>.
+    {% endif %}
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    {# ===== Enrolment ===================================================== #}
+    <div class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Enrolment</h2>
+        <p class="field-hint mt-0.5">
+          The class decides which campus the student belongs to and what they are
+          charged this term, so it is the one field worth double-checking.
+        </p>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        {% include "partials/_field.html" with field=form.school_class %}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.admission_number %}
+          {% include "partials/_field.html" with field=form.date_admitted %}
+        </div>
+        {% include "partials/_field.html" with field=form.status %}
+      </div>
+    </div>
+
+    {# ===== Student ======================================================= #}
+    <div class="card mt-5 overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Student</h2>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.first_name %}
+          {% include "partials/_field.html" with field=form.last_name %}
+        </div>
+        {% include "partials/_field.html" with field=form.other_names %}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.sex %}
+          {% include "partials/_field.html" with field=form.date_of_birth %}
+        </div>
+      </div>
+    </div>
+
+    {# ===== Parent / guardian ============================================= #}
+    <div class="card mt-5 overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Parent / guardian</h2>
+        <p class="field-hint mt-0.5">
+          Who the school calls about this child's fees.
+        </p>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.parent_name %}
+          {% include "partials/_field.html" with field=form.parent_phone %}
+        </div>
+        {% include "partials/_field.html" with field=form.parent_email %}
+        {% include "partials/_field.html" with field=form.address %}
+      </div>
+    </div>
+
+    <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      {% if form.instance.pk %}
+        <a href="{{ form.instance.get_absolute_url }}" class="btn btn-secondary text-sm">Cancel</a>
+      {% else %}
+        <a href="{% url 'students:student_list' %}" class="btn btn-secondary text-sm">Cancel</a>
+      {% endif %}
+      <button type="submit" class="btn btn-primary text-sm">{{ verb }} student</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

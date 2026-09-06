@@ -61,6 +61,13 @@ TERM = {
     "academic_year": "2025/2026",
     "sequence": 1,
     "is_current": True,
+    # Left unset on purpose. "Overdue" is a property of the term, not of a
+    # student, so the moment a due date is in the past *every* unpaid and part
+    # paid balance at the branch turns overdue at once -- which is correct, and
+    # is also why seeding one would hide the unpaid and part-paid states behind
+    # a wall of red. Set it on the term (admin, or Fee structures > Terms) when
+    # the school has agreed a deadline, and the overdue pill appears.
+    "due_date": None,
 }
 
 

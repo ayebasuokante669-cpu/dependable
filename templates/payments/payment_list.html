@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ page_obj.paginator.count }} payment{{ page_obj.paginator.count|pluralize }}
+    {% if is_filtered %}matching{% endif %}
+    &middot; <span class="numeric">{{ confirmed_total|naira }}</span> confirmed
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'payments:outstanding' %}" class="btn btn-ghost text-sm">
+    <span class="hidden sm:inline">Outstanding</span>
+    <span class="sm:hidden">Owed</span>
+  </a>
+  <a href="{% url 'payments:pending' %}" class="btn btn-secondary text-sm">
+    Pending{% if pending_count %}
+      <span class="status-pill status-partial">{{ pending_count }}</span>
+    {% endif %}
+  </a>
+  {% if "record_payments" in capabilities %}
+    <a href="{% url 'payments:record' %}" class="btn btn-primary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <span class="hidden sm:inline">Record payment</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+  {# ===== Totals for the current filter ================================== #}
+  <div class="mb-5 grid gap-4 sm:grid-cols-3">
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Confirmed</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-paid-strong">
+        {{ confirmed_total|naira }}
+      </div>
+      <div class="mt-1 text-xs text-ink-500">
+        Counts toward balances{% if is_filtered %} — for this filter{% endif %}
+      </div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Pending</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-partial-strong">
+        {{ pending_total|naira }}
+      </div>
+      <div class="mt-1 text-xs text-ink-500">
+        {{ pending_count }} receipt{{ pending_count|pluralize }} awaiting a check
+      </div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Term</div>
+      <div class="mt-2 text-lg font-semibold text-brand-900">
+        {% if term %}{{ term.name }}{% else %}Not set{% endif %}
+      </div>
+      <div class="mt-1 text-xs text-ink-500">
+        {% if term.due_date %}
+          Fees due by {{ term.due_date|date:"j F Y" }}
+        {% else %}
+          No due date set, so nothing reads as overdue
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ===== Filters ======================================================== #}
+  <form method="get" class="card mb-5 p-4 sm:p-5">
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(5,minmax(0,1fr))_auto]
+                lg:items-end">
+      {% for field in filter_form %}
+        <div>
+          <label for="{{ field.id_for_label }}" class="field-label">{{ field.label }}</label>
+          {{ field }}
+          {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+      <div class="flex gap-2">
+        <button type="submit" class="btn btn-secondary text-sm">Filter</button>
+        {% if is_filtered %}
+          <a href="{% url 'payments:index' %}" class="btn btn-ghost text-sm">Clear</a>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+
+  {% if payments %}
+    <div class="card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="table-head">
+            <tr>
+              <th scope="col" class="px-5 py-3 font-semibold">Receipt</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Student</th>
+              <th scope="col" class="px-5 py-3 text-right font-semibold">Amount</th>
+              <th scope="col" class="px-5 py-3 font-semibold">For</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Method</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Reference</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Paid</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ink-200">
+            {% for payment in payments %}
+              <tr class="{% if payment.status == 'void' %}bg-ink-50/60{% endif %}">
+                <td class="numeric whitespace-nowrap px-5 py-3">
+                  <a href="{{ payment.get_absolute_url }}"
+                     class="text-brand-800 hover:underline">
+                    {{ payment.receipt_number }}
+                  </a>
+                </td>
+                <td class="px-5 py-3">
+                  <a href="{{ payment.student.get_absolute_url }}"
+                     class="font-medium text-brand-800 hover:underline">
+                    {{ payment.student.formal_name }}
+                  </a>
+                  <span class="block text-xs text-ink-500">
+                    {{ payment.student.school_class.display_name }}
+                  </span>
+                </td>
+                <td class="numeric whitespace-nowrap px-5 py-3 text-right
+                           {% if payment.status == 'void' %}text-ink-400 line-through
+                           {% else %}font-medium text-ink-900{% endif %}">
+                  {{ payment.amount|naira }}
+                </td>
+                <td class="whitespace-nowrap px-5 py-3 text-ink-700">
+                  {{ payment.get_label_display }}
+                </td>
+                <td class="whitespace-nowrap px-5 py-3 text-ink-700">
+                  {{ payment.get_method_display }}
+                </td>
+                <td class="numeric max-w-40 truncate px-5 py-3 text-xs text-ink-500">
+                  {{ payment.reference|default:"—" }}
+                </td>
+                <td class="whitespace-nowrap px-5 py-3 text-ink-700">
+                  {{ payment.date_paid|date:"j M Y" }}
+                </td>
+                <td class="whitespace-nowrap px-5 py-3">
+                  <span class="status-pill {{ payment.pill_class }}">
+                    {{ payment.get_status_display }}
+                  </span>
+                  {% if payment.has_attachment %}
+                    <span class="ml-1 text-xs text-ink-500" title="Receipt attached"
+                          aria-label="Receipt attached">&#128206;</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="border-t border-ink-200 px-5 py-3 text-xs text-ink-500">
+        Only confirmed payments count toward a student's balance. A voided
+        payment keeps its row and stops counting — it is never deleted.
+      </p>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="mt-5 flex items-center justify-between gap-3" aria-label="Pagination">
+        <p class="text-sm text-ink-600">
+          {{ page_obj.start_index }}&ndash;{{ page_obj.end_index }}
+          of {{ page_obj.paginator.count }}
+        </p>
+        <div class="flex gap-2">
+          {% if page_obj.has_previous %}
+            <a href="{% querystring page=page_obj.previous_page_number %}"
+               class="btn btn-secondary text-sm">Previous</a>
+          {% else %}
+            <span class="btn btn-secondary text-sm opacity-50" aria-disabled="true">Previous</span>
+          {% endif %}
+          <span class="btn btn-ghost text-sm" aria-current="page">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+          </span>
+          {% if page_obj.has_next %}
+            <a href="{% querystring page=page_obj.next_page_number %}"
+               class="btn btn-secondary text-sm">Next</a>
+          {% else %}
+            <span class="btn btn-secondary text-sm opacity-50" aria-disabled="true">Next</span>
+          {% endif %}
+        </div>
+      </nav>
+    {% endif %}
+
+  {% elif is_filtered %}
+    <div class="card empty-state">
+      <p class="text-base font-medium text-ink-700">No payments match those filters</p>
+      <a href="{% url 'payments:index' %}" class="btn btn-secondary mt-5 text-sm">
+        Clear filters
+      </a>
+    </div>
+
+  {% else %}
+    <div class="card empty-state">
+      <p class="text-base font-medium text-ink-700">No payments recorded yet</p>
+      <p class="mx-auto mt-1 max-w-md text-sm">
+        The school banks the money as it always has; this is where the bursar
+        records what came in and against whom. Every balance on the platform is
+        derived from these rows.
+      </p>
+      {% if "record_payments" in capabilities %}
+        <a href="{% url 'payments:record' %}" class="btn btn-primary mt-5 text-sm">
+          Record the first payment
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

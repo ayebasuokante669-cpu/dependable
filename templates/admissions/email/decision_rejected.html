@@ -1,0 +1,38 @@
+{% extends "admissions/email/_base.html" %}
+
+{% comment %}
+Deliberately short, and deliberately not the offer letter with the adjectives
+swapped. It says the decision plainly, does not dangle a reconsideration the
+school has not offered, and leaves the door open for a future intake.
+{% endcomment %}
+
+{% block body %}
+  <p style="margin:0 0 16px;">
+    Thank you for applying to {{ school.name }}{% if branch %}, {{ branch.name }}{% endif %}
+    for <strong>{{ child }}</strong>.
+  </p>
+
+  <p style="margin:0 0 16px;">
+    After careful consideration we are not able to offer a place in
+    {{ applying_for }} for this intake.
+  </p>
+
+  {% if applicant.decision_note %}
+    <p style="margin:0 0 16px;padding:12px 14px;background-color:#f6f8fb;
+              border-radius:6px;font-size:14px;color:#435065;">
+      {{ applicant.decision_note|linebreaksbr }}
+    </p>
+  {% endif %}
+
+  <p style="margin:0 0 16px;">
+    We know this is disappointing, and we are grateful that you considered us.
+    You would be very welcome to apply again for a future intake.
+  </p>
+{% endblock %}
+
+{% block panel %}
+  <p style="margin:0 0 16px;font-size:13px;color:#6b7891;">
+    Your reference for this application is
+    <span style="font-family:'IBM Plex Mono',Consolas,monospace;color:#1c2432;">{{ reference }}</span>.
+  </p>
+{% endblock %}

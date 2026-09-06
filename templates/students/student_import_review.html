@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ filename }}
+    {% if show_branch %}&middot; {{ branch.name }}{% endif %}
+    &middot; nothing has been saved yet
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-5">
+
+  {# ===== The verdict, in one line ======================================== #}
+  <section class="card overflow-hidden">
+    <div class="grid divide-y divide-ink-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+      <div class="px-5 py-4">
+        <p class="text-xs uppercase tracking-wide text-ink-500">Rows read</p>
+        <p class="numeric mt-1 text-2xl font-semibold text-ink-900">{{ report.total }}</p>
+      </div>
+      <div class="px-5 py-4">
+        <p class="text-xs uppercase tracking-wide text-ink-500">Ready to import</p>
+        <p class="numeric mt-1 text-2xl font-semibold
+                  {% if report.ready_count %}text-paid-strong{% else %}text-ink-400{% endif %}">
+          {{ report.ready_count }}
+        </p>
+      </div>
+      <div class="px-5 py-4">
+        <p class="text-xs uppercase tracking-wide text-ink-500">Need correcting</p>
+        <p class="numeric mt-1 text-2xl font-semibold
+                  {% if report.failed_count %}text-overdue-strong{% else %}text-ink-400{% endif %}">
+          {{ report.failed_count }}
+        </p>
+      </div>
+    </div>
+
+    {% if report.unknown_columns or report.absent_columns %}
+      <div class="border-t border-ink-200 px-5 py-3 text-xs text-ink-500">
+        {% if report.unknown_columns %}
+          <p>
+            Ignored column{{ report.unknown_columns|length|pluralize }}:
+            {% for name in report.unknown_columns %}
+              <span class="chip">{{ name }}</span>
+            {% endfor %}
+          </p>
+        {% endif %}
+        {% if report.absent_columns %}
+          <p class="{% if report.unknown_columns %}mt-1.5{% endif %}">
+            Not in the file, so left blank:
+            {% for name in report.absent_columns %}
+              <span class="chip">{{ name }}</span>
+            {% endfor %}
+          </p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+
+  {# ===== What to do about it ============================================= #}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <div class="card px-5 py-4">
+      {% if report.ready_count and report.failed_count %}
+        <p class="text-sm text-ink-700">
+          <strong class="font-semibold">{{ report.ready_count }}</strong> student{{ report.ready_count|pluralize }}
+          can be imported now. The {{ report.failed_count }} row{{ report.failed_count|pluralize }}
+          below {{ report.failed_count|pluralize:"is,are" }} left out — fix
+          {{ report.failed_count|pluralize:"it,them" }} in your spreadsheet and
+          upload again, or import the rest first and add
+          {{ report.failed_count|pluralize:"it,them" }} by hand.
+        </p>
+      {% elif report.ready_count %}
+        <p class="text-sm text-ink-700">
+          Every row checked out.
+          <strong class="font-semibold">{{ report.ready_count }}</strong>
+          student{{ report.ready_count|pluralize }} ready to enrol at {{ branch.name }}.
+        </p>
+      {% else %}
+        <p class="text-sm text-overdue-strong">
+          Nothing in this file can be imported yet. Every row needs a correction
+          — the reasons are listed below.
+        </p>
+      {% endif %}
+
+      <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="submit" name="action" value="discard" class="btn btn-ghost text-sm">
+          Discard and upload a corrected file
+        </button>
+        {% if report.ready_count %}
+          <button type="submit" name="action" value="import" class="btn btn-primary text-sm">
+            Import {{ report.ready_count }} student{{ report.ready_count|pluralize }}
+          </button>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+
+  {# ===== The rows that failed, and exactly why =========================== #}
+  {% if report.failed %}
+    <section class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">
+          {{ report.failed_count }} row{{ report.failed_count|pluralize }} to correct
+        </h2>
+        <p class="field-hint mt-0.5">
+          Row numbers match the spreadsheet, so you can go straight to them.
+        </p>
+      </div>
+      <ul class="divide-y divide-ink-200">
+        {% for row in report.failed %}
+          <li class="px-5 py-4">
+            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span class="numeric shrink-0 rounded-md bg-overdue-soft px-2 py-0.5
+                           text-xs font-semibold text-overdue-strong">
+                Row {{ row.number }}
+              </span>
+              <span class="text-sm font-medium text-ink-800">{{ row.label }}</span>
+            </div>
+            <ul class="mt-2 space-y-1">
+              {% for error in row.errors %}
+                <li class="flex gap-2 text-sm text-ink-700">
+                  <span aria-hidden="true" class="text-overdue">&bull;</span>
+                  <span>
+                    <strong class="font-semibold text-ink-900">{{ error.column }}</strong>
+                    {{ error.message }}
+                  </span>
+                </li>
+              {% endfor %}
+            </ul>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {# ===== The rows that passed ============================================ #}
+  {% if report.ready %}
+    <section class="card overflow-hidden">
+      <details {% if not report.failed %}open{% endif %}>
+        <summary class="cursor-pointer list-none border-b border-ink-200 px-5 py-4
+                        hover:bg-ink-50">
+          <h2 class="inline text-sm font-semibold text-ink-900">
+            {{ report.ready_count }} row{{ report.ready_count|pluralize }} ready to import
+          </h2>
+          <span class="ml-1 text-xs text-ink-500">— click to
+            {% if report.failed %}show{% else %}hide{% endif %}</span>
+        </summary>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="table-head">
+              <tr>
+                <th scope="col" class="px-5 py-3 font-semibold">Row</th>
+                <th scope="col" class="px-5 py-3 font-semibold">Adm. no.</th>
+                <th scope="col" class="px-5 py-3 font-semibold">Student</th>
+                <th scope="col" class="px-5 py-3 font-semibold">Class</th>
+                <th scope="col" class="px-5 py-3 font-semibold">Parent</th>
+                <th scope="col" class="px-5 py-3 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-ink-200">
+              {% for row in report.ready %}
+                <tr>
+                  <td class="numeric px-5 py-2.5 text-ink-500">{{ row.number }}</td>
+                  <td class="numeric whitespace-nowrap px-5 py-2.5 text-ink-700">
+                    {{ row.student.admission_number }}
+                  </td>
+                  <td class="px-5 py-2.5 font-medium text-ink-800">
+                    {{ row.student.formal_name }}
+                  </td>
+                  <td class="whitespace-nowrap px-5 py-2.5 text-ink-700">
+                    {{ row.student.school_class.display_name }}
+                  </td>
+                  <td class="px-5 py-2.5 text-ink-700">
+                    {{ row.student.parent_name }}
+                    <span class="numeric block text-xs text-ink-500">
+                      {{ row.student.parent_phone_display }}
+                    </span>
+                  </td>
+                  <td class="px-5 py-2.5">
+                    <span class="status-pill
+                                 {% if row.student.is_enrolled %}status-paid{% else %}status-unpaid{% endif %}">
+                      {{ row.student.get_status_display }}
+                    </span>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+  {% endif %}
+
+</div>
+{% endblock %}

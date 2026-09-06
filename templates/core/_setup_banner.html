@@ -1,0 +1,23 @@
+{% comment %}
+The nudge back to onboarding, shown on a dashboard only while something is
+still unfinished. Takes `setup` -- the dict from views.setup_progress, which
+has already worked out what is left.
+{% endcomment %}
+{% if not setup.is_complete %}
+  <div class="card flex flex-col gap-3 border-brand-200 bg-brand-50 px-5 py-4
+              sm:flex-row sm:items-center">
+    <div class="min-w-0 flex-1">
+      <p class="text-sm font-semibold text-brand-900">
+        Finish setting up — {{ setup.done_count }} of {{ setup.total }} done
+      </p>
+      {% if setup.next_step %}
+        <p class="mt-0.5 text-sm text-ink-600">
+          Next: {{ setup.next_step.label }} — {{ setup.next_step.description }}
+        </p>
+      {% endif %}
+    </div>
+    <a href="{{ setup.url }}" class="btn btn-primary shrink-0 text-sm">
+      Continue setup
+    </a>
+  </div>
+{% endif %}

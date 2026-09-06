@@ -3,7 +3,7 @@
 import os
 
 from .base import *  # noqa: F401,F403
-from .base import BASE_DIR, env_list
+from .base import BASE_DIR, PRODUCT_NAME, SUPPORT_EMAIL, env_list
 from .database import get_database_config
 
 DEBUG = False
@@ -30,4 +30,6 @@ EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@dependable.app")
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL", f"{PRODUCT_NAME} <{SUPPORT_EMAIL}>"
+)

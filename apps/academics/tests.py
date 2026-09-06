@@ -312,7 +312,7 @@ class SeedCommandTests(TestCase):
 
         # 13 single-arm classes + 3 senior years x 2 arms.
         self.assertEqual(first_classes, 19)
-        self.assertEqual(first_subjects, 21)
+        self.assertEqual(first_subjects, 34)
 
         call_command("seed_academics", stdout=out)
         self.assertEqual(Class.all_objects.count(), first_classes)
@@ -326,14 +326,19 @@ class SeedCommandTests(TestCase):
         orphans = [s.name for s in Subject.all_objects.all() if not s.classes.exists()]
         self.assertEqual(orphans, [])
 
-    def test_a_subject_taught_at_every_level_reaches_every_class(self):
+    def test_a_subject_spanning_levels_is_one_row_reaching_all_of_them(self):
         from django.core.management import call_command
         from io import StringIO
 
         call_command("seed_academics", "--create-school", stdout=StringIO())
 
+        # Nursery through JSS 3, one row: 4 nursery + 6 primary + 3 junior.
+        # The senior arms teach their own religion subject by name instead.
         religion = Subject.all_objects.get(name="Religion Studies")
-        self.assertEqual(religion.classes.count(), 19)
+        self.assertEqual(religion.classes.count(), 13)
+        self.assertNotIn(
+            Level.SENIOR_SECONDARY, {c.level for c in religion.classes.all()}
+        )
 
         # Mathematics starts at primary -- nursery has Number Work instead.
         maths = Subject.all_objects.get(name="Mathematics")
@@ -352,36 +357,80 @@ class SeedCommandTests(TestCase):
             {Level(c.level).label for c in rhymes.classes.all()}, {"Nursery"}
         )
 
-    def test_secondary_subjects_cover_junior_and_both_senior_arms(self):
-        """The secondary list is one set spanning JSS and SSS."""
+    def test_the_shared_core_is_one_row_on_both_senior_arms(self):
+        """Mathematics is not duplicated per arm -- one row, six senior classes."""
+        from django.core.management import call_command
+        from io import StringIO
+
+        call_command("seed_academics", "--create-school", stdout=StringIO())
+
+        maths = Subject.all_objects.get(name="Mathematics")
+        senior = [c for c in maths.classes.all() if c.level == Level.SENIOR_SECONDARY]
+        self.assertEqual({c.stream for c in senior}, {"Arts", "Science"})
+        self.assertEqual(len(senior), 6)  # 3 years x 2 arms
+        self.assertEqual(
+            Subject.all_objects.filter(name="Mathematics").count(), 1
+        )
+
+    def test_a_junior_subject_does_not_leak_into_the_senior_arms(self):
         from django.core.management import call_command
         from io import StringIO
 
         call_command("seed_academics", "--create-school", stdout=StringIO())
 
         digital = Subject.all_objects.get(name="Digital Literacy")
-        assigned = digital.classes.all()
         self.assertEqual(
-            {Level(c.level).label for c in assigned},
-            {"Junior Secondary", "Senior Secondary"},
+            {Level(c.level).label for c in digital.classes.all()},
+            {"Junior Secondary"},
         )
-        # Every senior arm, not just one of them.
-        senior_arms = {
-            c.stream for c in assigned if c.level == Level.SENIOR_SECONDARY
+        self.assertEqual(digital.classes.count(), 3)
+
+    def test_arm_specific_placement_narrows_to_its_arm(self):
+        """Physics is a Science subject; the Arts arm must not receive it."""
+        from django.core.management import call_command
+        from io import StringIO
+
+        call_command("seed_academics", "--create-school", stdout=StringIO())
+
+        physics = Subject.all_objects.get(name="Physics")
+        arms = {c.stream for c in physics.classes.all()}
+        self.assertEqual(arms, {"Science"})
+        self.assertNotIn("Arts", arms)
+        self.assertEqual(physics.classes.count(), 3)  # SSS 1-3 Science
+
+        science = Class.all_objects.get(name="SSS 2", stream="Science")
+        arts = Class.all_objects.get(name="SSS 2", stream="Arts")
+        self.assertIn("Physics", {s.name for s in science.subjects.all()})
+        self.assertNotIn("Physics", {s.name for s in arts.subjects.all()})
+
+        # ...and the mirror case, so neither arm is simply getting everything.
+        self.assertIn("Government", {s.name for s in arts.subjects.all()})
+        self.assertNotIn("Government", {s.name for s in science.subjects.all()})
+
+    def test_each_senior_arm_carries_the_subjects_the_school_named(self):
+        """The client's two lists, exactly -- eleven subjects on each arm."""
+        from django.core.management import call_command
+        from io import StringIO
+
+        call_command("seed_academics", "--create-school", stdout=StringIO())
+
+        expected = {
+            "Science": {
+                "Mathematics", "English Studies", "Chemistry", "Biology", "Physics",
+                "Agriculture", "Geography", "Economics", "Marketing",
+                "Civic Education", "Livestock",
+            },
+            "Arts": {
+                "Mathematics", "English Studies", "Commerce", "Economics",
+                "Accounting", "Government", "Literature in English",
+                "Christian Religious Knowledge", "Civic Education", "Marketing",
+                "Home Management",
+            },
         }
-        self.assertEqual(senior_arms, {"Arts", "Science"})
-        self.assertEqual(assigned.count(), 9)  # 3 JSS + 6 SSS
-
-    def test_arm_specific_placement_still_narrows(self):
-        """No subject uses it today, but the mechanism must keep working."""
-        from apps.academics.curriculum import SENIOR, SubjectSpec, at, classes_for
-
-        arts = Class(name="SSS 1", level=Level.SENIOR_SECONDARY, stream="Arts")
-        science = Class(name="SSS 1", level=Level.SENIOR_SECONDARY, stream="Science")
-        junior = Class(name="JSS 1", level=Level.JUNIOR_SECONDARY)
-
-        spec = SubjectSpec("Government", "GOV", (at(SENIOR, "Arts"),))
-        self.assertEqual(classes_for(spec, [arts, science, junior]), [arts])
+        for klass in Class.all_objects.filter(level=Level.SENIOR_SECONDARY):
+            taught = {s.name for s in klass.subjects.all()}
+            self.assertEqual(taught, expected[klass.stream], klass.display_name)
+            self.assertEqual(len(taught), 11, klass.display_name)
 
     def test_refuses_an_unknown_school_without_the_flag(self):
         from django.core.management import call_command

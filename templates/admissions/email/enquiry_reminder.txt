@@ -1,0 +1,18 @@
+Dear {{ applicant.parent_name }},
+
+A little while ago you enquired about a place for {{ child }} at {{ school.name }}{% if branch %}, {{ branch.name }}{% endif %}. We have not heard from you since, so this is a friendly reminder.
+
+Your reference is {{ reference }}.
+{% if expires_on %}
+Your enquiry is held until {{ expires_on|date:"j F Y" }}{% if days_left and days_left > 0 %} - that is {{ days_left }} day{{ days_left|pluralize }} from now{% endif %}. After that we would need you to start again.
+{% endif %}
+To continue, please get in touch and we will take you through the application. For {{ applying_for }} we will need:
+{% for line in requirements.required_documents %}  - {{ line.label }}
+{% endfor %}{% if requirements.requires_assessment %}  - An entrance assessment, which we will arrange with you
+{% endif %}{% if office_phone or office_email %}
+{% if office_phone %}Call us on {{ office_phone }}{% endif %}{% if office_email %}{% if office_phone %}, or email{% else %}Email us at{% endif %} {{ office_email }}{% endif %}.
+{% endif %}{% if enquiry_url %}
+You can also find us at {{ enquiry_url }}
+{% endif %}
+Warm regards,
+{{ school.name }}

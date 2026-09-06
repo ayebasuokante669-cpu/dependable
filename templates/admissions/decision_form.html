@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    <span class="numeric">{{ applicant.reference }}</span>
+    &middot; {{ applicant.applying_for }}
+    &middot; {{ applicant.status_label }}
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl">
+
+  {# ===== What the decision is being made on ============================ #}
+  <section class="card mb-5 overflow-hidden">
+    <div class="border-b border-ink-200 bg-ink-50 px-5 py-3">
+      <h2 class="text-sm font-semibold text-ink-900">{{ applicant.formal_name }}</h2>
+      <p class="field-hint mt-0.5">
+        {{ applicant.applying_for }}
+        {% if applicant.age %} &middot; {{ applicant.age }} years old{% endif %}
+        {% if applicant.previous_school %} &middot; from {{ applicant.previous_school }}{% endif %}
+      </p>
+    </div>
+
+    <dl class="grid gap-x-6 gap-y-3 px-5 py-4 sm:grid-cols-2">
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          Requirements
+        </dt>
+        <dd class="mt-1 text-sm">
+          {% if missing %}
+            <span class="text-partial-strong">
+              {{ missing|length }} outstanding:
+              {% for line in missing %}{{ line.label }}{% if not forloop.last %}, {% endif %}{% endfor %}
+            </span>
+          {% else %}
+            <span class="text-paid-strong">All complete</span>
+          {% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          Assessment
+        </dt>
+        <dd class="mt-1 text-sm text-ink-900">
+          {% if not profile.requires_assessment %}
+            <span class="text-ink-500">Not sat at this level</span>
+          {% elif assessment and assessment.has_been_sat %}
+            <span class="numeric">
+              {{ assessment.score|floatformat:"-2" }} / {{ assessment.max_score|floatformat:"-2" }}
+            </span>
+            &middot; {{ assessment.get_outcome_display }}
+          {% else %}
+            <span class="text-partial-strong">Not yet sat</span>
+          {% endif %}
+        </dd>
+      </div>
+    </dl>
+
+    {% if missing %}
+      <p class="border-t border-ink-200 bg-partial-soft px-5 py-3 text-sm
+                text-partial-strong">
+        You can still decide with items outstanding — a school sometimes offers
+        a place subject to papers arriving. Nothing here stops you; it is shown
+        so the decision is made knowing.
+      </p>
+    {% endif %}
+  </section>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Decision</h2>
+        <p class="field-hint mt-0.5">
+          Only a school owner or principal reaches this screen, and the decision
+          is recorded against your name.
+        </p>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+
+        <fieldset>
+          <legend class="field-label">{{ form.decision.label }}</legend>
+          <div class="space-y-2">
+            {% for choice in form.decision %}
+              <label class="check-row border border-ink-200 py-3">
+                {{ choice.tag }}
+                <span class="text-sm font-medium text-ink-900">{{ choice.choice_label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          {% for error in form.decision.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+        </fieldset>
+
+        {% include "partials/_field.html" with field=form.decision_note %}
+
+        <label class="check-row border border-ink-200 py-3">
+          {{ form.notify_parent }}
+          <span class="min-w-0">
+            <span class="block text-sm font-medium text-ink-900">
+              {{ form.notify_parent.label }}
+            </span>
+            <span class="block text-xs text-ink-500">{{ form.notify_parent.help_text }}</span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <a href="{{ applicant.get_absolute_url }}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">Record decision</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

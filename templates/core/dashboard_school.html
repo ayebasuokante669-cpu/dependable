@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ current_school.name }} &middot; every campus
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'students:student_list' %}" class="btn btn-secondary text-sm">
+    <span class="hidden sm:inline">View</span> roster
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {% include "core/_setup_banner.html" %}
+
+  <div class="grid gap-4 sm:grid-cols-3">
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Campuses</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ branch_count }}</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Students enrolled</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ student_count }}</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Classes running</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ class_count }}</div>
+    </div>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
+      <h2 class="text-sm font-semibold text-ink-900">Your campuses</h2>
+      <a href="{% url 'admin:schools_branch_changelist' %}"
+         class="btn btn-secondary text-xs">Manage branches</a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="table-head">
+          <tr>
+            <th scope="col" class="px-5 py-3 font-semibold">Campus</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Location</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Current term</th>
+            <th scope="col" class="px-5 py-3 text-right font-semibold">Classes</th>
+            <th scope="col" class="px-5 py-3 text-right font-semibold">Students</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-ink-200">
+          {% for row in rows %}
+            <tr>
+              <td class="px-5 py-3 font-medium text-ink-900">{{ row.branch.name }}</td>
+              <td class="px-5 py-3 text-ink-700">
+                {{ row.branch.city }}{% if row.branch.city and row.branch.state %}, {% endif %}{{ row.branch.state }}
+              </td>
+              <td class="px-5 py-3">
+                {% if row.term %}
+                  <span class="text-ink-700">{{ row.term.name }}</span>
+                {% else %}
+                  <span class="status-pill status-partial">Not set</span>
+                {% endif %}
+              </td>
+              <td class="numeric px-5 py-3 text-right text-ink-700">{{ row.branch.classes_count }}</td>
+              <td class="numeric px-5 py-3 text-right text-ink-700">{{ row.branch.students_count }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-5 py-8 text-center text-ink-500">
+                No campuses yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if branches_without_a_term %}
+      <p class="border-t border-ink-200 bg-partial-soft px-5 py-3 text-xs text-partial-strong">
+        No current term at {{ branches_without_a_term|join:", " }} — nothing there
+        can be priced or billed until one is set.
+        <a href="{% url 'admin:fees_term_changelist' %}" class="font-semibold underline">
+          Set a term
+        </a>.
+      </p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "admissions/public_base.html" %}
+
+{% block title %}Enquiry received{% endblock %}
+
+{% block heading %}
+  <p class="mt-1 text-sm text-ink-600">Enquiry received</p>
+{% endblock %}
+
+{% block body %}
+  <div class="text-center">
+    <span class="mx-auto grid size-12 place-items-center rounded-full bg-paid-soft"
+          aria-hidden="true">
+      <svg class="size-7 text-paid-strong" fill="none" viewBox="0 0 24 24"
+           stroke-width="2" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+      </svg>
+    </span>
+
+    <h2 class="mt-4 text-lg font-semibold text-ink-900">Thank you.</h2>
+    <p class="mt-2 text-sm text-ink-600">
+      {{ school.name }} has your enquiry and will be in touch shortly.
+    </p>
+
+    {% if reference %}
+      {% comment %}
+      Shown once, from the session. Worth quoting on the phone, which is why it
+      is large and monospaced rather than buried in a sentence.
+      {% endcomment %}
+      <div class="mt-6 rounded-md border border-ink-200 bg-ink-50 px-4 py-3">
+        <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          Your reference
+        </p>
+        <p class="numeric mt-1 text-xl font-semibold text-brand-900">{{ reference }}</p>
+        <p class="mt-1 text-xs text-ink-500">
+          Quote this if you call or visit the school.
+        </p>
+      </div>
+    {% endif %}
+
+    <p class="mt-6 text-sm text-ink-600">
+      Keep an eye on your email — we have sent a copy there. If you do not hear
+      from us within a few days, please get in touch.
+    </p>
+  </div>
+{% endblock %}

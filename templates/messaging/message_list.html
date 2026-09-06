@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ page_obj.paginator.count }} message{{ page_obj.paginator.count|pluralize }}
+    sent to parents
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  {% if can_send %}
+    <a href="{% url 'messaging:fee_reminder' %}" class="btn btn-secondary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      </svg>
+      <span class="hidden sm:inline">Fee reminder</span>
+    </a>
+    <a href="{% url 'messaging:compose' %}" class="btn btn-primary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <span class="hidden sm:inline">New message</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+  {% include "messaging/_provider_note.html" %}
+  {% include "messaging/_identity_note.html" %}
+
+  {% if messages_sent %}
+    <div class="card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="table-head">
+            <tr>
+              <th scope="col" class="px-5 py-3 font-semibold">Sent</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Audience</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Channel</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Message</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Delivery</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ink-200">
+            {% for message in messages_sent %}
+              <tr>
+                <td class="whitespace-nowrap px-5 py-3 align-top text-ink-700">
+                  <a href="{{ message.get_absolute_url }}"
+                     class="font-medium text-brand-800 hover:underline">
+                    {{ message.created_at|date:"j M Y" }}
+                  </a>
+                  <span class="block text-xs text-ink-500">
+                    {{ message.created_at|date:"H:i" }}
+                    {% if message.sender %}&middot; {{ message.sender }}{% endif %}
+                  </span>
+                </td>
+                <td class="px-5 py-3 align-top">
+                  <span class="font-medium text-ink-900">{{ message.audience }}</span>
+                  <span class="block text-xs text-ink-500">
+                    {{ message.get_audience_type_display }}
+                  </span>
+                </td>
+                <td class="whitespace-nowrap px-5 py-3 align-top text-ink-700">
+                  {{ message.get_channel_display }}
+                </td>
+                <td class="max-w-md px-5 py-3 align-top text-ink-600">
+                  <span class="line-clamp-2">{{ message.body|truncatechars:120 }}</span>
+                </td>
+                <td class="whitespace-nowrap px-5 py-3 align-top">
+                  <span class="status-pill {{ message.pill_class }}">
+                    {{ message.get_status_display }}
+                  </span>
+                  {% comment %} The honest summary: accepted by the gateway, confirmed on a
+                     handset, and bounced are three different facts. {% endcomment %}
+                  <span class="mt-1 block text-xs text-ink-500">
+                    {{ message.sent }} sent,
+                    {{ message.delivered }} delivered{% if message.failed %},
+                    <span class="font-semibold text-overdue-strong">
+                      {{ message.failed }} failed</span>{% endif %}
+                  </span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="mt-5 flex items-center justify-between gap-3" aria-label="Pagination">
+        <p class="text-sm text-ink-600">
+          {{ page_obj.start_index }}&ndash;{{ page_obj.end_index }}
+          of {{ page_obj.paginator.count }}
+        </p>
+        <div class="flex gap-2">
+          {% if page_obj.has_previous %}
+            <a href="{% querystring page=page_obj.previous_page_number %}"
+               class="btn btn-secondary text-sm">Previous</a>
+          {% else %}
+            <span class="btn btn-secondary text-sm opacity-50" aria-disabled="true">Previous</span>
+          {% endif %}
+          <span class="btn btn-ghost text-sm" aria-current="page">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+          </span>
+          {% if page_obj.has_next %}
+            <a href="{% querystring page=page_obj.next_page_number %}"
+               class="btn btn-secondary text-sm">Next</a>
+          {% else %}
+            <span class="btn btn-secondary text-sm opacity-50" aria-disabled="true">Next</span>
+          {% endif %}
+        </div>
+      </nav>
+    {% endif %}
+
+  {% else %}
+    <div class="card empty-state">
+      <p class="text-base font-medium text-ink-700">No messages sent yet</p>
+      <p class="mx-auto mt-1 max-w-md text-sm">
+        Parents do not sign in to {{ product_name }} — everything they hear from the
+        school arrives as an SMS or a WhatsApp message sent from here, and every
+        one of them is logged on this page.
+      </p>
+      {% if can_send %}
+        <div class="mt-5 flex flex-wrap justify-center gap-2">
+          <a href="{% url 'messaging:fee_reminder' %}" class="btn btn-primary text-sm">
+            Send a fee reminder
+          </a>
+          <a href="{% url 'messaging:compose' %}" class="btn btn-secondary text-sm">
+            Write a message
+          </a>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

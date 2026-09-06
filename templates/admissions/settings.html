@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    How long an enquiry lives, when the parent is reminded, and who may see the
+    pipeline.
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-5">
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">The enquiry window</h2>
+        <p class="field-hint mt-0.5">
+          An enquiry that has not become an application inside the window
+          expires. It is kept, never deleted — an expired enquiry is still the
+          answer to "how many did that Instagram post bring us?".
+        </p>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.enquiry_validity_days %}
+          {% include "partials/_field.html" with field=form.reminder_after_days %}
+        </div>
+        <p class="rounded-md bg-ink-50 px-3 py-2 text-xs text-ink-600">
+          Both are acted on by the nightly commands
+          <span class="numeric">send_enquiry_reminders</span> and
+          <span class="numeric">expire_enquiries</span>.
+        </p>
+      </div>
+    </div>
+
+    <div class="card mt-5 overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Who does what</h2>
+      </div>
+      <div class="space-y-4 p-5 sm:p-6">
+        <label class="check-row border border-ink-200 py-3">
+          {{ form.bursar_can_view_applicants }}
+          <span class="min-w-0">
+            <span class="block text-sm font-medium text-ink-900">
+              {{ form.bursar_can_view_applicants.label }}
+            </span>
+            <span class="block text-xs text-ink-500">
+              {{ form.bursar_can_view_applicants.help_text }}
+            </span>
+          </span>
+        </label>
+
+        <label class="check-row border border-ink-200 py-3">
+          {{ form.require_payment_before_enrolment }}
+          <span class="min-w-0">
+            <span class="block text-sm font-medium text-ink-900">
+              {{ form.require_payment_before_enrolment.label }}
+            </span>
+            <span class="block text-xs text-ink-500">
+              {{ form.require_payment_before_enrolment.help_text }}
+            </span>
+          </span>
+        </label>
+
+        <p class="rounded-md bg-ink-50 px-3 py-2 text-xs text-ink-600">
+          Deciding on an application stays with the school owner and the
+          principal whatever is set here. A bursar records admission payments
+          either way.
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-5 flex justify-end">
+      <button type="submit" class="btn btn-primary">Save settings</button>
+    </div>
+  </form>
+
+  {# ===== What each level asks for ==================================== #}
+  <section class="card overflow-hidden">
+    <div class="border-b border-ink-200 px-5 py-4">
+      <h2 class="text-sm font-semibold text-ink-900">Requirements by level</h2>
+      <p class="field-hint mt-0.5">
+        What is in force today. Levels marked <em>default</em> run on the
+        platform's policy; edit a level under
+        <span class="numeric">Admission requirement sets</span> in the admin to
+        make it your own.
+      </p>
+    </div>
+
+    <div class="divide-y divide-ink-200">
+      {% for profile in profiles %}
+        <div class="px-5 py-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 class="text-sm font-semibold text-ink-900">{{ profile.level_label }}</h3>
+            {% if profile.is_configured %}
+              <span class="status-pill status-paid">Your own</span>
+            {% else %}
+              <span class="chip">Default</span>
+            {% endif %}
+            {% if profile.requires_assessment %}
+              <span class="status-pill status-partial">Sits the entrance exam</span>
+            {% else %}
+              <span class="chip">No entrance exam</span>
+            {% endif %}
+          </div>
+
+          <ul class="mt-2.5 flex flex-wrap gap-1.5">
+            {% for line in profile.lines %}
+              <li class="chip {% if not line.is_required %}opacity-60{% endif %}">
+                {{ line.label }}{% if not line.is_required %} (optional){% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

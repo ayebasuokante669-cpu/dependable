@@ -3,8 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ page_title|default:"Dependable" }}{% endblock %} &middot; Dependable</title>
+  <title>{% block title %}{{ page_title|default:product_name }}{% endblock %} &middot; {{ product_name }}</title>
   <meta name="theme-color" content="#0f2547">
+
+  {% comment %}
+  SVG first: every current browser prefers it and gets a mark that stays crisp
+  at any size, including the 16px tab. `alternate icon` is what older browsers
+  fall back to, and apple-touch-icon is what iOS uses when a school pins the
+  dashboard to a home screen -- which, on a phone-first roster, they do.
+  {% endcomment %}
+  <link rel="icon" href="{% static 'img/schoolcord-logo.svg' %}" type="image/svg+xml">
+  <link rel="alternate icon" href="{% static 'img/schoolcord-logo.png' %}" type="image/png">
+  <link rel="apple-touch-icon" href="{% static 'img/schoolcord-logo.png' %}">
 
   {# Public Sans for UI, IBM Plex Mono for money, IDs and codes. #}
   <link rel="preconnect" href="https://fonts.googleapis.com">

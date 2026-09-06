@@ -1,17 +1,26 @@
 {% comment %}Brand mark plus the tenant the current user is acting for.{% endcomment %}
 <div class="px-5 pt-5 pb-4">
   <div class="flex items-center gap-2.5">
-    <span class="grid size-9 shrink-0 place-items-center rounded-md bg-white/15
-                 font-semibold text-white">D</span>
-    <span class="text-base font-semibold tracking-tight text-white">Dependable</span>
+    {% include "partials/_brand_mark.html" with tone="light" %}
+    <span class="text-base font-semibold tracking-tight text-white">
+      {{ product_name }}
+    </span>
   </div>
 
   {% if current_school %}
-    <div class="mt-4 rounded-md bg-white/10 px-3 py-2.5">
-      <div class="truncate text-sm font-semibold text-white">{{ current_school.name }}</div>
-      <div class="mt-0.5 truncate text-xs text-brand-200">
-        {% if current_branch %}{{ current_branch.name }}{% else %}All branches{% endif %}
-        &middot; {{ current_school.get_plan_display }}
+    {% comment %}
+    The tenant the user is acting for, under the product mark. The school's own
+    logo when it has uploaded one -- this is the school's software while they
+    are inside it, and SCHOOLCORD's mark above already says whose software.
+    {% endcomment %}
+    <div class="mt-4 flex items-center gap-2.5 rounded-md bg-white/10 px-3 py-2.5">
+      {% include "partials/_school_logo.html" with school=current_school size="size-8" tone="light" %}
+      <div class="min-w-0">
+        <div class="truncate text-sm font-semibold text-white">{{ current_school.name }}</div>
+        <div class="mt-0.5 truncate text-xs text-brand-200">
+          {% if current_branch %}{{ current_branch.name }}{% else %}All branches{% endif %}
+          &middot; {{ current_school.get_plan_display }}
+        </div>
       </div>
     </div>
   {% elif current_role_label %}

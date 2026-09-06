@@ -46,6 +46,17 @@ class Term(BranchScopedModel):
         help_text="The term the school is in now. Only one per branch; setting "
         "this clears it from any other term.",
     )
+    #: The date fees for this term are expected by. Nullable, because a school
+    #: that has not set one has not set one -- and inventing a deadline would
+    #: turn every unpaid student on the platform red overnight. A balance only
+    #: reads as overdue once the school says when it was due.
+    due_date = models.DateField(
+        "fees due by",
+        null=True,
+        blank=True,
+        help_text="Optional. Unpaid balances are only marked overdue after "
+        "this date.",
+    )
 
     class Meta(BranchScopedModel.Meta):
         abstract = False

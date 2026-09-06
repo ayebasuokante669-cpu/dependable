@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% comment %}
+The centred card every signed-out auth screen sits in: sign in, the three
+password-reset stages, and signup's narrower sibling. One layout, so the login
+page and the reset page cannot drift apart.
+
+Pages fill `auth_heading`, `auth_body` and optionally `auth_footer`.
+{% endcomment %}
+
+{% block anonymous_content %}
+<div class="grid min-h-full place-items-center px-4 py-12">
+  <div class="w-full {% block auth_width %}max-w-sm{% endblock %}">
+
+    <a href="{% url 'core:landing' %}"
+       class="mb-8 flex items-center justify-center gap-2.5">
+      {% include "partials/_brand_mark.html" with size="size-10" %}
+      <span class="text-xl font-semibold tracking-tight text-brand-900">
+        {{ product_name }}
+      </span>
+    </a>
+
+    <div class="card p-6">
+      <h1 class="text-lg font-semibold text-ink-900">{% block auth_heading %}{% endblock %}</h1>
+      {% block auth_intro %}{% endblock %}
+      {% block auth_body %}{% endblock %}
+    </div>
+
+    {% block auth_footer %}{% endblock %}
+  </div>
+</div>
+{% endblock %}

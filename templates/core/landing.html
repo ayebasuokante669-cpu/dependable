@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product_name }} — {{ product_tagline|lower }}{% endblock %}
+
+{% block anonymous_content %}
+<div class="min-h-full bg-white">
+
+  {# ===== Header ========================================================== #}
+  <header class="border-b border-ink-200">
+    <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+      <a href="{% url 'core:landing' %}" class="flex items-center gap-2.5">
+        {% include "partials/_brand_mark.html" %}
+        <span class="text-base font-semibold tracking-tight text-brand-900">
+          {{ product_name }}
+        </span>
+      </a>
+      <div class="flex items-center gap-2">
+        <a href="{% url 'login' %}" class="btn btn-ghost text-sm">Sign in</a>
+        <a href="{% url 'core:signup' %}" class="btn btn-primary text-sm">
+          Get started
+        </a>
+      </div>
+    </div>
+  </header>
+
+  {# ===== Hero ============================================================ #}
+  <section class="mx-auto max-w-5xl px-4 pb-12 pt-14 sm:px-6 sm:pb-16 sm:pt-20">
+    <div class="max-w-2xl">
+      <span class="status-pill status-paid">For Nigerian schools</span>
+      <h1 class="mt-4 text-3xl font-bold tracking-tight text-brand-900 sm:text-4xl">
+        Know what every child owes, and who has paid.
+      </h1>
+      <p class="mt-4 text-base text-ink-700 sm:text-lg">
+        {{ product_name }} keeps your classes, your fee structure and your roster in
+        one place, so a parent's question is answered in seconds instead of from
+        three different notebooks.
+      </p>
+      <div class="mt-7 flex flex-col gap-2 sm:flex-row">
+        <a href="{% url 'core:signup' %}" class="btn btn-primary">
+          Create your school account
+        </a>
+        <a href="{% url 'login' %}" class="btn btn-secondary">
+          Sign in to your school
+        </a>
+      </div>
+      <p class="mt-3 text-xs text-ink-500">
+        Free while you set up. No card needed to start.
+      </p>
+    </div>
+  </section>
+
+  {# ===== What it does ==================================================== #}
+  <section class="border-y border-ink-200 bg-ink-50">
+    <div class="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
+      <h2 class="text-xl font-semibold tracking-tight text-brand-900">
+        Set up once, in four steps
+      </h2>
+      <p class="mt-2 max-w-2xl text-sm text-ink-600">
+        Each one takes minutes, and you can stop and come back. Nothing is
+        charged and nobody is billed until you say so.
+      </p>
+
+      <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {% comment %}Mirrors the real onboarding sequence, so the promise on the
+        front page and the checklist after signup are the same four things.{% endcomment %}
+        <div class="card p-5">
+          <span class="grid size-8 place-items-center rounded-md bg-brand-50
+                       text-sm font-semibold text-brand-800">1</span>
+          <h3 class="mt-3 text-sm font-semibold text-ink-900">Your classes</h3>
+          <p class="mt-1 text-sm text-ink-600">
+            Nursery to SSS, arms and all, with the subjects each one takes.
+          </p>
+        </div>
+        <div class="card p-5">
+          <span class="grid size-8 place-items-center rounded-md bg-brand-50
+                       text-sm font-semibold text-brand-800">2</span>
+          <h3 class="mt-3 text-sm font-semibold text-ink-900">Your fees</h3>
+          <p class="mt-1 text-sm text-ink-600">
+            What each class owes per term, itemised — school fees, books,
+            development levy.
+          </p>
+        </div>
+        <div class="card p-5">
+          <span class="grid size-8 place-items-center rounded-md bg-brand-50
+                       text-sm font-semibold text-brand-800">3</span>
+          <h3 class="mt-3 text-sm font-semibold text-ink-900">Your students</h3>
+          <p class="mt-1 text-sm text-ink-600">
+            Import the roster you already keep in Excel. Bad rows are listed for
+            fixing, not silently dropped.
+          </p>
+        </div>
+        <div class="card p-5">
+          <span class="grid size-8 place-items-center rounded-md bg-brand-50
+                       text-sm font-semibold text-brand-800">4</span>
+          <h3 class="mt-3 text-sm font-semibold text-ink-900">Your staff</h3>
+          <p class="mt-1 text-sm text-ink-600">
+            Principals and bursars, each seeing their own campus and nothing
+            else.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ===== Why it is built this way ======================================== #}
+  <section class="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
+    <div class="grid gap-8 lg:grid-cols-3">
+      <div>
+        <h3 class="text-sm font-semibold text-ink-900">One campus or six</h3>
+        <p class="mt-2 text-sm text-ink-600">
+          Every branch keeps its own classes, fees and roster. A principal sees
+          their campus; the proprietor sees all of them at once.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-ink-900">Fees that stay true</h3>
+        <p class="mt-2 text-sm text-ink-600">
+          A student's bill is worked out from their class's fee structure every
+          time it is shown, so repricing a class never leaves an old figure
+          behind.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-ink-900">The right people only</h3>
+        <p class="mt-2 text-sm text-ink-600">
+          A bursar collects against the fee structure without being able to
+          change it. Access follows the role, never the job title.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  {# ===== Closing CTA ===================================================== #}
+  <section class="border-t border-ink-200 bg-brand-900">
+    <div class="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6">
+      <h2 class="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+        Ready when your next term is
+      </h2>
+      <p class="mx-auto mt-2 max-w-lg text-sm text-brand-100">
+        Set your school up now and have the roster ready before the first fee is
+        collected.
+      </p>
+      <a href="{% url 'core:signup' %}"
+         class="btn mt-6 bg-white text-brand-900 hover:bg-brand-50">
+        Create your school account
+      </a>
+    </div>
+  </section>
+
+  <footer class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <div class="flex flex-col items-center justify-between gap-3 text-xs text-ink-500
+                sm:flex-row">
+      <p>&copy; {% now "Y" %} {{ product_name }}. {{ product_tagline }}.</p>
+      <p>
+        Already have an account?
+        <a href="{% url 'login' %}" class="font-medium text-brand-700 hover:underline">
+          Sign in
+        </a>
+      </p>
+    </div>
+  </footer>
+
+</div>
+{% endblock %}

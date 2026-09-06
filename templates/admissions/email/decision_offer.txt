@@ -1,0 +1,23 @@
+Dear {{ applicant.parent_name }},
+
+We are delighted to offer {{ child }} a place at {{ school.name }}{% if branch %}, {{ branch.name }}{% endif %} in {{ applying_for }}.
+
+Your reference is {{ reference }}.
+{% if applicant.decision_note %}
+{{ applicant.decision_note }}
+{% endif %}
+To take up the place, please come in and complete the admission. {% if schedule %}The following is payable at intake:
+{% for item in schedule.items.all %}{% if item.kind != "books" %}  {{ item.name }}{% if item.kind == "admission" %} (admission fee){% endif %}: N{{ item.amount|floatformat:"0" }}
+{% endif %}{% endfor %}  ---
+  Total at intake: N{{ schedule.compulsory_total|floatformat:"0" }}
+{% if schedule.books_total %}
+Compulsory books, charged separately:
+{% for item in schedule.items.all %}{% if item.kind == "books" %}  {{ item.name }}: N{{ item.amount|floatformat:"0" }}
+{% endif %}{% endfor %}  Books total: N{{ schedule.books_total|floatformat:"0" }}
+{% endif %}{% endif %}
+{% if office_phone or office_email %}{% if office_phone %}Call us on {{ office_phone }}{% endif %}{% if office_email %}{% if office_phone %}, or email{% else %}Email us at{% endif %} {{ office_email }}{% endif %} to arrange a time.
+{% endif %}
+We look forward to welcoming {{ applicant.first_name }}.
+
+Warm regards,
+{{ school.name }}

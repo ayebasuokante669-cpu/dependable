@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    <span class="numeric">{{ student.admission_number }}</span>
+    &middot; {{ student.school_class.display_name }}
+    {% if position.term %}&middot; {{ position.term.name }}{% endif %}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{{ student.get_absolute_url }}" class="btn btn-ghost text-sm">
+    <span class="hidden sm:inline">Student record</span>
+    <span class="sm:hidden">Back</span>
+  </a>
+  {% if can_record %}
+    <a href="{% url 'payments:record' %}?student={{ student.pk }}"
+       class="btn btn-primary text-sm">
+      <span class="hidden sm:inline">Record</span> payment
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-5 lg:grid-cols-3">
+
+  <section class="card overflow-hidden lg:col-span-2">
+    <div class="border-b border-ink-200 px-5 py-3">
+      <h2 class="text-sm font-semibold text-ink-900">
+        Every payment recorded for {{ student.first_name }}
+      </h2>
+      <p class="mt-0.5 text-xs text-ink-500">
+        All terms, newest first. Voided rows are kept and struck through.
+      </p>
+    </div>
+    {% include "payments/_history_table.html" %}
+  </section>
+
+  <div class="space-y-5">
+    <section class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-3">
+        <h2 class="text-sm font-semibold text-ink-900">This term</h2>
+        <p class="mt-0.5 text-xs text-ink-500">
+          {% if position.term %}{{ position.term.name }}
+          {% else %}No current term{% endif %}
+        </p>
+      </div>
+      {% if position.is_priced %}
+        <dl class="divide-y divide-ink-200">
+          <div class="flex items-baseline justify-between gap-3 px-5 py-3">
+            <dt class="text-sm text-ink-600">Expected</dt>
+            <dd class="numeric text-sm text-ink-900">{{ position.expected|naira }}</dd>
+          </div>
+          <div class="flex items-baseline justify-between gap-3 px-5 py-3">
+            <dt class="text-sm text-ink-600">Confirmed</dt>
+            <dd class="numeric text-sm text-ink-900">{{ position.paid|naira }}</dd>
+          </div>
+          <div class="flex items-baseline justify-between gap-3 bg-ink-50 px-5 py-3">
+            <dt class="text-sm font-semibold text-ink-900">Outstanding</dt>
+            <dd class="numeric text-lg font-semibold
+                       {% if position.outstanding %}text-overdue-strong
+                       {% else %}text-paid-strong{% endif %}">
+              {{ position.outstanding|naira }}
+            </dd>
+          </div>
+        </dl>
+        <div class="flex flex-wrap items-center gap-2 border-t border-ink-200
+                    px-5 py-3">
+          <span class="status-pill {{ position.pill_class }}">
+            {{ position.pill_label }}
+          </span>
+          {% if position.due_date %}
+            <span class="text-xs text-ink-500">
+              Due {{ position.due_date|date:"j M Y" }}
+            </span>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="empty-state py-8">
+          <p class="text-sm text-ink-600">
+            {{ student.school_class.display_name }} has no fees set for this
+            term, so there is no balance to show.
+          </p>
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="card p-5">
+      <h2 class="text-sm font-semibold text-ink-900">Parent / guardian</h2>
+      <p class="mt-2 text-sm text-ink-900">{{ student.parent_name }}</p>
+      <a href="{{ student.parent_phone_link }}"
+         class="numeric text-sm text-brand-800 hover:underline">
+        {{ student.parent_phone_display }}
+      </a>
+      {% if "send_messages" in capabilities %}
+        <a href="{% url 'messaging:compose' %}?audience=students"
+           class="btn btn-secondary mt-4 w-full text-sm">Message parents</a>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

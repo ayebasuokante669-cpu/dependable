@@ -220,15 +220,39 @@ class NavigationTests(TestCase):
         self.assertIn("Platform", labels)
 
     def test_unbuilt_destinations_render_as_unavailable(self):
+        """The shell stays honest while feature screens are still being built.
+
+        The pair moves as features land: Payments was the unbuilt half of this
+        assertion until the payments app shipped, and Reports is next.
+        """
         sections = {s.label: s.items for s in nav_for(Role.SCHOOL_OWNER, "/")}
-        branches = next(i for i in sections["School"] if i.label == "Branches")
         students = next(i for i in sections["School"] if i.label == "Students")
-        self.assertTrue(branches.available)  # admin URL exists today
-        self.assertFalse(students.available)  # feature screen not built yet
+        payments = next(i for i in sections["Finance"] if i.label == "Payments")
+        reports = next(i for i in sections["Overview"] if i.label == "Reports")
+        self.assertTrue(students.available)   # roster screens exist now
+        self.assertTrue(payments.available)   # and payments screens do too
+        self.assertFalse(reports.available)   # feature screen not built yet
 
     def test_dashboard_is_marked_active_on_its_own_path(self):
-        dashboard = nav_for(Role.BURSAR, "/")[0].items[0]
+        from django.urls import reverse
+
+        from apps.core.navigation import home_url_name
+
+        # "/" is the public landing page now, so a role's dashboard is wherever
+        # ROLE_HOME sends it -- the bursar's is the finance one.
+        home = reverse(home_url_name(Role.BURSAR))
+        dashboard = nav_for(Role.BURSAR, home)[0].items[0]
+        self.assertEqual(dashboard.href, home)
         self.assertTrue(dashboard.active)
+
+    def test_the_dashboard_entry_points_each_role_at_its_own(self):
+        hrefs = {
+            role: nav_for(role, "/")[0].items[0].href for role in Role.values
+        }
+        # Four roles, four destinations -- none of them sharing one screen.
+        self.assertEqual(len(set(hrefs.values())), len(hrefs))
+        self.assertEqual(hrefs[Role.BURSAR], "/finance/")
+        self.assertEqual(hrefs[Role.PLATFORM_OWNER], "/platform/")
 
     def test_anonymous_gets_no_navigation(self):
         self.assertEqual(nav_for(None), [])

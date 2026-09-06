@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% load money %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ page_obj.paginator.count }} student{{ page_obj.paginator.count|pluralize }}
+    {% if is_filtered %}matching{% else %}on the roster{% endif %}
+    {% if expected_on_page %}
+      &middot; <span class="numeric">{{ expected_on_page|naira }}</span> expected on this page
+    {% endif %}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  {% if "manage_students" in capabilities %}
+    <a href="{% url 'students:student_import' %}" class="btn btn-secondary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21
+                 18.75V16.5M7.5 7.5 12 3m0 0 4.5 4.5M12 3v13.5" />
+      </svg>
+      <span class="hidden sm:inline">Import from Excel</span>
+    </a>
+    <a href="{% url 'students:student_create' %}{% if filter_form.school_class.value %}?school_class={{ filter_form.school_class.value }}{% endif %}"
+       class="btn btn-primary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <span class="hidden sm:inline">New student</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+  {# ===== Search and filters ============================================== #}
+  <form method="get" class="card mb-5 p-4 sm:p-5">
+    <div class="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+      <div>
+        <label for="{{ filter_form.q.id_for_label }}" class="field-label">
+          {{ filter_form.q.label }}
+        </label>
+        {{ filter_form.q }}
+      </div>
+      <div>
+        <label for="{{ filter_form.school_class.id_for_label }}" class="field-label">
+          {{ filter_form.school_class.label }}
+        </label>
+        {{ filter_form.school_class }}
+      </div>
+      <div>
+        <label for="{{ filter_form.status.id_for_label }}" class="field-label">
+          {{ filter_form.status.label }}
+        </label>
+        {{ filter_form.status }}
+      </div>
+      <div class="flex gap-2">
+        <button type="submit" class="btn btn-secondary text-sm">Search</button>
+        {% if is_filtered %}
+          <a href="{% url 'students:student_list' %}" class="btn btn-ghost text-sm">Clear</a>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+
+  {% if rows %}
+    <div class="card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="table-head">
+            <tr>
+              <th scope="col" class="px-5 py-3 font-semibold">Adm. no.</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Student</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Class</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Parent phone</th>
+              <th scope="col" class="px-5 py-3 font-semibold">Fees this term</th>
+              {% if "manage_students" in capabilities %}
+                <th scope="col" class="px-5 py-3 text-right font-semibold">Actions</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ink-200">
+            {% for row in rows %}
+              <tr class="{% if not row.student.is_enrolled %}bg-ink-50/60{% endif %}">
+                <td class="numeric whitespace-nowrap px-5 py-3 text-ink-700">
+                  {{ row.student.admission_number }}
+                </td>
+                <td class="px-5 py-3">
+                  <a href="{{ row.student.get_absolute_url }}"
+                     class="font-medium text-brand-800 hover:underline">
+                    {{ row.student.formal_name }}
+                  </a>
+                  {% if not row.student.is_enrolled %}
+                    <span class="status-pill status-unpaid ml-1.5">
+                      {{ row.student.get_status_display }}
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="whitespace-nowrap px-5 py-3 text-ink-700">
+                  {{ row.student.school_class.display_name }}
+                </td>
+                <td class="whitespace-nowrap px-5 py-3">
+                  <a href="{{ row.student.parent_phone_link }}"
+                     class="numeric text-ink-700 hover:underline">
+                    {{ row.student.parent_phone_display }}
+                  </a>
+                </td>
+                <td class="whitespace-nowrap px-5 py-3">
+                  <div class="flex items-center gap-2">
+                    <span class="status-pill {{ row.position.pill_class }}">
+                      {{ row.position.pill_label }}
+                    </span>
+                    {% if row.position.is_priced %}
+                      <span class="numeric text-ink-700">{{ row.position.outstanding|naira }}</span>
+                    {% endif %}
+                  </div>
+                </td>
+                {% if "manage_students" in capabilities %}
+                  <td class="px-5 py-3">
+                    <div class="flex justify-end gap-1">
+                      <a href="{% url 'students:student_update' row.student.pk %}"
+                         class="btn btn-ghost text-xs">Edit</a>
+                      <a href="{% url 'students:student_delete' row.student.pk %}"
+                         class="btn btn-ghost text-xs text-overdue-strong
+                                hover:bg-overdue-soft">Remove</a>
+                    </div>
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if not current_terms %}
+        <p class="border-t border-ink-200 bg-partial-soft px-5 py-3 text-xs text-partial-strong">
+          No term is marked current, so there is nothing to price this roster
+          against. Set one under Terms.
+        </p>
+      {% elif unpriced_on_page %}
+        <p class="border-t border-ink-200 bg-partial-soft px-5 py-3 text-xs text-partial-strong">
+          {{ unpriced_on_page }} student{{ unpriced_on_page|pluralize }} on this page
+          {{ unpriced_on_page|pluralize:"is,are" }} in a class with no fees set for
+          this term.
+          {% if "manage_fees" in capabilities %}
+            <a href="{% url 'fees:structure_list' %}" class="font-semibold underline">
+              Set them
+            </a>.
+          {% endif %}
+        </p>
+      {% else %}
+        <p class="border-t border-ink-200 px-5 py-3 text-xs text-ink-500">
+          Balances are the full term fee until the payments layer lands — nothing
+          has been recorded against these students yet.
+        </p>
+      {% endif %}
+    </div>
+
+    {# ===== Pagination ==================================================== #}
+    {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="mt-5 flex items-center justify-between gap-3" aria-label="Pagination">
+        <p class="text-sm text-ink-600">
+          {{ page_obj.start_index }}&ndash;{{ page_obj.end_index }}
+          of {{ page_obj.paginator.count }}
+        </p>
+        <div class="flex gap-2">
+          {% if page_obj.has_previous %}
+            <a href="{% querystring page=page_obj.previous_page_number %}"
+               class="btn btn-secondary text-sm">Previous</a>
+          {% else %}
+            <span class="btn btn-secondary text-sm opacity-50" aria-disabled="true">Previous</span>
+          {% endif %}
+          <span class="btn btn-ghost text-sm" aria-current="page">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+          </span>
+          {% if page_obj.has_next %}
+            <a href="{% querystring page=page_obj.next_page_number %}"
+               class="btn btn-secondary text-sm">Next</a>
+          {% else %}
+            <span class="btn btn-secondary text-sm opacity-50" aria-disabled="true">Next</span>
+          {% endif %}
+        </div>
+      </nav>
+    {% endif %}
+
+  {% elif is_filtered %}
+    <div class="card empty-state">
+      <p class="text-base font-medium text-ink-700">No students match those filters</p>
+      <p class="mx-auto mt-1 max-w-md text-sm">
+        {% if total_count %}
+          There {{ total_count|pluralize:"is,are" }} {{ total_count }}
+          student{{ total_count|pluralize }} on the roster in total.
+        {% endif %}
+      </p>
+      <a href="{% url 'students:student_list' %}" class="btn btn-secondary mt-5 text-sm">
+        Clear filters
+      </a>
+    </div>
+  {% else %}
+    <div class="card empty-state">
+      <p class="text-base font-medium text-ink-700">No students yet</p>
+      <p class="mx-auto mt-1 max-w-md text-sm">
+        Enrol students one at a time, or import a roster you already keep in a
+        spreadsheet. Each one is placed in a class, which is what decides the
+        fees they are charged this term.
+      </p>
+      {% if "manage_students" in capabilities %}
+        <div class="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
+          <a href="{% url 'students:student_create' %}" class="btn btn-primary text-sm">
+            Enrol the first student
+          </a>
+          <a href="{% url 'students:student_import' %}" class="btn btn-secondary text-sm">
+            Import from Excel
+          </a>
+        </div>
+      {% else %}
+        <p class="mt-4 text-xs">Your role can view the roster but not change it.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

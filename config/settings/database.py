@@ -103,7 +103,7 @@ def get_database_config(base_dir: Path, *, allow_fallback: bool = True) -> dict:
         return postgres
 
     print(
-        f"[dependable] PostgreSQL at {postgres['HOST']}:{postgres['PORT']} is not "
+        f"[schoolcord] PostgreSQL at {postgres['HOST']}:{postgres['PORT']} is not "
         f"reachable - falling back to SQLite for local development. "
         f"Set DB_ENGINE=postgres to disable this fallback.",
         file=sys.stderr,

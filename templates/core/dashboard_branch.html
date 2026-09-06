@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ current_branch.name }}
+    {% if term %}&middot; {{ term.name }}{% else %}&middot; no current term{% endif %}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  {% if "manage_students" in capabilities %}
+    <a href="{% url 'students:student_create' %}" class="btn btn-primary text-sm">
+      <span class="hidden sm:inline">New</span> student
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {% include "core/_setup_banner.html" %}
+
+  <div class="grid gap-4 sm:grid-cols-3">
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Students enrolled</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ student_count }}</div>
+      <a href="{% url 'students:student_list' %}"
+         class="mt-1 inline-block text-xs font-medium text-brand-700 hover:underline">
+        View roster
+      </a>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Classes</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ class_count }}</div>
+      <a href="{% url 'academics:class_list' %}"
+         class="mt-1 inline-block text-xs font-medium text-brand-700 hover:underline">
+        Manage classes
+      </a>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Subjects</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ subject_count }}</div>
+      <a href="{% url 'academics:subject_list' %}"
+         class="mt-1 inline-block text-xs font-medium text-brand-700 hover:underline">
+        Manage subjects
+      </a>
+    </div>
+  </div>
+
+  {% if not term %}
+    <div class="card border-partial/30 bg-partial-soft px-5 py-4 text-sm text-partial-strong">
+      <p class="font-semibold">No term is marked current for this campus.</p>
+      <p class="mt-0.5">
+        Fees are always priced against a term, so nothing on this campus can be
+        billed until one is set.
+      </p>
+    </div>
+  {% elif unpriced_classes %}
+    <div class="card border-partial/30 bg-partial-soft px-5 py-4 text-sm text-partial-strong">
+      <p class="font-semibold">
+        {{ unpriced_classes|length }} class{{ unpriced_classes|length|pluralize:"es" }}
+        with students but no fees for {{ term.name }}.
+      </p>
+      <p class="mt-0.5">
+        Those children have no expected fee this term.
+        {% if "manage_fees" in capabilities %}
+          <a href="{% url 'fees:structure_list' %}" class="font-semibold underline">
+            Set their fees
+          </a>.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
+      <h2 class="text-sm font-semibold text-ink-900">Classes on this campus</h2>
+      <a href="{% url 'students:student_list' %}" class="btn btn-secondary text-xs">
+        Full roster
+      </a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="table-head">
+          <tr>
+            <th scope="col" class="px-5 py-3 font-semibold">Class</th>
+            <th scope="col" class="px-5 py-3 text-right font-semibold">Students</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Fees this term</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-ink-200">
+          {% for row in classes %}
+            <tr>
+              <td class="px-5 py-3 font-medium text-ink-900">
+                {{ row.klass.display_name }}
+              </td>
+              <td class="numeric px-5 py-3 text-right text-ink-700">
+                {{ row.klass.students_count }}
+              </td>
+              <td class="px-5 py-3">
+                {% if row.is_priced %}
+                  <span class="status-pill status-paid">Set</span>
+                {% else %}
+                  <span class="status-pill status-unpaid">No fees set</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="px-5 py-8 text-center text-ink-500">
+                No classes set up yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

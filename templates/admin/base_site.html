@@ -1,0 +1,66 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+A light SCHOOLCORD skin over Django's admin.
+
+Deliberately not a rebuild: the admin is an internal tool for support work, and
+every hour spent restyling it is an hour not spent on the screens a school
+actually uses. This stops it looking like a stock Django install -- brand blue
+in the header and breadcrumbs, and the same 8px corner the design system uses
+everywhere else. Nothing structural, and no override of the branding block:
+`admin.site.site_header` in config/urls.py already reads SCHOOLCORD from
+apps/core/branding.py, so the name arrives on its own.
+
+Extending a template of the same name is the documented way to override an
+admin template -- Django's loader continues past this file when resolving the
+parent, so this is not recursion.
+
+The hex values are literal rather than the Tailwind custom properties because
+the admin does not load app.css, and pulling the whole stylesheet in to colour
+one bar would be the rebuild this is avoiding. They match --color-brand-* in
+assets/app.css; if those move, move these.
+{% endcomment %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    :root {
+      --schoolcord-brand-900: #0f2547;
+      --schoolcord-brand-700: #1d3f79;
+      --schoolcord-brand-500: #3566b3;
+      --schoolcord-brand-100: #d9e5f6;
+
+      /* Django's own theme variables: setting these carries the brand through
+         the header, links and selected rows without overriding each rule. */
+      --primary: var(--schoolcord-brand-900);
+      --secondary: var(--schoolcord-brand-900);
+      --accent: var(--schoolcord-brand-100);
+      --link-fg: var(--schoolcord-brand-700);
+      --link-hover-color: var(--schoolcord-brand-500);
+      --header-bg: var(--schoolcord-brand-900);
+      --header-color: #ffffff;
+      --header-branding-color: #ffffff;
+      --header-link-color: #ffffff;
+      --breadcrumbs-bg: var(--schoolcord-brand-700);
+      --breadcrumbs-fg: var(--schoolcord-brand-100);
+      --breadcrumbs-link-fg: #ffffff;
+      --default-button-bg: var(--schoolcord-brand-700);
+      --default-button-hover-bg: var(--schoolcord-brand-900);
+    }
+
+    #site-name a:link,
+    #site-name a:visited {
+      color: #fff;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    /* The house corner, so the admin does not read as a different product. */
+    .button,
+    input[type="submit"],
+    input[type="button"],
+    .submit-row input,
+    a.button {
+      border-radius: 8px;
+    }
+  </style>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    <span class="numeric">{{ applicant.reference }}</span>
+    &middot; {{ applicant.applying_for }}
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Entrance assessment</h2>
+        <p class="field-hint mt-0.5">
+          Book the date now and come back for the score. Recording an outcome
+          moves {{ applicant.first_name }} on to the assessed stage, ready for a
+          decision.
+        </p>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.scheduled_for %}
+          {% include "partials/_field.html" with field=form.sat_on %}
+        </div>
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.score %}
+          {% include "partials/_field.html" with field=form.max_score %}
+        </div>
+        {% include "partials/_field.html" with field=form.outcome %}
+        {% include "partials/_field.html" with field=form.notes %}
+      </div>
+    </div>
+
+    <div class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <a href="{{ applicant.get_absolute_url }}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">Save assessment</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

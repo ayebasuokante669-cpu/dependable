@@ -1,0 +1,26 @@
+{% load static %}{% comment %}
+SCHOOLCORD's official logo: the product's mark, not a tenant's.
+
+Two points with one cord between them -- the school and the parent on the same
+line. Built from the brand tokens (#EEF3FB ground, #0F2A52 / #1B4680 / #2E63B0
+marks), so it sits in the palette rather than beside it.
+
+Served from static as SVG with a PNG fallback rather than inlined, because it
+is now a real asset with a filename: one file to replace when the mark is
+revised, and one cached request instead of the same markup on every page.
+
+The mark carries its own light ground, so unlike the placeholder it replaced it
+needs no dark/light variant -- it reads on the brand-900 sidebar and on the
+white auth card alike. Any `tone` passed by a caller is ignored on purpose.
+
+Params:
+  size  Tailwind size class for the box. Default size-9.
+  alt   Override the alt text. Default "" -- the mark almost always sits beside
+        the wordmark, where announcing it twice helps nobody.
+{% endcomment %}
+<img src="{% static 'img/schoolcord-logo.svg' %}"
+     onerror="this.onerror=null;this.src='{% static 'img/schoolcord-logo.png' %}'"
+     alt="{{ alt|default:'' }}"
+     width="112" height="112"
+     class="{{ size|default:'size-9' }} shrink-0 rounded-md"
+     {% if not alt %}aria-hidden="true"{% endif %}>

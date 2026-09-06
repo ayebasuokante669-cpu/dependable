@@ -1,0 +1,48 @@
+{% extends "registration/_auth_base.html" %}
+
+{% block title %}Create your school account{% endblock %}
+{% block auth_width %}max-w-md{% endblock %}
+{% block auth_heading %}Create your school account{% endblock %}
+
+{% block auth_intro %}
+  <p class="mt-1 text-sm text-ink-600">
+    Step 1 of 5. This creates your school, its first campus, and your owner
+    account — then walks you through the rest.
+  </p>
+{% endblock %}
+
+{% block auth_body %}
+  {% if form.non_field_errors %}
+    <div class="mt-4 rounded-md border border-overdue/30 bg-overdue-soft px-3 py-2.5
+                text-sm text-overdue-strong" role="alert">
+      {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" class="mt-5 space-y-5" novalidate>
+    {% csrf_token %}
+
+    {% include "partials/_field.html" with field=form.school_name %}
+    {% include "partials/_field.html" with field=form.full_name %}
+    {% include "partials/_field.html" with field=form.email %}
+    {% include "partials/_field.html" with field=form.password %}
+    {% include "partials/_field.html" with field=form.password_confirm %}
+
+    <button type="submit" class="btn btn-primary w-full">
+      Create account and continue
+    </button>
+  </form>
+
+  <p class="mt-4 text-xs text-ink-500">
+    You will be signed in as the school owner, able to see every campus you add.
+  </p>
+{% endblock %}
+
+{% block auth_footer %}
+  <p class="mt-6 text-center text-sm text-ink-600">
+    Already have an account?
+    <a href="{% url 'login' %}" class="font-semibold text-brand-700 hover:underline">
+      Sign in
+    </a>
+  </p>
+{% endblock %}

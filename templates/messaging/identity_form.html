@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ school.name }} &middot;
+    {% if is_new %}not registered yet{% else %}currently
+      {{ config.get_status_display|lower }}{% endif %}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'messaging:identity' %}" class="btn btn-ghost text-sm">Cancel</a>
+{% endblock %}
+
+{% block content %}
+<form method="post" class="mx-auto max-w-3xl space-y-5">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="card border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                text-overdue-strong">
+      {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+  {% endif %}
+
+  <section class="card overflow-hidden">
+    <div class="border-b border-ink-200 px-5 py-3">
+      <h2 class="text-sm font-semibold text-ink-900">The name parents see</h2>
+      <p class="mt-0.5 text-xs text-ink-500">
+        This is what appears where a contact name normally would on the parent's
+        handset.
+      </p>
+    </div>
+    <div class="grid gap-4 px-5 py-5 sm:grid-cols-2">
+      {% include "partials/_field.html" with field=form.sender_id %}
+      {% include "partials/_field.html" with field=form.provider %}
+    </div>
+  </section>
+
+  <section class="card overflow-hidden">
+    <div class="border-b border-ink-200 px-5 py-3">
+      <h2 class="text-sm font-semibold text-ink-900">Approval</h2>
+      <p class="mt-0.5 text-xs text-ink-500">
+        Nothing sends under this Sender ID until it is approved. Approve it once
+        the gateway has confirmed the registration — not before, or the first
+        batch bounces.
+      </p>
+    </div>
+    <div class="grid gap-4 px-5 py-5">
+      {% include "partials/_field.html" with field=form.status %}
+      {% include "partials/_field.html" with field=form.status_note %}
+    </div>
+  </section>
+
+  <section class="card overflow-hidden">
+    <div class="border-b border-ink-200 px-5 py-3">
+      <h2 class="text-sm font-semibold text-ink-900">Gateway account</h2>
+      <p class="mt-0.5 text-xs text-ink-500">
+        Leave both blank for the pilot arrangement: the platform's master
+        account sends, under this school's Sender ID. Fill them in only once the
+        school has taken out its own account with the gateway.
+      </p>
+    </div>
+    <div class="grid gap-4 px-5 py-5 sm:grid-cols-2">
+      {% include "partials/_field.html" with field=form.api_key %}
+      {% include "partials/_field.html" with field=form.account_reference %}
+    </div>
+  </section>
+
+  <div class="flex flex-wrap gap-2">
+    <button type="submit" class="btn btn-primary text-sm">
+      {% if is_new %}Register Sender ID{% else %}Save{% endif %}
+    </button>
+    <a href="{% url 'messaging:identity' %}" class="btn btn-ghost text-sm">Cancel</a>
+  </div>
+
+  <p class="text-xs text-ink-500">
+    A Sender ID is registered with the gateway, not with us. Setting one here
+    records what {{ school.name }} sends as; it does not create the registration.
+  </p>
+</form>
+{% endblock %}

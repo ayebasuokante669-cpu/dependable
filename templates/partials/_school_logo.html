@@ -1,0 +1,27 @@
+{% comment %}
+A tenant school's own logo, falling back to the initial-in-a-coloured-square
+this design system already uses for students and for the brand.
+
+The fallback is not a placeholder to be replaced later -- most schools will
+never upload a logo, and an initial square is a better answer than a broken
+image or an empty box. It is the same pattern as the student avatar on the
+roster, so a school that has not uploaded one still looks deliberate.
+
+Params:
+  school  The School. Required.
+  size    Tailwind size class for the box. Default size-9.
+  rounded Corner class. Default rounded-md.
+  tone    "light" for the dark sidebar; anything else for light backgrounds.
+{% endcomment %}
+{% if school.logo %}
+  <img src="{{ school.logo.url }}" alt="{{ school.name }} logo"
+       class="{{ size|default:'size-9' }} shrink-0 {{ rounded|default:'rounded-md' }}
+              bg-white object-contain
+              {% if tone != 'light' %}border border-ink-200{% endif %}">
+{% else %}
+  <span class="grid {{ size|default:'size-9' }} shrink-0 place-items-center
+               {{ rounded|default:'rounded-md' }} text-sm font-semibold
+               {% if tone == 'light' %}bg-white/15 text-white
+               {% else %}bg-brand-100 text-brand-800{% endif %}"
+        aria-hidden="true">{{ school.initial }}</span>
+{% endif %}
