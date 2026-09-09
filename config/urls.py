@@ -25,6 +25,8 @@ urlpatterns = [
         BrandedPasswordResetView.as_view(),
         name="password_reset",
     ),
+    # Ours, and before the catch-all auth include so the name resolves here.
+    path("accounts/", include("apps.accounts.urls")),
     path("accounts/", include("django.contrib.auth.urls")),
     path("academics/", include("apps.academics.urls")),
     path("fees/", include("apps.fees.urls")),

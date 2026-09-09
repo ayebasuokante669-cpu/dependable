@@ -7,12 +7,33 @@ from .base import BASE_DIR, PRODUCT_NAME, SUPPORT_EMAIL, env_list
 from .database import get_database_config
 
 DEBUG = False
+
+# --- Host and origin allow-lists ----------------------------------------
+# The env vars carry the domains we own and can write down -- theschoolcord.com
+# and friends. The platform's own address is appended here instead: Railway
+# generates it (schoolcord-production.up.railway.app) and exposes it as
+# RAILWAY_PUBLIC_DOMAIN, so pinning it into an env var would mean re-editing the
+# dashboard every time the service is renamed or recreated. Its healthcheck hits
+# that host, so a stale value is a failed deploy rather than a cosmetic problem.
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS")
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
+
+_platform_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+if _platform_domain and _platform_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_platform_domain)
+    # Django matches CSRF origins on scheme://host, so this needs the https://
+    # prefix that the ALLOWED_HOSTS entry must not have.
+    _platform_origin = f"https://{_platform_domain}"
+    if _platform_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_platform_origin)
 
 DATABASES = {"default": get_database_config(BASE_DIR, allow_fallback=False)}
 DATABASES["default"]["CONN_MAX_AGE"] = int(os.environ.get("DB_CONN_MAX_AGE", "60"))
 
 SECURE_SSL_REDIRECT = True
+# Railway terminates TLS at its edge and forwards plain HTTP to the container,
+# so request.is_secure() is False without this -- which would turn the redirect
+# above into an infinite loop and stop any cookie being marked secure.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
@@ -21,8 +42,6 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
-
-CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "")

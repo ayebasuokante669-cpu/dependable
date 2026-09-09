@@ -64,3 +64,20 @@ assets/app.css; if those move, move these.
     }
   </style>
 {% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  {% comment %}
+  Staff accounts are created here, in the admin's add-user form -- so the
+  Generate button and the reveal toggle have to reach it, not just the app's
+  own screens. static/js/password.js finds the fields by their
+  autocomplete="new-password" attribute, which Django's UserCreationForm
+  already sets, so nothing in the admin's markup has to change.
+
+  Only the password partial is included, not the app shell's JavaScript: the
+  admin has its own navigation and its own light/dark handling, and this has no
+  business touching either. The partial's stylesheet is standalone for the same
+  reason app.css is kept out of here -- see static/css/password-controls.css.
+  {% endcomment %}
+  {% include "partials/_password_policy.html" %}
+{% endblock %}
