@@ -33,8 +33,8 @@
   --color-ink-100: #eef1f6;
   --color-ink-200: #dfe4ed;
   --color-ink-300: #c3cbd9;
-  --color-ink-400: #94a0b5;
-  --color-ink-500: #6b7891;
+  --color-ink-400: #8290a8;
+  --color-ink-500: #626e88;
   --color-ink-600: #5a6b85;
   --color-ink-700: #435065;
   --color-ink-800: #2e3849;
@@ -85,6 +85,123 @@
 
   /* --- Layout ----------------------------------------------------------- */
   --spacing-sidebar: 16rem;
+
+  /* --- Semantic surfaces ------------------------------------------------
+     The ramps above are literal colours; these say what a colour is *for*.
+     Only these and the ramps are re-declared for dark mode, which is why no
+     component or template needs a `dark:` variant to follow the theme.
+
+     `surface` is a card or an input -- the plane content sits on, one step
+     above the page ground (ink-50). It replaces bare `bg-white`, which cannot
+     follow a theme because white is white. */
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+
+  /* The deep navy plane: sidebar, mobile drawer, closing CTA. Stays dark in
+     both themes -- it is the constant the rest of the UI is measured against
+     -- so its foreground tokens live here rather than borrowing brand-100/200,
+     which invert. */
+  --color-panel: #0f2547;
+  --color-panel-fg: #ffffff;
+  --color-panel-muted: #b8cdec;
+  --color-panel-subtle: #8badde;
+  --color-scrim: rgb(9 23 50 / 0.6);
+
+  /* The action colour. Separate from the brand ramp because the ramp inverts
+     for dark mode and a primary button must not: it has to keep enough
+     contrast against its own label at every step. */
+  --color-accent: #1d3f79;
+  --color-accent-hover: #1a3563;
+  --color-accent-active: #0f2547;
+  --color-on-accent: #ffffff;
+
+  /* --- Motion -----------------------------------------------------------
+     Two durations and two curves, so every transition in the app is one of a
+     handful of recognisable movements rather than a per-component guess.
+     `--ease-spring` overshoots slightly; reserved for the card fan. */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.42, 0.64, 1);
+  --duration-quick: 160ms;
+  --duration-settle: 380ms;
+}
+
+/* ==========================================================================
+   Dark theme
+   Nothing here styles a component. It re-points the same tokens the light
+   theme uses, so every existing `text-ink-900` / `bg-brand-50` / `.status-pill`
+   follows along untouched.
+
+   The ink ramp is inverted in meaning, not mirrored in value: ink-50 stays
+   "furthest back" and ink-900 stays "most prominent", they just swap which end
+   of the luminance range that is. Same for brand. Every pair below is checked
+   against WCAG AA in both themes -- see `npm run check:contrast`.
+   ========================================================================== */
+:root[data-theme="dark"] {
+  /* Brand: inverted. `text-brand-900` is a heading in both themes; here that
+     means a pale blue, and `bg-brand-50` a deep one. */
+  --color-brand-50: #16243a;
+  --color-brand-100: #1c3050;
+  --color-brand-200: #24406b;
+  --color-brand-300: #2f5389;
+  --color-brand-400: #4272ad;
+  --color-brand-500: #6a9bdd;
+  --color-brand-600: #86b0e6;
+  --color-brand-700: #9dc0ee;
+  --color-brand-800: #bcd5f5;
+  --color-brand-900: #dbe9fb;
+  --color-brand-950: #eef5fe;
+
+  /* Neutrals: ink-50 is the page ground, ink-900 the primary text. */
+  --color-ink-50: #0e131b;
+  --color-ink-100: #1a222e;
+  --color-ink-200: #26313f;
+  --color-ink-300: #384555;
+  --color-ink-400: #7b899d;
+  --color-ink-500: #a3b0c3;
+  --color-ink-600: #bcc8d8;
+  --color-ink-700: #d2dce8;
+  --color-ink-800: #e4ebf4;
+  --color-ink-900: #f4f8fc;
+
+  /* Payment status: the soft/strong relationship holds, both ends move. A
+     status pill is a light label on a deep tint instead of the reverse. */
+  --color-paid: #34b27c;
+  --color-paid-soft: #0f2a20;
+  --color-paid-strong: #63d6a3;
+
+  --color-partial: #d99a2b;
+  --color-partial-soft: #2c2211;
+  --color-partial-strong: #f2bc60;
+
+  --color-unpaid: #8b9ab0;
+  --color-unpaid-soft: #1b222d;
+  --color-unpaid-strong: #bcc8d8;
+
+  --color-overdue: #c93f3f;
+  --color-overdue-soft: #2d1719;
+  --color-overdue-strong: #f39191;
+
+  --color-surface: #171f2b;
+  --color-surface-raised: #1e2836;
+
+  /* The panel stays dark, but lifts away from the darker page ground so the
+     sidebar still reads as a separate plane rather than merging with it. */
+  --color-panel: #0b1524;
+  --color-panel-fg: #ffffff;
+  --color-panel-muted: #a8bdda;
+  --color-panel-subtle: #7d96ba;
+  --color-scrim: rgb(3 8 16 / 0.72);
+
+  /* A mid blue, not a pale one: the label on top stays white in both themes. */
+  --color-accent: #3566b3;
+  --color-accent-hover: #3f74c4;
+  --color-accent-active: #2b5599;
+  --color-on-accent: #ffffff;
+
+  /* Shadow does less work on a dark ground -- depth comes from the surface
+     step instead -- so these deepen rather than spread. */
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+  --shadow-panel: 0 10px 30px -12px rgb(0 0 0 / 0.7);
 }
 
 /* ==========================================================================
@@ -100,6 +217,32 @@
     color: var(--color-ink-900);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* The theme swap itself is the one place a page-wide transition earns its
+     keep: without it every surface hard-cuts at once, which reads as a flash.
+     Scoped to colour so no layout property is ever animated. */
+  html.theme-anim,
+  html.theme-anim body,
+  html.theme-anim .card,
+  html.theme-anim header,
+  html.theme-anim aside {
+    transition: background-color var(--duration-quick) var(--ease-out),
+                border-color var(--duration-quick) var(--ease-out),
+                color var(--duration-quick) var(--ease-out);
+  }
+
+  /* One global opt-out, honoured by every component below. Motion is removed;
+     nothing is hidden, and no state becomes unreachable. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   /* A visible, brand-coloured focus ring everywhere -- never remove it. */
@@ -123,17 +266,32 @@
      accepts real utilities, so variants layer on rather than extend. */
   .btn {
     @apply inline-flex items-center justify-center gap-2 min-h-touch px-4
-           rounded-md font-medium text-sm transition-colors
+           rounded-md font-medium text-sm
            disabled:opacity-50 disabled:pointer-events-none;
+    /* Transform is listed but only ever moved a single pixel on press: the
+       feedback should read as the surface taking the weight, not as a bounce. */
+    transition: background-color var(--duration-quick) var(--ease-out),
+                border-color var(--duration-quick) var(--ease-out),
+                color var(--duration-quick) var(--ease-out),
+                box-shadow var(--duration-quick) var(--ease-out),
+                transform var(--duration-quick) var(--ease-out);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: translateY(1px);
   }
 
   .btn-primary {
-    @apply bg-brand-700 text-white hover:bg-brand-800 active:bg-brand-900;
+    @apply bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-active;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    box-shadow: 0 2px 8px -2px var(--color-accent);
   }
 
   .btn-secondary {
-    @apply bg-white text-brand-800 border border-ink-200
-           hover:bg-ink-50 active:bg-ink-100;
+    @apply bg-surface text-brand-800 border border-ink-200
+           hover:bg-ink-50 hover:border-ink-300 active:bg-ink-100;
   }
 
   .btn-ghost {
@@ -142,6 +300,24 @@
 
   .btn-danger {
     @apply bg-overdue text-white hover:bg-overdue-strong;
+  }
+
+  /* Sits on the navy panel, which is dark in both themes -- so it inverts
+     against the panel rather than against the page. */
+  .btn-on-panel {
+    @apply bg-panel-fg text-brand-900;
+  }
+
+  :root[data-theme="dark"] .btn-on-panel {
+    @apply bg-white/15 text-panel-fg;
+  }
+
+  .btn-on-panel:hover:not(:disabled) {
+    @apply bg-brand-50;
+  }
+
+  :root[data-theme="dark"] .btn-on-panel:hover:not(:disabled) {
+    @apply bg-white/25;
   }
 
   /* A line item ticked for deletion but still on screen, so a mis-click can be
@@ -155,8 +331,48 @@
   }
 
   .card {
-    @apply bg-white rounded-lg border border-ink-200 shadow-card;
+    @apply bg-surface rounded-lg border border-ink-200 shadow-card;
   }
+
+  /* A card that goes somewhere or opens something. The lift is 2px and the
+     shadow does most of the talking -- enough to read as "this responds",
+     not enough to shift the row around it. */
+  .card-interactive {
+    @apply cursor-pointer;
+    transition: transform var(--duration-quick) var(--ease-out),
+                box-shadow var(--duration-quick) var(--ease-out),
+                border-color var(--duration-quick) var(--ease-out);
+  }
+
+  .card-interactive:hover {
+    @apply border-ink-300;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .card-interactive:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* The two-tone treatment: a tinted band keyed to the group's meaning, and a
+     plain surface under it. The tint comes from a status token, so a grouped
+     card is legible in both themes for the same reason a pill is. */
+  .card-tone {
+    @apply bg-surface rounded-lg border border-ink-200 shadow-card overflow-hidden;
+  }
+
+  .card-tone-head {
+    @apply flex items-center gap-3 px-5 py-3.5 border-b border-ink-200;
+    background-color: var(--tone-soft, var(--color-ink-50));
+    color: var(--tone-strong, var(--color-ink-900));
+  }
+
+  .tone-brand  { --tone-soft: var(--color-brand-50);   --tone-strong: var(--color-brand-900); }
+  .tone-paid   { --tone-soft: var(--color-paid-soft);   --tone-strong: var(--color-paid-strong); }
+  .tone-partial{ --tone-soft: var(--color-partial-soft);--tone-strong: var(--color-partial-strong); }
+  .tone-unpaid { --tone-soft: var(--color-unpaid-soft); --tone-strong: var(--color-unpaid-strong); }
+  .tone-overdue{ --tone-soft: var(--color-overdue-soft);--tone-strong: var(--color-overdue-strong); }
 
   .field-label {
     @apply block text-sm font-medium text-ink-700 mb-1.5;
@@ -164,16 +380,22 @@
 
   .field-input {
     @apply block w-full min-h-touch px-3 rounded-md border border-ink-300
-           bg-white text-ink-900 placeholder:text-ink-400
+           bg-surface text-ink-900 placeholder:text-ink-400
            focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20
            focus:outline-none;
+    transition: border-color var(--duration-quick) var(--ease-out),
+                box-shadow var(--duration-quick) var(--ease-out),
+                background-color var(--duration-quick) var(--ease-out);
   }
 
   .field-textarea {
     @apply block w-full py-2 px-3 rounded-md border border-ink-300
-           bg-white text-ink-900 placeholder:text-ink-400
+           bg-surface text-ink-900 placeholder:text-ink-400
            focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20
            focus:outline-none;
+    transition: border-color var(--duration-quick) var(--ease-out),
+                box-shadow var(--duration-quick) var(--ease-out),
+                background-color var(--duration-quick) var(--ease-out);
   }
 
   .field-checkbox {
@@ -186,6 +408,7 @@
   .check-row {
     @apply flex items-center gap-3 min-h-touch px-3 rounded-md cursor-pointer
            hover:bg-ink-50;
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   .field-error {
@@ -213,22 +436,22 @@
   /* Navigation ---------------------------------------------------------- */
   .nav-link {
     @apply flex items-center gap-3 min-h-touch px-3 rounded-md text-sm
-           font-medium text-brand-100 transition-colors
-           hover:bg-white/10 hover:text-white;
+           font-medium text-panel-muted transition-colors
+           hover:bg-white/10 hover:text-panel-fg;
   }
 
   .nav-link-active {
-    @apply bg-white/15 text-white;
+    @apply bg-white/15 text-panel-fg;
   }
 
   .nav-link-disabled {
-    @apply text-brand-300/60 cursor-not-allowed hover:bg-transparent
-           hover:text-brand-300/60;
+    @apply text-panel-subtle/60 cursor-not-allowed hover:bg-transparent
+           hover:text-panel-subtle/60;
   }
 
   .nav-section-label {
     @apply px-3 pt-5 pb-1 text-[11px] font-semibold uppercase
-           tracking-wider text-brand-300;
+           tracking-wider text-panel-subtle;
   }
 
   /* Payment status pills -------------------------------------------------
@@ -249,4 +472,232 @@
   .numeric {
     @apply font-mono tabular-nums;
   }
+
+  /* --- Fan: stacked cards that spread ------------------------------------
+     The four setup steps arrive as one pile and open into the grid.
+
+     The layout is *always* the grid -- the pile is transforms applied on top
+     of it, measured from the real grid positions by js/ui.js. Nothing is
+     positioned absolutely and nothing is hidden, so with JS off, at any
+     breakpoint, or under reduced motion, what renders is simply the four
+     cards in a row. That also keeps every card in the accessibility tree in
+     both states: the pile is a visual arrangement, not a disclosure. */
+  .fan-item {
+    transition: transform var(--duration-settle) var(--ease-spring),
+                box-shadow var(--duration-settle) var(--ease-out),
+                opacity var(--duration-quick) var(--ease-out);
+    will-change: transform;
+  }
+
+  /* Only while stacked: the pile reads as depth, so the cards behind take a
+     deeper shadow and the top one sits proud of them. */
+  .is-stacked .fan-item {
+    box-shadow: var(--shadow-panel);
+  }
+
+  .fan-trigger {
+    transition: transform var(--duration-quick) var(--ease-out),
+                opacity var(--duration-quick) var(--ease-out);
+  }
+
+  .fan-trigger:hover {
+    transform: translateY(-2px);
+  }
+
+  /* Crops the grid's reserved height down to the pile's, and animates the
+     change so the section below slides rather than jumps. Height is set from
+     JS because only JS knows what the grid measured. */
+  .fan-viewport {
+    transition: height var(--duration-settle) var(--ease-out);
+  }
+
+  /* Set for one reflow while the deck re-forms off-screen, so it snaps rather
+     than animating somewhere nobody is looking -- and is not still moving if
+     you scroll straight back up to it. */
+  .fan-instant .fan-item,
+  .fan-instant .fan-viewport {
+    transition: none;
+  }
+
+  /* While piled, the whole deck is the target -- the button below it is for
+     keyboards and screen readers, not the only way in. */
+  .is-stacked .fan-viewport {
+    cursor: pointer;
+  }
+
+  .is-stacked .fan-viewport:hover .fan-item:first-child {
+    box-shadow: 0 18px 40px -16px var(--color-accent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* Reduced motion gets the answer, not the animation: the grid, always. */
+    .fan-item {
+      transform: none !important;
+    }
+  }
+
+  /* --- Disclosure: a card that opens ------------------------------------
+     Built on <details>/<summary>, so it is keyboard-operable, announced as
+     expandable, and open-by-default-able without a line of JavaScript. The
+     height animation is the grid 0fr->1fr technique -- `height: auto` is not
+     interpolable, a grid track is. */
+  .disclosure {
+    @apply bg-surface rounded-lg border border-ink-200 shadow-card overflow-hidden;
+    transition: border-color var(--duration-quick) var(--ease-out),
+                box-shadow var(--duration-quick) var(--ease-out);
+  }
+
+  .disclosure:hover {
+    @apply border-ink-300;
+  }
+
+  .disclosure[open] {
+    box-shadow: var(--shadow-panel);
+  }
+
+  .disclosure-summary {
+    @apply flex cursor-pointer list-none items-center gap-3 px-5 py-4
+           min-h-touch;
+    transition: background-color var(--duration-quick) var(--ease-out);
+  }
+
+  .disclosure-summary::-webkit-details-marker { display: none; }
+
+  .disclosure-summary:hover {
+    background-color: var(--color-ink-50);
+  }
+
+  /* The two-tone half: a head tinted by the group's tone class, over a plain
+     surface. The rule below wins over the hover tint because it is the later
+     declaration of the same property at equal specificity -- deliberate, so a
+     grouped card keeps its colour identity on hover. */
+  .disclosure-tinted .disclosure-summary,
+  .disclosure-tinted .disclosure-summary:hover {
+    background-color: var(--tone-soft, var(--color-ink-50));
+  }
+
+  /* The divider belongs to the open state: closed, the card is one block. */
+  .disclosure-tinted[open] .disclosure-summary {
+    border-bottom: 1px solid var(--color-ink-200);
+  }
+
+  /* The chevron is the affordance and the state indicator both. */
+  .disclosure-chevron {
+    @apply ml-auto size-5 shrink-0 text-ink-400;
+    transition: transform var(--duration-settle) var(--ease-spring),
+                color var(--duration-quick) var(--ease-out);
+  }
+
+  .disclosure[open] .disclosure-chevron {
+    transform: rotate(180deg);
+    @apply text-ink-600;
+  }
+
+  .disclosure-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows var(--duration-settle) var(--ease-out);
+  }
+
+  .disclosure[open] .disclosure-body {
+    grid-template-rows: 1fr;
+  }
+
+  .disclosure-body > div {
+    overflow: hidden;
+  }
+
+  /* --- Theme toggle ------------------------------------------------------
+     A two-position switch rather than a single icon button: the current theme
+     should be readable without having to remember what the icon means. */
+  .theme-toggle {
+    @apply inline-flex shrink-0 items-center gap-0.5 rounded-md border
+           border-ink-200 bg-surface p-0.5;
+  }
+
+  .theme-toggle-option {
+    @apply grid size-8 place-items-center rounded-sm text-ink-500;
+    transition: background-color var(--duration-quick) var(--ease-out),
+                color var(--duration-quick) var(--ease-out),
+                transform var(--duration-quick) var(--ease-out);
+  }
+
+  .theme-toggle-option:hover {
+    @apply text-ink-800;
+  }
+
+  .theme-toggle-option:active {
+    transform: scale(0.92);
+  }
+
+  .theme-toggle-option[aria-pressed="true"] {
+    @apply bg-brand-50 text-brand-800;
+  }
+
+  /* The click feedback. The theme change itself lands everywhere at once,
+     which is oddly easy to miss -- this is the one thing that confirms the
+     press landed on the control you aimed at. Replayed from JS by removing
+     and re-adding `.is-switching`; the global reduced-motion rule collapses
+     the duration to nothing. */
+  .theme-toggle-option.is-switching svg {
+    animation: theme-icon-moon var(--duration-settle) var(--ease-spring);
+  }
+
+  /* The sun turns the other way, so the two icons never look like the same
+     animation played on different glyphs. */
+  .theme-toggle-option[data-theme-set="light"].is-switching svg {
+    animation-name: theme-icon-sun;
+  }
+
+  /* On the panel the toggle sits on navy in both themes, so it takes panel
+     foregrounds rather than ink ones. */
+  .theme-toggle-on-panel {
+    @apply border-white/15 bg-white/10;
+  }
+
+  .theme-toggle-on-panel .theme-toggle-option {
+    @apply text-panel-muted;
+  }
+
+  .theme-toggle-on-panel .theme-toggle-option:hover {
+    @apply text-panel-fg;
+  }
+
+  .theme-toggle-on-panel .theme-toggle-option[aria-pressed="true"] {
+    @apply bg-white/20 text-panel-fg;
+  }
+
+  /* --- Reveal on scroll --------------------------------------------------
+     Landing only. Starts *visible* and is dimmed by js/ui.js on load, so a
+     failed script or a reduced-motion preference leaves the page fully
+     readable rather than blank. */
+  .reveal {
+    transition: opacity var(--duration-settle) var(--ease-out),
+                transform var(--duration-settle) var(--ease-out);
+  }
+
+  .reveal-armed {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  .reveal-in {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   Keyframes
+   Top level rather than inside @layer components: an animation referenced by
+   name should not depend on where the layer that declares it is ordered.
+   ========================================================================== */
+@keyframes theme-icon-sun {
+  from { transform: rotate(-110deg) scale(0.45); opacity: 0.3; }
+  to   { transform: none;                        opacity: 1; }
+}
+
+@keyframes theme-icon-moon {
+  from { transform: rotate(55deg) scale(0.45); opacity: 0.3; }
+  to   { transform: none;                      opacity: 1; }
 }

@@ -63,7 +63,8 @@
 
   <ol class="card divide-y divide-ink-200 overflow-hidden">
     {% for step in setup.steps %}
-      <li class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center">
+      <li class="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-ink-50
+                 sm:flex-row sm:items-center">
         <span class="grid size-8 shrink-0 place-items-center rounded-md text-sm
                      font-semibold
                      {% if step.done %}bg-paid-soft text-paid-strong

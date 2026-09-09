@@ -5,7 +5,8 @@
   "description": "Tailwind build for the Dependable school management platform",
   "scripts": {
     "build:css": "tailwindcss -i ./assets/app.css -o ./static/css/app.css --minify",
-    "watch:css": "tailwindcss -i ./assets/app.css -o ./static/css/app.css --watch"
+    "watch:css": "tailwindcss -i ./assets/app.css -o ./static/css/app.css --watch",
+    "check:contrast": "node scripts/check-contrast.mjs"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.0",

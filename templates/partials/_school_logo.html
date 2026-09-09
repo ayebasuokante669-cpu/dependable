@@ -16,7 +16,7 @@ Params:
 {% if school.logo %}
   <img src="{{ school.logo.url }}" alt="{{ school.name }} logo"
        class="{{ size|default:'size-9' }} shrink-0 {{ rounded|default:'rounded-md' }}
-              bg-white object-contain
+              bg-surface object-contain
               {% if tone != 'light' %}border border-ink-200{% endif %}">
 {% else %}
   <span class="grid {{ size|default:'size-9' }} shrink-0 place-items-center
