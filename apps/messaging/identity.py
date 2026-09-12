@@ -17,6 +17,12 @@ school's: the first two get the batch rejected by the gateway or ignored by
 parents, and the third is a tenancy breach that a parent would see on their own
 handset. :class:`SenderIdentityUnavailable` carries a sentence a proprietor can
 act on instead.
+
+**The answer depends on the channel.** SMS needs the approved Sender ID.
+WhatsApp needs the school's WhatsApp set up and approved by Meta -- a separate
+approval on the same config row, and the SMS Sender ID's status does not enter
+into it. A school waiting on Meta can still send SMS; a school with WhatsApp
+approved and a Sender ID still pending can still send WhatsApp.
 """
 
 from __future__ import annotations
@@ -24,11 +30,11 @@ from __future__ import annotations
 from django.db.models import Q
 
 from .models import SchoolMessagingConfig, SenderIdStatus
-from .providers import SenderIdentity
+from .providers import Channel, SenderIdentity
 
 
 class SenderIdentityUnavailable(Exception):
-    """No approved Sender ID exists for this school, so nothing may be sent.
+    """No approved identity exists for this school and channel, so nothing may be sent.
 
     Deliberately not a subclass of ``ProviderNotConfigured``: that one means the
     *platform* is missing credentials and only the platform can fix it. This
@@ -85,13 +91,20 @@ def config_for(school, branch=None) -> SchoolMessagingConfig | None:
     return rows[0]
 
 
-def resolve(school, branch=None) -> SenderIdentity:
-    """The identity ``branch`` sends under, or refuse with a reason why.
+def resolve(school, branch=None, *, channel: str = Channel.SMS) -> SenderIdentity:
+    """The identity ``branch`` sends under on ``channel``, or refuse with a reason.
 
-    :raises SenderIdentityUnavailable: when there is no approved Sender ID.
+    A branch's own config row wins over the school-wide one for WhatsApp just
+    as it does for SMS: a campus with a row of its own is set up by that row,
+    whole.
+
+    :raises SenderIdentityUnavailable: when there is no approved identity.
     """
     config = config_for(school, branch)
     school_name = _school_name(school, config)
+
+    if channel == Channel.WHATSAPP:
+        return _resolve_whatsapp(config, school_name)
 
     if config is None:
         raise SenderIdentityUnavailable(
@@ -114,9 +127,36 @@ def resolve(school, branch=None) -> SenderIdentity:
     )
 
 
-def resolve_for_branch(branch) -> SenderIdentity:
+def resolve_for_branch(branch, *, channel: str = Channel.SMS) -> SenderIdentity:
     """Convenience for the send path, which always has a branch in hand."""
-    return resolve(branch.school_id, branch)
+    return resolve(branch.school_id, branch, channel=channel)
+
+
+def _resolve_whatsapp(
+    config: SchoolMessagingConfig | None, school_name: str
+) -> SenderIdentity:
+    if config is None or not config.is_whatsapp_set_up:
+        raise SenderIdentityUnavailable(
+            f"{school_name} has not set up WhatsApp, so nothing can be sent "
+            f"over it. A platform administrator connects the school's WhatsApp "
+            f"Business number under Messaging identity.",
+            config=config,
+        )
+    if not config.is_whatsapp_usable:
+        raise SenderIdentityUnavailable(
+            _whatsapp_blocked_message(config, school_name), config=config
+        )
+    return SenderIdentity(
+        # Not sent to a WhatsApp gateway -- there is no Sender ID on WhatsApp --
+        # but it is still the school's messaging name, and it is what the
+        # batch's ``sent_as`` snapshot and the console log carry.
+        sender_id=config.sender_id,
+        provider_key=config.whatsapp_provider,
+        api_key=config.api_key,
+        account_reference=config.account_reference,
+        school_name=school_name,
+        device_id=config.whatsapp_device_id,
+    )
 
 
 def _blocked_message(config: SchoolMessagingConfig, school_name: str) -> str:
@@ -141,6 +181,35 @@ def _blocked_message(config: SchoolMessagingConfig, school_name: str) -> str:
     return (
         f"{school_name} has no approved Sender ID, so no message can be sent."
         f"{note}"
+    )
+
+
+def _whatsapp_blocked_message(config: SchoolMessagingConfig, school_name: str) -> str:
+    """Why this school cannot send WhatsApp yet, naming who fixes it."""
+    note = (
+        f" Reason given: {config.whatsapp_status_note}"
+        if config.whatsapp_status_note else ""
+    )
+
+    if config.whatsapp_status == SenderIdStatus.PENDING:
+        return (
+            f"{school_name}'s WhatsApp Business account is still awaiting "
+            f"approval from WhatsApp, so nothing can be sent over WhatsApp "
+            f"yet.{note}"
+        )
+    if config.whatsapp_status == SenderIdStatus.REJECTED:
+        return (
+            f"{school_name}'s WhatsApp Business account was not approved by "
+            f"WhatsApp, so nothing can be sent over it.{note}"
+        )
+    if config.whatsapp_status == SenderIdStatus.SUSPENDED:
+        return (
+            f"{school_name}'s WhatsApp is suspended, so WhatsApp sending is "
+            f"paused.{note}"
+        )
+    return (
+        f"{school_name} has no approved WhatsApp account, so nothing can be "
+        f"sent over WhatsApp.{note}"
     )
 
 

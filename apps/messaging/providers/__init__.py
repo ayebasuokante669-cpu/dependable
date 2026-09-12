@@ -34,18 +34,26 @@ from .base import (
     ProviderNotConfigured,
     SenderIdentity,
     SendResult,
+    TemplateMessage,
 )
 from .bulksmsnigeria import BulkSMSNigeriaProvider
 from .console import ConsoleProvider
 from .termii import TermiiProvider
+from .termii_whatsapp import TermiiWhatsAppProvider
 
 #: Every provider the platform knows how to talk to, keyed by ProviderKey.
 PROVIDERS: dict[str, type[MessagingProvider]] = {
     ConsoleProvider.key: ConsoleProvider,
     BulkSMSNigeriaProvider.key: BulkSMSNigeriaProvider,
     TermiiProvider.key: TermiiProvider,
+    TermiiWhatsAppProvider.key: TermiiWhatsAppProvider,
     AfricasTalkingProvider.key: AfricasTalkingProvider,
 }
+
+
+def providers_for(channel: str) -> list[str]:
+    """The provider keys that can carry ``channel``, in registry order."""
+    return [key for key, cls in PROVIDERS.items() if channel in cls.channels]
 
 DEFAULT_PROVIDER = ProviderKey.CONSOLE
 
@@ -105,7 +113,10 @@ __all__ = [
     "ProviderNotConfigured",
     "SendResult",
     "SenderIdentity",
+    "TemplateMessage",
     "TermiiProvider",
+    "TermiiWhatsAppProvider",
     "get_provider",
     "platform_override",
+    "providers_for",
 ]

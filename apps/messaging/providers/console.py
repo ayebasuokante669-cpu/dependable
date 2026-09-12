@@ -27,6 +27,7 @@ from .base import (
     MessagingProvider,
     ProviderKey,
     SendResult,
+    TemplateMessage,
 )
 
 logger = logging.getLogger("schoolcord.messaging")
@@ -49,7 +50,12 @@ class ConsoleProvider(MessagingProvider):
         channel: str,
         *,
         purpose: str = MessagePurpose.TRANSACTIONAL,
+        template: TemplateMessage | None = None,
     ) -> SendResult:
+        # A WhatsApp batch logs the template as the parent would read it, since
+        # that -- not the compose box -- is what a real gateway would deliver.
+        if template is not None:
+            message = f'template "{template.name}": {template.render()}'
         # The purpose is logged rather than ignored: on a real gateway it
         # decides whether a message reaches a DND number at all, so a demo or a
         # test run on this provider should show the routing that would have

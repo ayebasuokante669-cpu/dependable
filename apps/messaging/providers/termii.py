@@ -16,21 +16,27 @@ There is deliberately no platform-wide sender: a school with no approved Sender
 ID is refused before it reaches this class. A school that later takes out its
 own Termii account puts its key on its config and the same code sends with it.
 
-**Routing is the part that has to be right.** Termii offers three channels, and
-picking the wrong one does not fail loudly -- it silently fails to arrive:
+**Routing is the part that has to be right.** Termii's send endpoint offers
+these channels, and picking the wrong one does not fail loudly -- it silently
+fails to arrive:
 
 * ``dnd`` -- the transactional route. Reaches subscribers on the Do-Not-Disturb
   register, which in Nigeria is most of them, and is exempt from the 8pm-8am
   restriction the generic route enforces.
 * ``generic`` -- the promotional route. Blocked for DND numbers, refused
   overnight, and cheaper.
-* ``whatsapp`` -- their WhatsApp Business channel.
+* ``whatsapp`` -- free text over WhatsApp. **Not used.** WhatsApp Business only
+  carries free text inside a conversation the parent opened; a message the
+  school starts has to be a template Meta approved in advance. Every message
+  this platform sends is school-initiated, so WhatsApp goes through
+  :mod:`.termii_whatsapp` and its template endpoint, and this provider carries
+  SMS only.
 
 A fee reminder sent on ``generic`` reaches perhaps a third of the parents it was
 addressed to, at an hour of the school's choosing, and reports success for all
 of them. So the channel is derived from the message's
 :class:`~.base.MessagePurpose` rather than configured, and the default purpose
-is transactional. See :meth:`termii_channel`.
+is transactional. See :meth:`TermiiProvider.termii_channel`.
 
 **One recipient per request.** Termii has a bulk endpoint that takes an array
 of numbers, and we deliberately do not use it: it returns a single
@@ -83,16 +89,20 @@ TIMEOUT_SECONDS = 15
 DND_CHANNEL = "dnd"
 #: Their promotional route. Blocked for DND numbers, refused 8pm-8am.
 GENERIC_CHANNEL = "generic"
-WHATSAPP_CHANNEL = "whatsapp"
 
 #: What their API calls a plain text message, as opposed to a flash SMS.
 MESSAGE_TYPE = "plain"
 
 
-class TermiiProvider(MessagingProvider):
-    key = ProviderKey.TERMII
+class TermiiGateway(MessagingProvider):
+    """What every Termii product shares: the account, the POST, their answers.
+
+    Not registered as a provider -- it cannot send anything by itself. SMS and
+    WhatsApp subclass it because they are two endpoints on one account: the
+    same key, the same response shape, the same ways of refusing.
+    """
+
     label = "Termii"
-    channels = (Channel.SMS, Channel.WHATSAPP)
 
     def __init__(self, identity=None):
         super().__init__(identity)
@@ -130,62 +140,10 @@ class TermiiProvider(MessagingProvider):
 
     @property
     def endpoint(self) -> str:
-        return f"{self.base_url}/api/sms/send"
+        raise NotImplementedError
 
-    def termii_channel(self, channel: str, purpose: str) -> str:
-        """Which Termii route this message is allowed on.
-
-        WhatsApp is its own channel and the DND question does not arise. For
-        SMS the answer is the purpose, and the mapping is one way round only:
-        transactional goes on ``dnd``, and *only* something explicitly marked
-        promotional goes on ``generic``.
-
-        Written as "generic if promotional, else dnd" rather than as a lookup
-        table on purpose. A dict would make an unrecognised purpose fall
-        through to whatever ``.get()``'s default happened to be; this way every
-        value that is not the one promotional case -- including a blank, a
-        typo, or a purpose added later and not thought about here -- lands on
-        the transactional route, which is the one that arrives.
-        """
-        if channel == Channel.WHATSAPP:
-            return WHATSAPP_CHANNEL
-        if purpose == MessagePurpose.PROMOTIONAL:
-            return GENERIC_CHANNEL
-        return DND_CHANNEL
-
-    def payload(
-        self,
-        recipient: str,
-        message: str,
-        channel: str,
-        purpose: str = MessagePurpose.TRANSACTIONAL,
-    ) -> dict:
-        """The request body. Built and testable without an account.
-
-        Termii wants the number in international form without the plus
-        (``2348031234567``) and the API key in the body rather than in a header.
-        """
-        return {
-            "to": to_international(recipient, plus=False),
-            # The school's own registered Sender ID, never a platform-wide one.
-            "from": self.sender_id,
-            "sms": message,
-            "type": MESSAGE_TYPE,
-            "channel": self.termii_channel(channel, purpose),
-            "api_key": self.api_key,
-        }
-
-    def send(
-        self,
-        recipient: str,
-        message: str,
-        channel: str,
-        *,
-        purpose: str = MessagePurpose.TRANSACTIONAL,
-    ) -> SendResult:
-        self.check()
-        payload = self.payload(recipient, message, channel, purpose)
-
+    def post(self, payload: dict) -> SendResult:
+        """POST ``payload`` to :attr:`endpoint`; every failure becomes a result."""
         request = urllib.request.Request(
             self.endpoint,
             data=json.dumps(payload).encode("utf-8"),
@@ -253,11 +211,13 @@ class TermiiProvider(MessagingProvider):
             )
 
         balance = parsed.get("balance")
+        sender, to, route = self.log_context(payload or {})
         logger.info(
-            "[Termii] %s -> %s on %s (ref %s, balance %s)",
-            self.sender_id,
-            _mask(str((payload or {}).get("to", ""))),
-            (payload or {}).get("channel", "?"),
+            "[%s] %s -> %s on %s (ref %s, balance %s)",
+            self.label,
+            sender,
+            to,
+            route,
             reference,
             balance if balance is not None else "unknown",
         )
@@ -272,6 +232,14 @@ class TermiiProvider(MessagingProvider):
         # Accepted into their queue. Delivery is a later fact, reported by their
         # webhook -- see the module docstring.
         return SendResult(status=DeliveryStatus.SENT, reference=reference)
+
+    def log_context(self, payload: dict) -> tuple[str, str, str]:
+        """Who it went out as, to whom (masked), and on which route."""
+        return (
+            self.sender_id,
+            _mask(str(payload.get("to", ""))),
+            payload.get("channel", "?"),
+        )
 
     def read_error(self, code: int, body: str) -> str:
         """One sentence a bursar or an administrator can act on."""
@@ -290,14 +258,83 @@ class TermiiProvider(MessagingProvider):
                 f"Check TERMII_API_KEY."
             )
         if code in (400, 422):
-            return (
-                detail
-                or f'Termii refused the message. Check that the Sender ID '
-                f'"{self.sender_id}" is registered and approved on the account.'
-            )
+            return detail or f"Termii refused the message. {self.refusal_hint()}"
         if code == 429:
             return detail or "Termii is rate-limiting the account. Try again shortly."
         return detail or f"Termii returned HTTP {code}."
+
+    def refusal_hint(self) -> str:
+        """What to check when Termii refuses without saying why."""
+        return ""
+
+
+class TermiiProvider(TermiiGateway):
+    """SMS through Termii, under the school's own Sender ID."""
+
+    key = ProviderKey.TERMII
+    label = "Termii"
+    channels = (Channel.SMS,)
+
+    @property
+    def endpoint(self) -> str:
+        return f"{self.base_url}/api/sms/send"
+
+    def termii_channel(self, channel: str, purpose: str) -> str:
+        """Which Termii route this message is allowed on.
+
+        The answer is the purpose, and the mapping is one way round only:
+        transactional goes on ``dnd``, and *only* something explicitly marked
+        promotional goes on ``generic``.
+
+        Written as "generic if promotional, else dnd" rather than as a lookup
+        table on purpose. A dict would make an unrecognised purpose fall
+        through to whatever ``.get()``'s default happened to be; this way every
+        value that is not the one promotional case -- including a blank, a
+        typo, or a purpose added later and not thought about here -- lands on
+        the transactional route, which is the one that arrives.
+        """
+        if purpose == MessagePurpose.PROMOTIONAL:
+            return GENERIC_CHANNEL
+        return DND_CHANNEL
+
+    def payload(
+        self,
+        recipient: str,
+        message: str,
+        channel: str,
+        purpose: str = MessagePurpose.TRANSACTIONAL,
+    ) -> dict:
+        """The request body. Built and testable without an account.
+
+        Termii wants the number in international form without the plus
+        (``2348031234567``) and the API key in the body rather than in a header.
+        """
+        return {
+            "to": to_international(recipient, plus=False),
+            # The school's own registered Sender ID, never a platform-wide one.
+            "from": self.sender_id,
+            "sms": message,
+            "type": MESSAGE_TYPE,
+            "channel": self.termii_channel(channel, purpose),
+            "api_key": self.api_key,
+        }
+
+    def send(
+        self,
+        recipient: str,
+        message: str,
+        channel: str,
+        *,
+        purpose: str = MessagePurpose.TRANSACTIONAL,
+    ) -> SendResult:
+        self.check()
+        return self.post(self.payload(recipient, message, channel, purpose))
+
+    def refusal_hint(self) -> str:
+        return (
+            f'Check that the Sender ID "{self.sender_id}" is registered and '
+            f"approved on the account."
+        )
 
 
 def _flatten(value) -> str:

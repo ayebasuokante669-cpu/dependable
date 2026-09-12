@@ -1,8 +1,9 @@
 """Outbound parent messaging: who it came from, what was sent, and to whom.
 
-Three models:
+Four models:
 
     SchoolMessagingConfig          -- the school's own sending identity
+    WhatsAppTemplate               -- the WhatsApp messages it may start
     Message  --<  MessageRecipient -- what went out under it
 
 ``Message`` is one press of Send. ``MessageRecipient`` is one row per parent it
@@ -23,8 +24,21 @@ from django.utils import timezone
 
 from apps.core.models import BranchScopedModel, TenantScopedModel
 
-from .providers import Channel, DeliveryStatus, MessagePurpose, ProviderKey
-from .validators import SENDER_ID_MAX_LENGTH, normalise_sender_id, validate_sender_id
+from .providers import (
+    PROVIDERS,
+    Channel,
+    DeliveryStatus,
+    MessagePurpose,
+    ProviderKey,
+    TemplateMessage,
+)
+from .validators import (
+    SENDER_ID_MAX_LENGTH,
+    normalise_sender_id,
+    template_variables,
+    validate_sender_id,
+    validate_template_body,
+)
 
 
 class SenderIdStatus(models.TextChoices):
@@ -130,6 +144,49 @@ class SchoolMessagingConfig(TenantScopedModel):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
 
+    # --- WhatsApp ------------------------------------------------------------
+    # A second approval, held separately from the Sender ID's because it is
+    # granted by somebody else (Meta, not the SMS gateway), on a different
+    # timescale, and can be withdrawn independently. A school whose Sender ID is
+    # approved may still be waiting on WhatsApp, and must still be able to send
+    # SMS in the meantime.
+    whatsapp_provider = models.CharField(
+        "WhatsApp gateway",
+        max_length=32,
+        choices=ProviderKey.choices,
+        blank=True,
+        help_text="Blank means this school has not set up WhatsApp.",
+    )
+    whatsapp_device_id = models.CharField(
+        "WhatsApp device ID",
+        max_length=120,
+        blank=True,
+        help_text="The gateway's id for the school's connected WhatsApp "
+        "Business number.",
+    )
+    whatsapp_status = models.CharField(
+        "WhatsApp status",
+        max_length=20,
+        choices=SenderIdStatus.choices,
+        default=SenderIdStatus.PENDING,
+        help_text="Nothing sends over WhatsApp until Meta has approved the "
+        "school's WhatsApp Business account.",
+    )
+    whatsapp_status_note = models.CharField(
+        "WhatsApp note",
+        max_length=250,
+        blank=True,
+        help_text="Why WhatsApp was rejected or suspended — shown to the school.",
+    )
+    whatsapp_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="whatsapp_identities_approved",
+        null=True,
+        blank=True,
+    )
+    whatsapp_approved_at = models.DateTimeField(null=True, blank=True)
+
     class Meta(TenantScopedModel.Meta):
         abstract = False
         verbose_name = "messaging identity"
@@ -190,6 +247,35 @@ class SchoolMessagingConfig(TenantScopedModel):
     def uses_own_credentials(self) -> bool:
         return bool(self.api_key)
 
+    @property
+    def is_whatsapp_set_up(self) -> bool:
+        return bool(self.whatsapp_provider)
+
+    @property
+    def is_whatsapp_usable(self) -> bool:
+        """Whether a WhatsApp message may go out for this school.
+
+        The WhatsApp half of :attr:`is_usable`, and deliberately independent of
+        it: approval of the Sender ID says nothing about approval by Meta.
+        """
+        return (
+            self.is_whatsapp_set_up
+            and self.whatsapp_status == SenderIdStatus.APPROVED
+        )
+
+    @property
+    def whatsapp_state_label(self) -> str:
+        """"Not set up", or the approval status. What the screens print."""
+        if not self.is_whatsapp_set_up:
+            return "Not set up"
+        return self.get_whatsapp_status_display()
+
+    @property
+    def whatsapp_pill_class(self) -> str:
+        if not self.is_whatsapp_set_up:
+            return "status-unpaid"
+        return SENDER_ID_PILLS.get(self.whatsapp_status, "status-unpaid")
+
     # -- transitions ---------------------------------------------------------
 
     def approve(self, *, by=None, save: bool = True) -> "SchoolMessagingConfig":
@@ -203,6 +289,23 @@ class SchoolMessagingConfig(TenantScopedModel):
                 update_fields=[
                     "status", "status_note", "approved_by", "approved_at",
                     "updated_at",
+                ]
+            )
+        return self
+
+    def approve_whatsapp(
+        self, *, by=None, save: bool = True
+    ) -> "SchoolMessagingConfig":
+        """Mark the school's WhatsApp Business account approved by Meta."""
+        self.whatsapp_status = SenderIdStatus.APPROVED
+        self.whatsapp_status_note = ""
+        self.whatsapp_approved_by = by
+        self.whatsapp_approved_at = timezone.now()
+        if save:
+            self.save(
+                update_fields=[
+                    "whatsapp_status", "whatsapp_status_note",
+                    "whatsapp_approved_by", "whatsapp_approved_at", "updated_at",
                 ]
             )
         return self
@@ -227,6 +330,193 @@ class SchoolMessagingConfig(TenantScopedModel):
                 raise ValidationError(
                     {"branch": "That campus belongs to a different school."}
                 )
+
+        # Each gateway field must name a gateway that carries its channel. One
+        # list of providers feeds both dropdowns, and picking the WhatsApp
+        # gateway for SMS would otherwise save cleanly and fail every batch.
+        errors = {}
+        if not _carries(self.provider, Channel.SMS):
+            errors["provider"] = (
+                f"{self.get_provider_display()} does not carry SMS. Choose the "
+                f"gateway this Sender ID is registered with."
+            )
+        if self.whatsapp_provider and not _carries(
+            self.whatsapp_provider, Channel.WHATSAPP
+        ):
+            errors["whatsapp_provider"] = (
+                f"{self.get_whatsapp_provider_display()} does not carry WhatsApp."
+            )
+        provider_class = PROVIDERS.get(self.whatsapp_provider)
+        if (
+            self.whatsapp_status == SenderIdStatus.APPROVED
+            and provider_class is not None
+            and provider_class.requires_device_id
+            and not self.whatsapp_device_id.strip()
+        ):
+            errors["whatsapp_device_id"] = (
+                f"{provider_class.label} cannot send without the school's "
+                f"WhatsApp device ID. Add it before approving."
+            )
+        if errors:
+            raise ValidationError(errors)
+
+
+def _carries(provider_key: str, channel: str) -> bool:
+    provider_class = PROVIDERS.get(provider_key)
+    return provider_class is not None and channel in provider_class.channels
+
+
+class TemplateCategory(models.TextChoices):
+    """Meta's category for a WhatsApp template.
+
+    Meta decides it at review, prices by it, and polices it: a marketing
+    message registered as utility gets the template paused. Authentication
+    templates are left out -- they carry a one-time code and nothing else, and
+    nothing a school sends from the compose screen is one.
+    """
+
+    UTILITY = "utility", "Utility"
+    MARKETING = "marketing", "Marketing"
+
+
+class WhatsAppTemplate(TenantScopedModel):
+    """One WhatsApp message a school is allowed to start.
+
+    WhatsApp Business does not let a business send free text to someone who
+    has not messaged it first. Everything a school sends -- a fee reminder, a
+    closure notice -- starts the conversation, so it has to be a template
+    registered with the gateway and approved by Meta in advance, with only its
+    variables filled in per parent.
+
+    A row here *records* that registration; it does not create it. The
+    template is written and submitted on the gateway's dashboard, against the
+    school's WhatsApp device, and a platform administrator copies its id and
+    its exact text here and marks it approved once Meta has.
+
+    The body is kept, not just the id, for two reasons: the compose screen
+    shows the sender what the parent will actually read, and its
+    ``<%placeholders%>`` are checked against the variables the platform can
+    fill -- a template asking for something nobody supplies is refused on every
+    send, so it is refused here instead.
+
+    Scoped per school, because templates belong to the school's own WhatsApp
+    device.
+    """
+
+    name = models.CharField(
+        max_length=80,
+        help_text='What staff choose on the compose screen, e.g. "Fee reminder".',
+    )
+    provider = models.CharField(
+        max_length=32,
+        choices=ProviderKey.choices,
+        default=ProviderKey.TERMII_WHATSAPP,
+        help_text="The gateway this template is registered with.",
+    )
+    template_id = models.CharField(
+        "template ID",
+        max_length=120,
+        help_text="The gateway's id for the template, from its dashboard.",
+    )
+    category = models.CharField(
+        max_length=20,
+        choices=TemplateCategory.choices,
+        default=TemplateCategory.UTILITY,
+    )
+    language = models.CharField(max_length=10, default="en")
+    body = models.TextField(
+        validators=[validate_template_body],
+        help_text="The approved text exactly as registered, with variables "
+        "written <%parent_name%>. Available: <%parent_name%>, "
+        "<%student_name%>, <%school_name%>, <%message%>.",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=SenderIdStatus.choices,
+        default=SenderIdStatus.PENDING,
+        help_text="Nothing sends with this template until Meta has approved it.",
+    )
+    status_note = models.CharField(
+        max_length=250,
+        blank=True,
+        help_text="Why it was rejected or paused.",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        abstract = False
+        verbose_name = "WhatsApp template"
+        ordering = ["school__name", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["school", "name"],
+                name="one_whatsapp_template_name_per_school",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["school", "branch"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+    # -- derived facts -------------------------------------------------------
+
+    @property
+    def is_usable(self) -> bool:
+        return self.status == SenderIdStatus.APPROVED and bool(self.template_id)
+
+    @property
+    def variables(self) -> list[str]:
+        return template_variables(self.body)
+
+    @property
+    def purpose(self) -> str:
+        """The stored ``Message.purpose`` a batch on this template gets.
+
+        On WhatsApp the category, not the sender, says what a message is, so a
+        batch is recorded as whatever its template was approved as.
+        """
+        if self.category == TemplateCategory.MARKETING:
+            return MessagePurpose.PROMOTIONAL
+        return MessagePurpose.TRANSACTIONAL
+
+    @property
+    def pill_class(self) -> str:
+        return SENDER_ID_PILLS.get(self.status, "status-unpaid")
+
+    def message_for(self, **values) -> TemplateMessage:
+        """This template filled in for one recipient.
+
+        Only the variables the body actually uses are sent; one the body uses
+        and ``values`` lacks goes as an empty string rather than being dropped,
+        so the parent reads a gap rather than WhatsApp refusing the message.
+        """
+        return TemplateMessage(
+            template_id=self.template_id,
+            data={name: str(values.get(name) or "") for name in self.variables},
+            name=self.name,
+            body=self.body,
+        )
+
+    # -- persistence ---------------------------------------------------------
+
+    def save(self, *args, **kwargs):
+        if self.status == SenderIdStatus.APPROVED:
+            self.approved_at = self.approved_at or timezone.now()
+        else:
+            self.approved_at = None
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+
+        if not _carries(self.provider, Channel.WHATSAPP):
+            raise ValidationError(
+                {"provider": f"{self.get_provider_display()} does not carry WhatsApp."}
+            )
 
 
 class AudienceType(models.TextChoices):
@@ -332,6 +622,17 @@ class Message(BranchScopedModel):
     #: Named ``sent_as`` rather than ``sender_id`` because ``sender`` above is a
     #: foreign key, and Django already owns that column name for its id.
     sent_as = models.CharField("Sender ID", max_length=32, blank=True)
+    #: The approved template a WhatsApp batch went out as; empty for SMS.
+    #: Protected rather than nulled on delete: a batch resumed later has to be
+    #: sent as the same template, and a template that has carried messages is
+    #: retired by changing its status, not by deleting the record of it.
+    template = models.ForeignKey(
+        WhatsAppTemplate,
+        on_delete=models.PROTECT,
+        related_name="messages",
+        null=True,
+        blank=True,
+    )
 
     class Meta(BranchScopedModel.Meta):
         abstract = False
