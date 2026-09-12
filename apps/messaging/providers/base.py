@@ -24,9 +24,11 @@ than not sending it.
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from django.db import models
+
+from ..validators import TEMPLATE_PLACEHOLDER, template_variables
 
 
 class ProviderKey(models.TextChoices):
@@ -43,6 +45,10 @@ class ProviderKey(models.TextChoices):
     BULKSMSNIGERIA = "bulksmsnigeria", "BulkSMS Nigeria"
     TERMII = "termii", "Termii"
     AFRICASTALKING = "africastalking", "Africa's Talking"
+    #: Termii's WhatsApp Business template API. A separate key from ``TERMII``
+    #: because it is a separate approval (Meta's, not a Sender ID registration),
+    #: a separate endpoint, and a separate thing a school may or may not have.
+    TERMII_WHATSAPP = "termii_whatsapp", "Termii WhatsApp"
 
 
 class Channel(models.TextChoices):
@@ -140,6 +146,10 @@ class SenderIdentity:
     account_reference: str = ""
     #: For logs and screens only -- never sent to a gateway.
     school_name: str = ""
+    #: The gateway's id for the school's connected WhatsApp Business number.
+    #: Empty on SMS identities; a WhatsApp provider that needs one says so in
+    #: :meth:`MessagingProvider.check`.
+    device_id: str = ""
 
     def __str__(self) -> str:
         return self.sender_id
@@ -147,6 +157,43 @@ class SenderIdentity:
     @property
     def uses_own_credentials(self) -> bool:
         return bool(self.api_key)
+
+
+@dataclass(frozen=True)
+class TemplateMessage:
+    """A pre-approved WhatsApp template, filled in for one recipient.
+
+    WhatsApp Business does not carry free text to someone who has not messaged
+    the business first: a school-initiated message has to be a template Meta
+    approved in advance, with only its variables changing per send. So a
+    WhatsApp provider is handed this rather than a body.
+
+    Built by the dispatcher from ``WhatsAppTemplate`` and the recipient row, and
+    a plain value object for the same reason :class:`SenderIdentity` is: a
+    provider must be able to send without the ORM, and a test must be able to
+    state a template without creating one.
+    """
+
+    #: The gateway's id for the approved template.
+    template_id: str
+    #: Variable name -> value, exactly as the template declares them.
+    data: dict = field(default_factory=dict)
+    #: For logs only.
+    name: str = ""
+    #: The approved text with its ``<%placeholders%>``, when known. Lets a
+    #: provider check nothing is missing, and the console show what would land.
+    body: str = ""
+
+    def missing_variables(self) -> list[str]:
+        """Placeholders in :attr:`body` with no value in :attr:`data`."""
+        return [name for name in template_variables(self.body) if name not in self.data]
+
+    def render(self) -> str:
+        """The body as a parent would read it. For logs, never for the wire."""
+        return TEMPLATE_PLACEHOLDER.sub(
+            lambda match: str(self.data.get(match.group(1), match.group(0))),
+            self.body,
+        )
 
 
 class ProviderNotConfigured(Exception):
@@ -176,6 +223,9 @@ class MessagingProvider(abc.ABC):
     #: Whether this provider needs a registered Sender ID to send at all. The
     #: console provider does not; every real gateway does.
     requires_sender_id: bool = True
+    #: Whether a school must have a connected WhatsApp device on its config
+    #: before this provider can be approved for it.
+    requires_device_id: bool = False
 
     def __init__(self, identity: SenderIdentity | None = None):
         self.identity = identity
@@ -208,6 +258,10 @@ class MessagingProvider(abc.ABC):
         to ``TRANSACTIONAL``, so a caller that has not thought about it gets the
         route that actually reaches DND numbers rather than the one that
         silently drops them.
+
+        A provider that carries WhatsApp also accepts a keyword-only
+        ``template: TemplateMessage | None``. The dispatcher passes it only for
+        WhatsApp batches, so an SMS-only provider need not declare it.
 
         Must never raise for an ordinary delivery failure -- return
         :meth:`SendResult.failure` instead.

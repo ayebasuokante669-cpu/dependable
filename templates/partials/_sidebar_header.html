@@ -2,7 +2,7 @@
 <div class="px-5 pt-5 pb-4">
   <div class="flex items-center gap-2.5">
     {% include "partials/_brand_mark.html" with tone="light" %}
-    <span class="text-base font-semibold tracking-tight text-white">
+    <span class="text-base font-semibold tracking-tight text-panel-fg">
       {{ product_name }}
     </span>
   </div>
@@ -16,8 +16,8 @@
     <div class="mt-4 flex items-center gap-2.5 rounded-md bg-white/10 px-3 py-2.5">
       {% include "partials/_school_logo.html" with school=current_school size="size-8" tone="light" %}
       <div class="min-w-0">
-        <div class="truncate text-sm font-semibold text-white">{{ current_school.name }}</div>
-        <div class="mt-0.5 truncate text-xs text-brand-200">
+        <div class="truncate text-sm font-semibold text-panel-fg">{{ current_school.name }}</div>
+        <div class="mt-0.5 truncate text-xs text-panel-muted">
           {% if current_branch %}{{ current_branch.name }}{% else %}All branches{% endif %}
           &middot; {{ current_school.get_plan_display }}
         </div>
@@ -25,8 +25,8 @@
     </div>
   {% elif current_role_label %}
     <div class="mt-4 rounded-md bg-white/10 px-3 py-2.5">
-      <div class="text-sm font-semibold text-white">Platform</div>
-      <div class="mt-0.5 text-xs text-brand-200">All schools</div>
+      <div class="text-sm font-semibold text-panel-fg">Platform</div>
+      <div class="mt-0.5 text-xs text-panel-muted">All schools</div>
     </div>
   {% endif %}
 </div>

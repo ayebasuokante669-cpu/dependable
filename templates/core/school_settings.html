@@ -80,13 +80,13 @@
         <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
           In the sidebar
         </p>
-        <div class="mt-2 flex items-center gap-2.5 rounded-md bg-brand-900 px-3 py-2.5">
+        <div class="mt-2 flex items-center gap-2.5 rounded-md bg-panel px-3 py-2.5">
           {% include "partials/_school_logo.html" with school=object size="size-8" tone="light" %}
           <div class="min-w-0">
-            <div class="truncate text-sm font-semibold text-white">
+            <div class="truncate text-sm font-semibold text-panel-fg">
               {{ object.name }}
             </div>
-            <div class="mt-0.5 truncate text-xs text-brand-200">
+            <div class="mt-0.5 truncate text-xs text-panel-muted">
               All branches &middot; {{ object.get_plan_display }}
             </div>
           </div>

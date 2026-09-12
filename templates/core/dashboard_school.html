@@ -17,19 +17,34 @@
 
   {% include "core/_setup_banner.html" %}
 
+  {% comment %}
+  Each figure already answers "how many"; the next question is always "which
+  ones". These were dead tiles sitting directly above the list that answers it,
+  so the whole tile is the link -- a 44px+ target with the count as its label,
+  rather than a small "view all" tacked underneath.
+  {% endcomment %}
   <div class="grid gap-4 sm:grid-cols-3">
-    <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Campuses</div>
+    <a href="{% url 'admin:schools_branch_changelist' %}" class="card card-interactive group p-5">
+      <div class="flex items-center gap-1.5 text-sm font-medium text-ink-600">
+        Campuses
+        {% include "partials/_tile_arrow.html" %}
+      </div>
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ branch_count }}</div>
-    </div>
-    <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Students enrolled</div>
+    </a>
+    <a href="{% url 'students:student_list' %}" class="card card-interactive group p-5">
+      <div class="flex items-center gap-1.5 text-sm font-medium text-ink-600">
+        Students enrolled
+        {% include "partials/_tile_arrow.html" %}
+      </div>
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ student_count }}</div>
-    </div>
-    <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Classes running</div>
+    </a>
+    <a href="{% url 'academics:class_list' %}" class="card card-interactive group p-5">
+      <div class="flex items-center gap-1.5 text-sm font-medium text-ink-600">
+        Classes running
+        {% include "partials/_tile_arrow.html" %}
+      </div>
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ class_count }}</div>
-    </div>
+    </a>
   </div>
 
   <div class="card overflow-hidden">

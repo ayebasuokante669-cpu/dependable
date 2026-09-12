@@ -23,13 +23,35 @@
         href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+
+  {% comment %}
+  Inline and synchronous on purpose. The theme has to be on <html> before the
+  first paint, or a dark-mode user gets a white flash on every navigation --
+  which no amount of transition afterwards can undo. It is four lines and
+  blocks for microseconds; ui.js (deferred, below) handles everything after.
+  {% endcomment %}
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('schoolcord-theme');
+        var dark = saved ? saved === 'dark'
+          : matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <script src="{% static 'js/ui.js' %}" defer></script>
+  {% include "partials/_password_policy.html" %}
+
   {% block extra_head %}{% endblock %}
 </head>
 <body class="h-full">
 
 <a href="#main"
    class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50
-          focus:rounded-md focus:bg-white focus:px-4 focus:py-2 focus:shadow-panel">
+          focus:rounded-md focus:bg-surface focus:px-4 focus:py-2 focus:shadow-panel">
   Skip to main content
 </a>
 
@@ -38,7 +60,7 @@
 
   {# ===== Desktop sidebar: permanent from lg up ============================ #}
   <aside class="hidden lg:flex lg:w-sidebar lg:shrink-0 lg:flex-col
-                bg-brand-900 lg:fixed lg:inset-y-0 lg:left-0">
+                bg-panel lg:fixed lg:inset-y-0 lg:left-0">
     {% include "partials/_sidebar_header.html" %}
     {% include "partials/_nav.html" with nav_label="Main" %}
     {% include "partials/_sidebar_footer.html" %}
@@ -48,15 +70,15 @@
   <div id="mobile-nav" class="fixed inset-0 z-40 hidden lg:hidden" role="dialog"
        aria-modal="true" aria-label="Navigation">
     <div id="mobile-nav-overlay"
-         class="absolute inset-0 bg-brand-950/60 opacity-0 transition-opacity duration-200"></div>
+         class="absolute inset-0 bg-scrim opacity-0 transition-opacity duration-200"></div>
     <div id="mobile-nav-panel"
          class="absolute inset-y-0 left-0 flex w-[17rem] max-w-[85%] flex-col
-                bg-brand-900 shadow-panel -translate-x-full transition-transform
+                bg-panel shadow-panel -translate-x-full transition-transform
                 duration-200 ease-out">
       <div class="flex items-start justify-between">
         <div class="flex-1">{% include "partials/_sidebar_header.html" %}</div>
         <button type="button" id="mobile-nav-close"
-                class="m-3 grid size-touch place-items-center rounded-md text-brand-100
+                class="m-3 grid size-touch place-items-center rounded-md text-panel-muted
                        hover:bg-white/10"
                 aria-label="Close navigation">
           <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
@@ -74,7 +96,7 @@
   <div class="flex min-w-0 flex-1 flex-col lg:pl-sidebar">
 
     <header class="sticky top-0 z-30 flex min-h-touch items-center gap-3 border-b
-                   border-ink-200 bg-white/95 px-4 py-2 backdrop-blur sm:px-6">
+                   border-ink-200 bg-surface/95 px-4 py-2 backdrop-blur sm:px-6">
       <button type="button" id="mobile-nav-open"
               class="grid size-touch shrink-0 place-items-center rounded-md text-ink-700
                      hover:bg-ink-100 lg:hidden"
@@ -93,7 +115,10 @@
         {% block page_subtitle %}{% endblock %}
       </div>
 
-      <div class="flex shrink-0 items-center gap-2">{% block page_actions %}{% endblock %}</div>
+      <div class="flex shrink-0 items-center gap-2">
+        {% block page_actions %}{% endblock %}
+        {% include "partials/_theme_toggle.html" %}
+      </div>
     </header>
 
     <main id="main" class="flex-1 px-4 py-6 sm:px-6 lg:px-8">

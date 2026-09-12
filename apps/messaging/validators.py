@@ -65,3 +65,43 @@ def validate_sender_id(value: str) -> None:
             "short code, which is registered separately.",
             code="sender_id_numeric",
         )
+
+
+# ---------------------------------------------------------------------------
+# WhatsApp templates
+# ---------------------------------------------------------------------------
+
+#: How Termii marks a variable in a WhatsApp template: ``<%parent_name%>``.
+TEMPLATE_PLACEHOLDER = re.compile(r"<%\s*([A-Za-z0-9_]+)\s*%>")
+
+#: Every variable the platform knows how to fill, per recipient, at send time.
+#: A template may use any of them, or none; it may not use anything else,
+#: because a variable nobody fills is a message WhatsApp refuses -- and it
+#: would refuse it for every parent in the batch, not just one.
+TEMPLATE_VARIABLES = {
+    "parent_name": "The parent's name, as on the student's record",
+    "student_name": "The student's full name",
+    "school_name": "The school's name",
+    "message": "What the sender typed in the compose box",
+}
+
+
+def template_variables(body: str) -> list[str]:
+    """The distinct placeholder names in ``body``, in the order they appear."""
+    seen: list[str] = []
+    for name in TEMPLATE_PLACEHOLDER.findall(body or ""):
+        if name not in seen:
+            seen.append(name)
+    return seen
+
+
+def validate_template_body(body: str) -> None:
+    """Reject a template that uses a variable the platform cannot fill."""
+    unknown = [name for name in template_variables(body) if name not in TEMPLATE_VARIABLES]
+    if unknown:
+        raise ValidationError(
+            f"This template uses {', '.join(f'<%{n}%>' for n in unknown)}, which "
+            f"the platform has no value for. Use only: "
+            f"{', '.join(f'<%{n}%>' for n in TEMPLATE_VARIABLES)}.",
+            code="template_unknown_variable",
+        )

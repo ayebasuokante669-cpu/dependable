@@ -24,6 +24,10 @@ is what makes "a school with no approved Sender ID sends nothing" true rather
 than aspirational: there is no path from here to a provider that does not go
 through that resolution, and a school that fails it never gets a Message row at
 all -- so the log never shows a batch that was never really sendable.
+
+A WhatsApp batch is resolved against the school's WhatsApp approval rather than
+its Sender ID, and goes out as an approved :class:`~.models.WhatsAppTemplate`
+filled in per parent -- WhatsApp does not carry free text the school starts.
 """
 
 from __future__ import annotations
@@ -58,6 +62,7 @@ def record(
     provider_key: str = "",
     identity: SenderIdentity | None = None,
     purpose: str = MessagePurpose.TRANSACTIONAL,
+    template=None,
 ) -> Message:
     """Write the batch as queued. Sends nothing.
 
@@ -65,7 +70,13 @@ def record(
     with no approved Sender ID is refused *before* any row is written -- see
     :func:`send`.
     """
+    # Belt and braces over the tenant-scoped form that offered the template:
+    # one school's batch must never go out as another school's template.
+    if template is not None and template.school_id != branch.school_id:
+        raise ValueError("That WhatsApp template belongs to a different school.")
+
     message = Message(
+        template=template,
         branch=branch,
         school_id=branch.school_id,
         body=body,
@@ -118,10 +129,16 @@ def deliver(message: Message, provider: MessagingProvider | None = None) -> Mess
     provider = provider or get_provider(identity=identity_for(message))
     pending = list(
         message.recipients.filter(status=DeliveryStatus.PENDING)
+        # A template names the student; one join rather than one per parent.
+        .select_related("student")
+    )
+    # Once per batch, and only when a template might ask for it.
+    school_name = (
+        message.school.name if message.channel == Channel.WHATSAPP else ""
     )
 
     for recipient in pending:
-        result = _send_one(provider, recipient, message)
+        result = _send_one(provider, recipient, message, school_name)
         recipient.status = result.status
         recipient.provider_reference = result.reference[:120]
         recipient.error = result.error
@@ -138,7 +155,10 @@ def deliver(message: Message, provider: MessagingProvider | None = None) -> Mess
 
 
 def _send_one(
-    provider: MessagingProvider, recipient: MessageRecipient, message: Message
+    provider: MessagingProvider,
+    recipient: MessageRecipient,
+    message: Message,
+    school_name: str = "",
 ) -> SendResult:
     """One send, with every foreseeable failure turned into a logged row.
 
@@ -152,14 +172,30 @@ def _send_one(
             f"{provider.label} cannot send over "
             f"{Channel(message.channel).label}."
         )
+
+    # Read off the batch, not passed in: a send resumed days later must be
+    # routed exactly as the first half of it was.
+    options = {"purpose": message.purpose}
+    if message.channel == Channel.WHATSAPP:
+        template = message.template
+        # Checked per batch at delivery, not only at compose: a template Meta
+        # paused between the first half of a batch and the second must stop the
+        # second half rather than have WhatsApp refuse it parent by parent.
+        if template is None or not template.is_usable:
+            return SendResult.failure(
+                "WhatsApp only carries approved templates, and this batch's "
+                "template is not approved, so it was not sent."
+            )
+        options["template"] = template.message_for(
+            parent_name=recipient.parent_name,
+            student_name=recipient.student.full_name if recipient.student else "",
+            school_name=school_name,
+            message=message.body,
+        )
+
     try:
         return provider.send(
-            recipient.phone,
-            message.body,
-            message.channel,
-            # Read off the batch, not passed in: a send resumed days later must
-            # be routed exactly as the first half of it was.
-            purpose=message.purpose,
+            recipient.phone, message.body, message.channel, **options
         )
     except Exception as exc:  # noqa: BLE001 -- see the docstring above
         return SendResult.failure(f"{type(exc).__name__}: {exc}")
@@ -172,7 +208,9 @@ def identity_for(message: Message) -> SenderIdentity:
     ``sender_id``, so a batch resumed after an approval was withdrawn is
     refused rather than finished under a name that is no longer registered.
     """
-    return identity_module.resolve(message.school_id, message.branch)
+    return identity_module.resolve(
+        message.school_id, message.branch, channel=message.channel
+    )
 
 
 def send(
@@ -184,16 +222,20 @@ def send(
     sender=None,
     provider: MessagingProvider | None = None,
     purpose: str = MessagePurpose.TRANSACTIONAL,
+    template=None,
 ) -> Message:
     """Record a batch and deliver it. What the compose screen calls.
 
-    Resolves the school's Sender ID first, and raises
+    Resolves the school's identity for ``channel`` first, and raises
     :class:`~apps.messaging.identity.SenderIdentityUnavailable` before writing
     anything if there is not an approved one. The compose screen catches that
     and shows the reason; nothing reaches a gateway under a borrowed or blank
-    name.
+    name, and nothing reaches WhatsApp before Meta has approved the school.
+
+    ``template`` is the approved ``WhatsAppTemplate`` a WhatsApp batch goes out
+    as; SMS batches have none.
     """
-    identity = identity_module.resolve_for_branch(branch)
+    identity = identity_module.resolve_for_branch(branch, channel=channel)
     provider = provider or get_provider(identity=identity)
     message = record(
         body=body,
@@ -204,5 +246,6 @@ def send(
         provider_key=provider.key,
         identity=identity,
         purpose=purpose,
+        template=template,
     )
     return deliver(message, provider)

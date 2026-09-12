@@ -26,6 +26,15 @@ Pages fill `auth_heading`, `auth_body` and optionally `auth_footer`.
     </div>
 
     {% block auth_footer %}{% endblock %}
+
+    {% comment %}
+    The signed-out screens have no shell header to hang the theme switch on,
+    and this is where a first-time user meets the product -- so it sits under
+    the card rather than being unavailable until after sign-in.
+    {% endcomment %}
+    <div class="mt-8 flex justify-center">
+      {% include "partials/_theme_toggle.html" %}
+    </div>
   </div>
 </div>
 {% endblock %}

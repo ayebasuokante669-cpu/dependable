@@ -7,6 +7,7 @@ override only what genuinely differs.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -92,6 +93,9 @@ TEMPLATES = [
                 # The product's own name, on signed-out pages too -- which is
                 # where it matters most.
                 "apps.core.branding.branding",
+                # The password minimum and the generator's URL, for the
+                # checklist in static/js/password.js.
+                "apps.accounts.context_processors.password_policy",
             ],
         },
     },
@@ -103,12 +107,50 @@ ASGI_APPLICATION = "config.asgi.application"
 # Set before the first migration and effectively permanent thereafter.
 AUTH_USER_MODEL = "accounts.User"
 
+# --- Password policy ----------------------------------------------------
+# Modelled on NIST SP 800-63B: length and a check against known-breached
+# secrets do the work, and there are deliberately no composition rules -- no
+# "must contain a symbol", no forced rotation. Those push people towards
+# P@ssw0rd1 and a sticky note, which is worse than the passphrase they would
+# have picked unaided.
+#
+# The order matters only for which message a user sees first; every validator
+# runs and any one of them can reject.
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    # NIST's floor. Django's default is also 8; stated explicitly because it is
+    # policy here, not a default we happen to have inherited.
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8},
+    },
+    # Django's bundled list of the 20k most common passwords. Kept alongside the
+    # breach check rather than replaced by it: it is local, so it still rejects
+    # the obvious ones when the network is down.
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    # Have I Been Pwned, via k-anonymity -- see apps/accounts/password_validation.py.
+    {"NAME": "apps.accounts.password_validation.BreachedPasswordValidator"},
 ]
+
+# Read by pwned-passwords-django. The timeout is what makes a slow API a
+# non-event: past this the validator gives up and falls through to the local
+# validators rather than leaving someone staring at a spinner. ADD_PADDING asks
+# the API to return a constant-size response, so the length of what comes back
+# cannot be used to infer anything about the prefix we asked for.
+PWNED_PASSWORDS = {
+    "API_TIMEOUT": float(os.environ.get("PWNED_PASSWORDS_TIMEOUT", "1.5")),
+    "ADD_PADDING": True,
+}
+
+# The breach check is the one validator that makes a network call. It is on
+# everywhere except under the test runner, where an external dependency would
+# make the suite slow, offline-hostile and non-deterministic. The validator's
+# own tests turn it back on with a stubbed client, so the behaviour it guards
+# is still covered -- see apps/accounts/tests_passwords.py.
+PWNED_PASSWORDS_ENABLED = env_bool(
+    "PWNED_PASSWORDS_ENABLED", default=sys.argv[1:2] != ["test"]
+)
 
 LOGIN_URL = "login"
 # The role-aware dispatcher, not a screen: it forwards to whichever dashboard
