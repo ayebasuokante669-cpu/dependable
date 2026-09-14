@@ -289,7 +289,10 @@ NAVIGATION: tuple[NavSection, ...] = (
     NavSection(
         label="Settings",
         items=(
-            NavItem("Settings", "core:school_settings", "cog", _LEADERSHIP),
+            NavItem("School settings", "core:school_settings", "cog", _LEADERSHIP),
+            # Everyone's own email and password. Every role, because every
+            # account has both.
+            NavItem("Account settings", "accounts:settings", "identity", ALL_ROLES),
         ),
     ),
 )

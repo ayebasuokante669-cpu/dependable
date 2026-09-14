@@ -79,6 +79,15 @@ class User(AbstractUser):
         "Has no effect on permissions.",
     )
     phone = models.CharField(max_length=32, blank=True)
+    must_change_password = models.BooleanField(
+        default=False,
+        # A database default as well as a Python one, so a deployment still on
+        # the code from before this column can keep inserting users once the
+        # migration has run.
+        db_default=False,
+        help_text="Set when the account was given a temporary password. Until "
+        "they choose their own, every screen sends them to Account settings.",
+    )
 
     # ``objects`` must stay unscoped: authentication backends and
     # ``createsuperuser`` resolve users through the default manager, before any
@@ -100,6 +109,16 @@ class User(AbstractUser):
     @property
     def is_platform_staff(self) -> bool:
         return self.scope is Scope.PLATFORM or self.is_superuser
+
+    def set_password(self, raw_password):
+        """Choosing a password, by any route, ends a temporary one.
+
+        Account settings, the reset email and the admin all come through here,
+        so none of them has to remember to clear the flag. Whatever gives out a
+        temporary password sets the flag *after* calling this.
+        """
+        super().set_password(raw_password)
+        self.must_change_password = False
 
     def clean(self):
         super().clean()

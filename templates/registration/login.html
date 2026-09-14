@@ -24,7 +24,7 @@
     {% csrf_token %}
 
     <div>
-      <label for="{{ form.username.id_for_label }}" class="field-label">Username</label>
+      <label for="{{ form.username.id_for_label }}" class="field-label">Email or username</label>
       <input type="text" name="{{ form.username.html_name }}"
              id="{{ form.username.id_for_label }}" class="field-input"
              value="{{ form.username.value|default:'' }}"

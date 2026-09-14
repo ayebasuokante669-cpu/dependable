@@ -1,4 +1,4 @@
-"""The password-generator endpoint behind the Generate button.
+"""Account screens: Account settings, and the password generator behind Generate.
 
 Generation lives on the server so there is exactly one implementation of the
 policy. A JavaScript generator would be a second definition of "strong enough"
@@ -18,10 +18,18 @@ from __future__ import annotations
 
 import logging
 
+from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
-from django.http import JsonResponse
+from django.http import HttpResponseRedirect, JsonResponse
+from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
+from django.views.generic import TemplateView
 
+from apps.core.navigation import home_url_for
+
+from .forms import AccountPasswordForm, EmailChangeForm
 from .passwords import generate_password
 
 logger = logging.getLogger(__name__)
@@ -30,6 +38,53 @@ logger = logging.getLogger(__name__)
 #: useless for amplification.
 RATE_LIMIT = 20
 RATE_WINDOW_SECONDS = 60
+
+
+class AccountSettingsView(LoginRequiredMixin, TemplateView):
+    """Anyone's own sign-in details: their email address and their password.
+
+    Every role has one, because every account has both. Two forms on one page,
+    told apart by a hidden ``form`` field, so a failed password change does not
+    wipe a half-typed email and vice versa.
+
+    Also where an account on a temporary password is held (see
+    RequirePasswordChangeMiddleware); choosing a new one sends them on to their
+    dashboard.
+    """
+
+    template_name = "accounts/settings.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        context.setdefault("email_form", EmailChangeForm(user))
+        context.setdefault("password_form", AccountPasswordForm(user))
+        context["temporary_password"] = user.must_change_password
+        context["page_title"] = "Account settings"
+        return context
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        if request.POST.get("form") == "email":
+            form = EmailChangeForm(user, request.POST)
+            if form.is_valid():
+                form.save()
+                messages.success(request, f"Your email address is now {user.email}.")
+                return redirect("accounts:settings")
+            return self.render_to_response(self.get_context_data(email_form=form))
+
+        form = AccountPasswordForm(user, request.POST)
+        if form.is_valid():
+            was_temporary = user.must_change_password
+            form.save()
+            # A password change rotates the session hash; without this the
+            # person who just changed it would be signed out.
+            update_session_auth_hash(request, form.user)
+            messages.success(request, "Password changed.")
+            if was_temporary:
+                return HttpResponseRedirect(home_url_for(form.user))
+            return redirect("accounts:settings")
+        return self.render_to_response(self.get_context_data(password_form=form))
 
 
 def _client_ip(request) -> str:

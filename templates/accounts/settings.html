@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">Your own sign-in details</p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-5">
+  {% if temporary_password %}
+    <div class="card border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                text-overdue-strong" role="alert">
+      <p class="font-semibold">You are signed in with a temporary password.</p>
+      <p class="mt-0.5">
+        Choose your own below to carry on. If the email address on your account
+        is not yours, correct it here too.
+      </p>
+    </div>
+  {% endif %}
+
+  <form method="post" class="card overflow-hidden" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="form" value="password">
+
+    <div class="border-b border-ink-200 px-5 py-4">
+      <h2 class="text-sm font-semibold text-ink-900">Password</h2>
+      <p class="field-hint mt-0.5">
+        You will stay signed in on this device afterwards.
+      </p>
+    </div>
+
+    {% if password_form.non_field_errors %}
+      <div class="border-b border-ink-200 bg-overdue-soft px-5 py-3 text-sm
+                  text-overdue-strong" role="alert">
+        {% for error in password_form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="space-y-5 p-5 sm:p-6">
+      {% include "partials/_field.html" with field=password_form.old_password %}
+      {% include "partials/_field.html" with field=password_form.new_password1 %}
+      {% include "partials/_field.html" with field=password_form.new_password2 %}
+    </div>
+
+    <div class="flex justify-end border-t border-ink-200 px-5 py-4">
+      <button type="submit" class="btn btn-primary text-sm">Change password</button>
+    </div>
+  </form>
+
+  <form method="post" class="card overflow-hidden" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="form" value="email">
+
+    <div class="border-b border-ink-200 px-5 py-4">
+      <h2 class="text-sm font-semibold text-ink-900">Email address</h2>
+      <p class="field-hint mt-0.5">
+        Currently <span class="font-medium text-ink-900">{{ user.email|default:"not set" }}</span>.
+        You sign in with your email address or your username,
+        <span class="font-medium text-ink-900">{{ user.username }}</span>.
+      </p>
+    </div>
+
+    {% if email_form.non_field_errors %}
+      <div class="border-b border-ink-200 bg-overdue-soft px-5 py-3 text-sm
+                  text-overdue-strong" role="alert">
+        {% for error in email_form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="space-y-5 p-5 sm:p-6">
+      {% include "partials/_field.html" with field=email_form.email %}
+      {% include "partials/_field.html" with field=email_form.current_password %}
+    </div>
+
+    <div class="flex justify-end border-t border-ink-200 px-5 py-4">
+      <button type="submit" class="btn btn-primary text-sm">Change email</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

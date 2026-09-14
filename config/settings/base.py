@@ -74,7 +74,15 @@ MIDDLEWARE = [
     "apps.core.middleware.TenantMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # An account on a temporary password is held at Account settings until it
+    # chooses its own. Reads request.user, so after AuthenticationMiddleware.
+    "apps.accounts.middleware.RequirePasswordChangeMiddleware",
 ]
+
+# Sign in with an email address or a username. The username is derived from the
+# email at signup and does not follow a later email change, so matching on email
+# is what keeps a corrected address from stranding anyone's login.
+AUTHENTICATION_BACKENDS = ["apps.accounts.backends.EmailOrUsernameBackend"]
 
 ROOT_URLCONF = "config.urls"
 

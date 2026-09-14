@@ -1,8 +1,9 @@
 """The two account-creation commands: platform owners, and invited school owners.
 
-What must hold: a password is never something the operator passes or learns, a
-platform owner belongs to no school and lands on the platform overview, and an
-invited owner joins the school that exists rather than conjuring a second one.
+What must hold: a password is never something passed as an argument, a platform
+owner belongs to no school and lands on the platform overview, an invited owner
+joins the school that exists rather than conjuring a second one, and a temporary
+password has to be replaced before the account can do anything else.
 """
 
 from __future__ import annotations
@@ -24,7 +25,8 @@ from apps.schools.models import Branch, School
 User = get_user_model()
 
 STRONG = "violet-harbour-lantern-92"
-PROMPT = "apps.accounts.management.commands.create_platform_owner.getpass"
+CHOSEN = "copper-meadow-violin-47"
+PROMPT = "apps.accounts.invites.getpass"
 RESET_PATH = re.compile(r"/accounts/reset/[^/\s]+/[^/\s]+/")
 
 
@@ -54,16 +56,16 @@ class CreatePlatformOwnerTests(TestCase):
         self.assertIsNone(user.school)
         self.assertIsNone(user.branch)
         self.assertTrue(user.is_superuser and user.is_staff and user.is_active)
+        self.assertFalse(user.must_change_password)
         self.assertEqual((user.first_name, user.last_name), ("Ada", "Obi"))
         self.assertTrue(user.check_password(STRONG))
 
     def test_signing_in_lands_on_the_platform_overview_not_a_school(self):
         with mock.patch(PROMPT, side_effect=[STRONG, STRONG]):
             create_platform_owner(email="ada@schoolcord.test", name="Ada Obi")
-        user = User.objects.get(email="ada@schoolcord.test")
 
         response = self.client.post(
-            reverse("login"), {"username": user.username, "password": STRONG}, follow=True
+            reverse("login"), {"username": "ada@schoolcord.test", "password": STRONG}, follow=True
         )
         self.assertEqual(response.redirect_chain[-1][0], reverse("core:platform_overview"))
         self.assertTemplateUsed(response, "core/dashboard_platform.html")
@@ -111,6 +113,27 @@ class CreatePlatformOwnerTests(TestCase):
         self.assertEqual(mail.outbox[0].to, ["client@schoolcord.test"])
         self.assertIn("https://www.schoolcord.test/accounts/reset/", mail.outbox[0].body)
 
+    def test_a_temporary_password_must_be_changed_at_first_sign_in(self):
+        with mock.patch(PROMPT, side_effect=[STRONG, STRONG]):
+            create_platform_owner(
+                email="client@placeholder.test", name="Client Name", temporary_password=True
+            )
+        user = User.objects.get(email="client@placeholder.test")
+        self.assertTrue(user.must_change_password)
+        self.assertEqual(len(mail.outbox), 0)
+
+        response = self.client.post(
+            reverse("login"), {"username": "client@placeholder.test", "password": STRONG}, follow=True
+        )
+        self.assertEqual(response.redirect_chain[-1][0], reverse("accounts:settings"))
+
+    def test_email_link_and_temporary_password_cannot_be_combined(self):
+        with self.assertRaisesMessage(CommandError, "not both"):
+            create_platform_owner(
+                email="ada@schoolcord.test", name="Ada Obi", email_link=True, temporary_password=True
+            )
+        self.assertFalse(User.objects.exists())
+
 
 @override_settings(PUBLIC_BASE_URL="https://www.schoolcord.test")
 class InviteSchoolOwnerTests(TestCase):
@@ -133,6 +156,7 @@ class InviteSchoolOwnerTests(TestCase):
         self.assertIsNone(owner.branch)
         self.assertEqual(owner.role, Role.SCHOOL_OWNER)
         self.assertFalse(owner.is_staff or owner.is_superuser)
+        self.assertFalse(owner.must_change_password)
 
     def test_an_unknown_school_is_an_error_not_a_new_school(self):
         with self.assertRaisesMessage(CommandError, "never creates a school"):
@@ -164,7 +188,7 @@ class InviteSchoolOwnerTests(TestCase):
         owner.refresh_from_db()
         self.assertTrue(owner.check_password(STRONG))
 
-        signed_in = self.client.post(reverse("login"), {"username": owner.username, "password": STRONG})
+        signed_in = self.client.post(reverse("login"), {"username": owner.email, "password": STRONG})
         self.assertRedirects(signed_in, reverse("core:school_dashboard"), fetch_redirect_response=False)
 
     def test_no_email_sends_nothing_but_forgot_password_still_reaches_them(self):
@@ -172,3 +196,47 @@ class InviteSchoolOwnerTests(TestCase):
         self.assertEqual(len(mail.outbox), 0)
         self.client.post(reverse("password_reset"), {"email": "proprietor@fulfilled.test"})
         self.assertEqual(len(mail.outbox), 1)
+
+    def test_a_placeholder_owner_gets_a_typed_temporary_password_and_fixes_both(self):
+        with mock.patch(PROMPT, side_effect=[STRONG, STRONG]) as prompt:
+            self.invite(
+                email="owner@placeholder.test", username="fulfilled-owner",
+                temporary_password=True, stdin=Terminal(),
+            )
+        self.assertEqual(prompt.call_count, 2)
+        self.assertEqual(len(mail.outbox), 0)
+
+        owner = User.objects.get(username="fulfilled-owner")
+        self.assertEqual(owner.school, self.school)
+        self.assertTrue(owner.must_change_password)
+        self.assertTrue(owner.check_password(STRONG))
+
+        # Signing in goes straight to Account settings...
+        response = self.client.post(
+            reverse("login"), {"username": "fulfilled-owner", "password": STRONG}, follow=True
+        )
+        self.assertEqual(response.redirect_chain[-1][0], reverse("accounts:settings"))
+        self.assertContains(response, "temporary password")
+
+        # ...where choosing their own password lets them into the school...
+        self.client.post(reverse("accounts:settings"), {
+            "form": "password", "old_password": STRONG,
+            "new_password1": CHOSEN, "new_password2": CHOSEN,
+        })
+        owner.refresh_from_db()
+        self.assertFalse(owner.must_change_password)
+        self.assertEqual(self.client.get(reverse("core:school_dashboard")).status_code, 200)
+
+        # ...and correcting the placeholder email moves their sign-in with it.
+        self.client.post(reverse("accounts:settings"), {
+            "form": "email", "email": "grace@fulfilled.test", "current_password": CHOSEN,
+        })
+        owner.refresh_from_db()
+        self.assertEqual(owner.email, "grace@fulfilled.test")
+        self.client.logout()
+        self.assertTrue(self.client.login(username="grace@fulfilled.test", password=CHOSEN))
+
+    def test_a_temporary_password_is_never_emailed_even_without_no_email(self):
+        with mock.patch(PROMPT, side_effect=[STRONG, STRONG]):
+            self.invite(temporary_password=True, stdin=Terminal())
+        self.assertEqual(len(mail.outbox), 0)

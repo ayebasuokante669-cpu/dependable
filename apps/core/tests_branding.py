@@ -405,7 +405,7 @@ class NavigationTests(TestCase):
         from apps.core.navigation import nav_for
 
         sections = {s.label: s.items for s in nav_for(Role.SCHOOL_OWNER, "/")}
-        item = next(i for i in sections["Settings"] if i.label == "Settings")
+        item = next(i for i in sections["Settings"] if i.label == "School settings")
         self.assertTrue(item.available)
         self.assertEqual(item.href, reverse("core:school_settings"))
 

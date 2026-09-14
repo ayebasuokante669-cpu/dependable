@@ -2,15 +2,19 @@
 
     python manage.py create_platform_owner --email you@theschoolcord.com --name "Your Name"
     python manage.py create_platform_owner --email them@example.com --name "Their Name" --email-link
+    python manage.py create_platform_owner --email placeholder@example.com --name "Their Name" --temporary-password
 
 The password is never a command-line argument, where it would end up in shell
-history and process listings. Either:
+history and process listings. One of:
 
-* it is typed at a hidden prompt, twice, and checked against the same validators
-  signup uses (length, common passwords, Have I Been Pwned); or
-* with ``--email-link``, the account gets a random password nobody knows and the
-  person is emailed the password-reset link to choose their own. Use this for
-  anyone who is not the one at the keyboard.
+* by default, it is typed at a hidden prompt, twice, and checked against the
+  same validators signup uses (length, common passwords, Have I Been Pwned).
+  For your own account.
+* ``--email-link``: the account gets a random password nobody knows, and the
+  person is emailed the password-reset link to choose their own.
+* ``--temporary-password``: typed at the hidden prompt, but the account has to
+  choose a new password the first time it signs in. For someone whose real
+  email you do not have yet; they correct it on Account settings.
 
 A platform owner has no school and is a Django superuser, which is what gives
 them every school on the platform and the admin. Signing in lands on the
@@ -20,17 +24,20 @@ platform overview.
 from __future__ import annotations
 
 import sys
-from getpass import getpass
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import BaseUserManager
-from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.core.validators import validate_email
 from django.db import transaction
 
-from apps.accounts.invites import send_set_password_email, set_random_password, unique_username
+from apps.accounts.invites import (
+    prompt_for_password,
+    send_set_password_email,
+    set_random_password,
+    unique_username,
+)
 from apps.core.roles import Role
 
 
@@ -50,11 +57,19 @@ class Command(BaseCommand):
             help="Email a link to set the password instead of prompting for one.",
         )
         parser.add_argument(
+            "--temporary-password",
+            action="store_true",
+            help="The prompted password is temporary: it must be changed at first sign-in.",
+        )
+        parser.add_argument(
             "--base-url",
             help="Site address for the emailed link. Defaults to PUBLIC_BASE_URL.",
         )
 
     def handle(self, *args, **options):
+        if options["email_link"] and options["temporary_password"]:
+            raise CommandError("Choose --email-link or --temporary-password, not both.")
+
         User = get_user_model()
         email = BaseUserManager.normalize_email(options["email"].strip())
         try:
@@ -85,7 +100,9 @@ class Command(BaseCommand):
         if options["email_link"]:
             set_random_password(user)
         else:
-            user.set_password(self._prompt_password(user, options.get("stdin") or sys.stdin))
+            user.set_password(prompt_for_password(user, options.get("stdin") or sys.stdin))
+            # After set_password, which clears the flag on every other route.
+            user.must_change_password = options["temporary_password"]
 
         try:
             user.full_clean()
@@ -102,19 +119,8 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Created platform owner {username} <{email}>."))
         if options["email_link"]:
             self.stdout.write(f"A link to set the password was emailed to {email}.")
-        self.stdout.write("Signing in lands on the platform overview (/platform/).")
-
-    def _prompt_password(self, user, stdin) -> str:
-        if not stdin.isatty():
-            raise CommandError(
-                "The password is typed at a hidden prompt, which needs an interactive "
-                "terminal. Run this in a terminal, or pass --email-link."
-            )
-        password = getpass("Password: ")
-        if password != getpass("Password (again): "):
-            raise CommandError("The two passwords do not match. Nothing was created.")
-        try:
-            validate_password(password, user)
-        except ValidationError as error:
-            raise CommandError("Password refused: " + " ".join(error.messages))
-        return password
+        if options["temporary_password"]:
+            self.stdout.write("The password is temporary: they must choose a new one when they first sign in.")
+        self.stdout.write(
+            f"Sign in with {email} or {username}; it lands on the platform overview (/platform/)."
+        )

@@ -127,7 +127,7 @@ class SignupView(FormView):
         school, branch, owner = form.save()
         # Nothing authenticated this user -- they were created a line ago -- so
         # the backend has to be named explicitly.
-        login(self.request, owner, backend="django.contrib.auth.backends.ModelBackend")
+        login(self.request, owner, backend="apps.accounts.backends.EmailOrUsernameBackend")
         messages.success(
             self.request,
             f"{school.name} is set up, with {branch.name} as its first campus. "

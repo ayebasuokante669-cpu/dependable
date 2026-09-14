@@ -38,33 +38,38 @@ pip install -r requirements.txt
 copy .env.example .env           # macOS/Linux: cp .env.example .env
 
 python manage.py migrate
-python manage.py bootstrap_tenant     # optional demo school + one user per role
 python manage.py runserver
-```
-
-To load the pilot school's academic setup:
-
-```bash
-python manage.py seed_academics --create-school       # Fulfilled Academy / Main Campus
-python manage.py seed_fees                            # First Term 2025/2026 pricing
-python manage.py seed_students                        # 60 students across 9 classes
-python manage.py bootstrap_tenant --name "Fulfilled Academy" --branch "Main Campus"
 ```
 
 Then open http://127.0.0.1:8000/.
 
-`bootstrap_tenant` creates a school, a branch, and four accounts — all with the
-password `dependable`:
+### Local demo data
 
-| Username                       | Role                      | Sees                       |
-| ------------------------------ | ------------------------- | -------------------------- |
-| `platform.owner`               | Platform Owner            | every school               |
-| `northgate-academy.owner`      | School Owner              | one school, all branches   |
-| `northgate-academy.principal`  | Principal / Branch Admin  | one branch                 |
-| `northgate-academy.bursar`     | Bursar                    | one branch                 |
+> **Local only.** Everything in this section creates invented schools, students,
+> fees and payments, and `bootstrap_tenant` creates a **superuser**. Run it
+> against your own SQLite database, never a shared or production one. Real
+> accounts are made with the commands in
+> [Creating real accounts](#creating-real-accounts).
+
+```bash
+python manage.py bootstrap_tenant --password "<a local password>"   # Demo School + one user per role
+python manage.py seed_academics --create-school       # a demo "Fulfilled Academy" / Main Campus
+python manage.py seed_fees                            # First Term 2025/2026 pricing
+python manage.py seed_students                        # 60 invented students across 9 classes
+```
+
+`bootstrap_tenant` creates a school, a branch, and four accounts, all with the
+password you pass as `--password` (always pass one):
+
+| Username                  | Role                      | Sees                       |
+| ------------------------- | ------------------------- | -------------------------- |
+| `platform.owner`          | Platform Owner            | every school               |
+| `demo-school.owner`       | School Owner              | one school, all branches   |
+| `demo-school.principal`   | Principal / Branch Admin  | one branch                 |
+| `demo-school.bursar`      | Bursar                    | one branch                 |
 
 Run it again with `--name "Rival College"` to create a second tenant and watch
-the isolation hold. For a superuser: `python manage.py createsuperuser`.
+the isolation hold.
 
 ### CSS
 
@@ -1223,7 +1228,9 @@ Everything above assumed you were already signed in. This is how you get there.
 | `/` | Landing page. Public; a signed-in visitor is redirected to their dashboard. |
 | `/signup/` | Creates a School, its first Branch and the owner User, then signs them in. |
 | `/welcome/` | The four-step onboarding checklist. |
-| `/accounts/login/` | Login, landing each role on its own dashboard. |
+| `/accounts/login/` | Sign in with an email address or a username, landing each role on its own dashboard. |
+| `/accounts/settings/` | Account settings: anyone's own email address and password. In every role's sidebar. |
+| `/accounts/password_change/` | Redirects to Account settings. |
 | `/accounts/password_reset/` | Django's reset flow; the console backend prints the link in dev. |
 | `/dashboard/` | Not a screen — forwards to whichever dashboard the role belongs on. |
 
@@ -1274,16 +1281,84 @@ students, colleagues? — rather than reading a "setup complete" flag. A flag
 would go stale the moment someone deleted their last class, and the school would
 be told it had finished a step it had not.
 
-### Trying it
+### Signing in, Account settings and temporary passwords
+
+**Email or username.** `apps/accounts/backends.py` signs people in with either.
+The username is tried first, so every existing login keeps working. An email
+matches case-insensitively, but only when exactly one account has it. Email is
+not unique at the database level, and a login that picked one of two accounts
+would sign someone in as a stranger. The username is derived from the email at
+signup and does **not** follow a later email change. Matching on email is what
+keeps a corrected address from stranding anyone's login.
+
+**Account settings** (`/accounts/settings/`, "Account settings" in every role's
+sidebar) is where anyone changes their own:
+
+* **email address.** It asks for the current password, so an unattended session
+  cannot point the account's reset emails elsewhere. An address another account
+  already uses is refused.
+* **password.** Django's `PasswordChangeForm`, so the new password goes through
+  `AUTH_PASSWORD_VALIDATORS`, the same NIST-aligned policy signup and the reset
+  flow use. Django's own `/accounts/password_change/` redirects here. The
+  admin's password page is separate and unchanged.
+
+**Temporary passwords.** `User.must_change_password` marks an account that was
+given a password it did not choose. `RequirePasswordChangeMiddleware` sends
+every request from such an account, the admin included, to Account settings,
+except:
+
+* Account settings itself
+* the password generator
+* signing out
+* the reset-by-email flow
+* static files
+
+The flag is cleared inside `User.set_password`, so choosing a password by any
+route ends it: Account settings, the reset email, or the admin. A platform owner
+can also tick it in the admin to force a change.
+
+### Creating real accounts
+
+A password is never a command-line argument, where it would sit in shell
+history and process listings.
+
+| For | Command | How the password is set |
+| --- | --- | --- |
+| Yourself, as platform owner | `create_platform_owner --email … --name "…"` | Typed at a hidden prompt, twice, and validated. |
+| A platform owner whose real email you have | `create_platform_owner --email … --name "…" --email-link` | Random and never shown; they are emailed the reset link. |
+| A school owner whose real email you have | `invite_school_owner --school <slug> --email … --name "…"` | Random and never shown; they are emailed the reset link. |
+| Anyone whose real email you do not have yet | add `--temporary-password` (and `--username` for a neutral one) | You type a temporary password at the prompt. It must be changed at first sign-in, and they correct the email on Account settings. |
+
+Platform owners are superusers with no school, and land on `/platform/`.
+`invite_school_owner` only attaches to a school that exists and never creates
+one, so a mistyped slug is an error, not a duplicate tenant. Emailed links use
+`PUBLIC_BASE_URL`; in production that is `https://www.theschoolcord.com`. The
+dev settings print mail to the console. So either send from production, or pass
+`--no-email` and have the person use "Forgot password" on the live sign-in page.
+
+### Accounts in production
+
+Cleaned up on 2026-09-14:
+
+* **Demo accounts removed:** `platform.owner` and `fulfilled-academy.owner`,
+  `.principal` and `.bursar`. Their shared password had been published in this
+  README.
+* **Fulfilled Academy's seed data deleted:** students, fee structures and
+  components, the term, classes, subjects and payments.
+* **Kept for real onboarding:** the school itself, its Main Campus branch, and
+  its messaging identity (Sender ID "Fulfilled").
+
+Do not run `bootstrap_tenant` or any `seed_*` command against production.
+
+### Trying it locally
 
 ```bash
-python manage.py bootstrap_tenant --name "Fulfilled Academy"
+python manage.py bootstrap_tenant --password "<a local password>"
 ```
 
-Then sign in as `fulfilled-academy.owner`, `.principal`, `.bursar` or
-`platform.owner`, password `dependable`. Each account is given an
-`@example.com` address so the password-reset flow has somewhere to send; in dev
-the console backend prints the whole message, link included.
+Then sign in as `demo-school.owner`, `.principal`, `.bursar` or `platform.owner`
+with that password, by username or by the `@example.com` address each one is
+given. In dev the console backend prints password-reset emails, link included.
 
 ## Branding and identity
 
@@ -1404,9 +1479,12 @@ literal because the admin does not load `app.css`.
 
 ### Demo data is obviously demo
 
-The genuine pilot tenant — **Fulfilled Academy**, its roster, its pricing — is
-untouched; it represents real pilot data. What changed is everything that was
-*filler* dressed as real:
+The seed files are demo data carrying the pilot school's name, not a record of
+the school: nobody in `roster.py` is a real person. That covers the roster,
+`pricing.py`, `curriculum.py` and `seed_payments`. They exist so the screens have
+something realistic to show locally, and production no longer holds any of it
+(see [Accounts in production](#accounts-in-production)). What changed in this
+pass is everything that was *filler* dressed as real:
 
 * `bootstrap_tenant` now creates **"Demo School"**, not "Northgate Academy".
 * The signup form's example is "Bright Future Academy", not the pilot school's
@@ -1481,7 +1559,10 @@ apps/core/           branding.py (the product's one name), tenancy.py,
                      forms.py (incl. SchoolSignupForm), views.py (landing,
                      signup, onboarding, the four role dashboards)
 apps/schools/        School (the tenant) and Branch
-apps/accounts/       the custom User
+apps/accounts/       the custom User (incl. must_change_password), backends.py
+                     (sign in by email or username), Account settings (views,
+                     forms), middleware.py (the temporary-password hold),
+                     invites.py, create_platform_owner, invite_school_owner
 apps/academics/      Class and Subject, their screens, and curriculum.py
 apps/fees/           Term, FeeStructure, FeeComponent, screens, and pricing.py
 apps/students/       Student, its screens, the derived fee position (fees.py),
@@ -1504,7 +1585,8 @@ apps/admissions/     the paid add-on: Applicant (enquiry through enrolment),
                      enquiry page (public_urls.py) and the staff pipeline
 templates/           base.html, 403.html, partials/, core/ (landing, signup,
                      onboarding, dashboards), academics/, fees/, students/,
-                     messaging/, payments/, registration/ (_auth_base.html plus
+                     messaging/, payments/, accounts/ (Account settings),
+                     registration/ (_auth_base.html plus
                      login, password reset and password change), admissions/
                      (public_base.html -- the school-branded shell that
                      deliberately does not extend base.html -- the pipeline,

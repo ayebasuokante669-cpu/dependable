@@ -2,6 +2,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from apps.core.branding import PRODUCT_NAME
 from apps.core.views import BrandedPasswordResetView, RoleAwareLoginView
@@ -14,8 +15,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # Ours, before the include below, so this is the "login" that gets reversed.
     # Everything else in the auth set -- logout, and the whole password-reset
-    # and password-change flow -- is Django's, driven by the templates in
-    # templates/registration/.
+    # flow -- is Django's, driven by the templates in templates/registration/.
     path("accounts/login/", RoleAwareLoginView.as_view(), name="login"),
     # Also ours, and for the same reason: the reset *email* is rendered without
     # a request, so context processors do not run and the product name has to
@@ -24,6 +24,13 @@ urlpatterns = [
         "accounts/password_reset/",
         BrandedPasswordResetView.as_view(),
         name="password_reset",
+    ),
+    # A password is changed on Account settings, next to the email address.
+    # Django's standalone page would be a second, unlinked way to do the same.
+    path(
+        "accounts/password_change/",
+        RedirectView.as_view(pattern_name="accounts:settings"),
+        name="password_change",
     ),
     # Ours, and before the catch-all auth include so the name resolves here.
     path("accounts/", include("apps.accounts.urls")),

@@ -20,7 +20,7 @@ class UserAdmin(TenantScopedAdminMixin, DjangoUserAdmin):
     ordering = ("last_name", "first_name", "username")
 
     fieldsets = (
-        (None, {"fields": ("username", "password")}),
+        (None, {"fields": ("username", "password", "must_change_password")}),
         ("Personal info", {"fields": ("first_name", "last_name", "email", "phone")}),
         (
             "Tenancy & access",
