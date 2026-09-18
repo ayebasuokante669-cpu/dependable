@@ -41,6 +41,8 @@ urlpatterns = [
     # Ours, and before the catch-all auth include so the name resolves here.
     path("accounts/", include("apps.accounts.urls")),
     path("accounts/", include("django.contrib.auth.urls")),
+    path("branches/", include("apps.schools.urls")),
+    path("staff/", include("apps.accounts.staff_urls")),
     path("academics/", include("apps.academics.urls")),
     path("fees/", include("apps.fees.urls")),
     path("students/", include("apps.students.urls")),

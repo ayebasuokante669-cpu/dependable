@@ -1230,9 +1230,50 @@ Everything above assumed you were already signed in. This is how you get there.
 | `/welcome/` | The four-step onboarding checklist. |
 | `/accounts/login/` | Sign in with an email address or a username, landing each role on its own dashboard. |
 | `/accounts/settings/` | Account settings: anyone's own email address and password. In every role's sidebar. |
+| `/privacy/` | The privacy policy. Public, and readable signed in as well as out. |
 | `/accounts/password_change/` | Redirects to Account settings. |
 | `/accounts/password_reset/` | Django's reset flow; the console backend prints the link in dev. |
 | `/dashboard/` | Not a screen — forwards to whichever dashboard the role belongs on. |
+
+### Branches, Staff and Terms are screens, not admin links
+
+These three sat in the sidebar as Django admin URLs, which meant the proprietor
+— whose account is deliberately **not** `is_staff` — followed a link in their
+own sidebar to the admin login page. Granting `is_staff` would have been worse:
+the admin is not tenant-scoped, so it would have put another school's rows one
+URL away.
+
+| URL | What it is | Who |
+| --- | --- | --- |
+| `/branches/` | The school's campuses, with add and edit. | Read: owner, principal. Change: owner and platform (`manage_branches`). |
+| `/staff/` | Who can sign in, and as what. | Read: owner, principal (`view_staff`). |
+| `/fees/terms/` | Terms, including which one the school is in now. | Read: everyone who reads fees. Change: `manage_fees`. |
+
+Fee structures needed no change — both the platform owner and the school owner
+already held `view_fees` and `manage_fees`. `apps/core/tests_role_access.py`
+signs in as each role and follows the sidebar links, asserting on what comes
+back and that no href is an `/admin/` URL; that is the check the suite lacked,
+because every existing test asked whether the *view* allowed the role and the
+view in question was Django's.
+
+### The privacy policy
+
+`/privacy/` is written for Nigeria's NDPA: the **school is the data
+controller**, SCHOOLCORD is the **processor**, plus what is held, who it is
+shared with, how long it is kept and how to ask to see, correct or delete it.
+The text lives in `templates/core/_privacy_body.html` and is included twice by
+`core/privacy.html` — once inside the signed-in shell, once on the signed-out
+page — so it exists in one place.
+
+It is linked from the landing footer and the signup form, and listed in
+`sitemap.xml` and `llms.txt` through `seo.PUBLIC_PAGES`. "Last updated" is
+`PrivacyView.POLICY_UPDATED`, a constant: a template printing today's date
+would claim a review that never happened. `PRIVACY_EMAIL` in
+`apps/core/branding.py` is the contact address, deliberately not the no-reply
+sender.
+
+> It is a plain-language baseline, not legal advice — have it reviewed before
+> the school relies on it.
 
 ### One dashboard per role
 

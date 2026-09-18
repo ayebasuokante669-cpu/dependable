@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ branches|length }} campus{{ branches|length|pluralize:"es" }}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  {% if "manage_branches" in capabilities %}
+    <a href="{% url 'schools:branch_create' %}" class="btn btn-primary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <span class="hidden sm:inline">New branch</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  {% if branches %}
+    <section class="card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="table-head">
+            <tr>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Campus</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Where</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Head</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Classes</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Students</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Status</th>
+              {% if "manage_branches" in capabilities %}
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Actions</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ink-200">
+            {% for branch in branches %}
+              <tr>
+                <td class="px-5 py-3 font-medium text-ink-900">{{ branch.name }}</td>
+                <td class="px-5 py-3 text-ink-700">
+                  {% if branch.city or branch.state %}
+                    {{ branch.city }}{% if branch.city and branch.state %}, {% endif %}{{ branch.state }}
+                  {% else %}<span class="text-ink-400">&mdash;</span>{% endif %}
+                </td>
+                <td class="px-5 py-3 text-ink-700">
+                  {% if branch.head %}{{ branch.head.get_full_name|default:branch.head.username }}
+                  {% else %}<span class="text-ink-400">Not assigned</span>{% endif %}
+                </td>
+                <td class="numeric px-5 py-3 text-ink-700">{{ branch.class_count }}</td>
+                <td class="numeric px-5 py-3 text-ink-700">{{ branch.student_count }}</td>
+                <td class="px-5 py-3">
+                  {% if branch.is_active %}
+                    <span class="status-pill status-paid">Active</span>
+                  {% else %}
+                    <span class="status-pill status-unpaid">Retired</span>
+                  {% endif %}
+                </td>
+                {% if "manage_branches" in capabilities %}
+                  <td class="px-5 py-3 text-right">
+                    <a href="{% url 'schools:branch_update' branch.pk %}"
+                       class="font-medium text-brand-700 hover:underline">Edit</a>
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% else %}
+    <div class="card px-5 py-8 text-center text-sm text-ink-600">
+      <p>No campuses yet.</p>
+      {% if "manage_branches" in capabilities %}
+        <a href="{% url 'schools:branch_create' %}" class="btn btn-primary mt-4">
+          Add the first one
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

@@ -30,6 +30,10 @@ PRODUCT_DESCRIPTION = (
 #: The letter in the brand mark when the full logo will not fit.
 PRODUCT_INITIAL = "S"
 
+#: Where privacy requests go -- printed on the privacy policy, and a mailbox a
+#: person can actually reply to, unlike the no-reply sender below.
+PRIVACY_EMAIL = "privacy@theschoolcord.com"
+
 #: Sent as the From: address on transactional mail.
 #:
 #: It has to be on a domain verified with Resend, which is the *subdomain*

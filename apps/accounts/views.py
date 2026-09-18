@@ -19,15 +19,17 @@ from __future__ import annotations
 import logging
 
 from django.contrib import messages
-from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
-from django.views.generic import TemplateView
+from django.views.generic import ListView, TemplateView
 
 from apps.core.navigation import home_url_for
+from apps.core.permissions import Capability, CapabilityRequiredMixin
+from apps.core.roles import Role
 
 from .forms import AccountPasswordForm, EmailChangeForm
 from .passwords import generate_password
@@ -141,3 +143,37 @@ def generate_password_view(request):
         )
 
     return JsonResponse({"password": password})
+
+
+class StaffListView(CapabilityRequiredMixin, ListView):
+    """Who can sign in at this school, and as what.
+
+    Like Branches, this used to be a link to the Django admin -- unreachable
+    for the proprietor, whose account is not ``is_staff``, and not tenant-scoped
+    if it had been. ``User`` has no scoped manager of its own (see
+    apps/core/tenancy.py on why ``User.objects`` is deliberately unfiltered), so
+    this is one of the few querysets that has to narrow itself, and it does so
+    from the signed-in account's own school rather than from anything in the URL.
+    """
+
+    capability = Capability.VIEW_STAFF
+    template_name = "accounts/staff_list.html"
+    context_object_name = "staff"
+
+    def get_queryset(self):
+        user = self.request.user
+        people = get_user_model().objects.select_related("school", "branch")
+        # A platform owner has no school of their own and sees everybody;
+        # anyone else sees exactly their own school's accounts.
+        if user.school_id is not None:
+            people = people.filter(school_id=user.school_id)
+        elif not user.is_superuser and user.role != Role.PLATFORM_OWNER:
+            people = people.none()
+        return people.order_by("role", "username")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Staff"
+        context["role_labels"] = dict(Role.choices)
+        return context
+

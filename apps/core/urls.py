@@ -8,6 +8,7 @@ urlpatterns = [
     # Public.
     path("", views.LandingView.as_view(), name="landing"),
     path("signup/", views.SignupView.as_view(), name="signup"),
+    path("privacy/", views.PrivacyView.as_view(), name="privacy"),
 
     # "The dashboard", for anything that should not have to know the role.
     path("dashboard/", views.dashboard, name="dashboard"),

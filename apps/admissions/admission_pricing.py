@@ -54,7 +54,7 @@ from decimal import Decimal
 #: The intake year these sheets price. Matches the termly file's academic year,
 #: but is stored on its own field -- an intake fee and a term fee for the same
 #: year are still different things.
-ACADEMIC_YEAR = "2025/2026"
+ACADEMIC_YEAR = "2026/2027"
 
 #: Kind values, mirrored from ``models.AdmissionFeeKind``. Repeated as plain
 #: strings so this file stays importable without Django configured, which is

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ staff|length }} account{{ staff|length|pluralize }} that can sign in
+  </p>
+{% endblock %}
+
+{% block content %}
+  <section class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="table-head">
+          <tr>
+            <th scope="col" class="px-5 py-2.5 font-semibold">Name</th>
+            <th scope="col" class="px-5 py-2.5 font-semibold">Email</th>
+            <th scope="col" class="px-5 py-2.5 font-semibold">Role</th>
+            <th scope="col" class="px-5 py-2.5 font-semibold">Job title</th>
+            <th scope="col" class="px-5 py-2.5 font-semibold">Campus</th>
+            <th scope="col" class="px-5 py-2.5 font-semibold">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-ink-200">
+          {% for person in staff %}
+            <tr>
+              <td class="px-5 py-3 font-medium text-ink-900">
+                {{ person.get_full_name|default:person.username }}
+              </td>
+              <td class="px-5 py-3 text-ink-700">
+                {% if person.email %}{{ person.email }}
+                {% else %}<span class="text-ink-400">&mdash;</span>{% endif %}
+              </td>
+              <td class="px-5 py-3 text-ink-700">{{ person.get_role_display }}</td>
+              <td class="px-5 py-3 text-ink-700">
+                {% if person.job_title %}{{ person.job_title }}
+                {% else %}<span class="text-ink-400">&mdash;</span>{% endif %}
+              </td>
+              <td class="px-5 py-3 text-ink-700">
+                {% if person.branch %}{{ person.branch.name }}
+                {% else %}<span class="text-ink-400">All campuses</span>{% endif %}
+              </td>
+              <td class="px-5 py-3">
+                {% if person.is_active %}
+                  <span class="status-pill status-paid">Active</span>
+                {% else %}
+                  <span class="status-pill status-unpaid">Disabled</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-5 py-8 text-center text-ink-600">
+                No staff accounts yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% comment %}
+  Staff are added by invitation rather than from a form here: the invite
+  command emails a reset link so a new account's password is never typed by
+  somebody else. See README, "Creating real accounts".
+  {% endcomment %}
+  {% if "manage_staff" in capabilities %}
+    <p class="mt-4 text-sm text-ink-600">
+      To add someone, ask your platform contact to send them an invitation —
+      they set their own password from the emailed link. Everyone changes their
+      own email and password under
+      <a href="{% url 'accounts:settings' %}"
+         class="font-medium text-brand-700 hover:underline">Account settings</a>.
+    </p>
+  {% endif %}
+{% endblock %}

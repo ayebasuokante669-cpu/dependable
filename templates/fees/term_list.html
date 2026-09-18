@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ terms|length }} term{{ terms|length|pluralize }} — the current one drives every balance
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  {% if "manage_fees" in capabilities %}
+    <a href="{% url 'fees:term_create' %}" class="btn btn-primary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <span class="hidden sm:inline">New term</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  {% if terms %}
+    <section class="card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="table-head">
+            <tr>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Term</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Campus</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Year</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Fees due by</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Structures</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Status</th>
+              {% if "manage_fees" in capabilities %}
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Actions</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ink-200">
+            {% for term in terms %}
+              <tr>
+                <td class="px-5 py-3 font-medium text-ink-900">{{ term.name }}</td>
+                <td class="px-5 py-3 text-ink-700">{{ term.branch.name }}</td>
+                <td class="px-5 py-3 text-ink-700">{{ term.academic_year }}</td>
+                <td class="px-5 py-3 text-ink-700">
+                  {% if term.due_date %}{{ term.due_date }}
+                  {% else %}<span class="text-ink-400">Not set</span>{% endif %}
+                </td>
+                <td class="numeric px-5 py-3 text-ink-700">{{ term.structure_count }}</td>
+                <td class="px-5 py-3">
+                  {% if term.is_current %}
+                    <span class="status-pill status-paid">Current</span>
+                  {% else %}
+                    <span class="status-pill status-unpaid">Past</span>
+                  {% endif %}
+                </td>
+                {% if "manage_fees" in capabilities %}
+                  <td class="px-5 py-3 text-right">
+                    <a href="{% url 'fees:term_update' term.pk %}"
+                       class="font-medium text-brand-700 hover:underline">Edit</a>
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% else %}
+    <div class="card px-5 py-8 text-center text-sm text-ink-600">
+      <p>No terms yet. Fee structures are priced per term, so this comes first.</p>
+      {% if "manage_fees" in capabilities %}
+        <a href="{% url 'fees:term_create' %}" class="btn btn-primary mt-4">Add a term</a>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

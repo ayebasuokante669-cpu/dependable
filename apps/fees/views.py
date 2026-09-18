@@ -11,6 +11,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import Count
 from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
@@ -18,7 +19,12 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from apps.academics.models import Class, Level
 from apps.core.permissions import Capability, CapabilityRequiredMixin
 
-from .forms import FeeComponentFormSet, FeeStructureForm, NewFeeComponentFormSet
+from .forms import (
+    FeeComponentFormSet,
+    FeeStructureForm,
+    NewFeeComponentFormSet,
+    TermForm,
+)
 from .models import FeeStructure, Term
 
 
@@ -212,3 +218,59 @@ class FeeStructureDeleteView(ManageFeesMixin, DeleteView):
         label = f"{self.object.school_class.display_name} ({self.object.term.name})"
         messages.success(self.request, f"Fee structure for {label} deleted.")
         return super().form_valid(form)
+
+
+# ---------------------------------------------------------------------------
+# Terms
+#
+# "Terms" in the sidebar used to be a Django admin link, which the proprietor's
+# own account cannot open (not ``is_staff``) and which is not tenant-scoped.
+# A term is ordinary school setup, so it gets an ordinary screen, gated on the
+# same fee capabilities as the structures priced against it.
+# ---------------------------------------------------------------------------
+
+
+class TermListView(ReadFeesMixin, ListView):
+    model = Term
+    template_name = "fees/term_list.html"
+    context_object_name = "terms"
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related("branch")
+            .annotate(structure_count=Count("fee_structures", distinct=True))
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Terms"
+        return context
+
+
+class TermCreateView(ManageFeesMixin, CreateView):
+    model = Term
+    form_class = TermForm
+    template_name = "fees/term_form.html"
+    success_url = reverse_lazy("fees:term_list")
+    extra_context = {"page_title": "New term", "verb": "Create"}
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f"{self.object.name} created.")
+        return response
+
+
+class TermUpdateView(ManageFeesMixin, UpdateView):
+    model = Term
+    form_class = TermForm
+    template_name = "fees/term_form.html"
+    success_url = reverse_lazy("fees:term_list")
+    extra_context = {"page_title": "Edit term", "verb": "Save"}
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f"{self.object.name} updated.")
+        return response
+

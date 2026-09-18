@@ -26,6 +26,7 @@ from apps.schools.models import Branch, School
 
 from .forms import FeeStructureForm
 from .models import FeeComponent, FeeStructure, Term, TermSequence
+from .pricing import TERM
 
 User = get_user_model()
 
@@ -515,7 +516,10 @@ class SeedCommandTests(TestCase):
         self._seed()
         term = Term.all_objects.get()
         self.assertTrue(term.is_current)
-        self.assertEqual(term.academic_year, "2025/2026")
+        # Read from the pricing file rather than restated here: the year moves
+        # every session, and a copy in the test would just go stale.
+        self.assertEqual(term.academic_year, TERM["academic_year"])
+        self.assertEqual(term.name, TERM["name"])
         self.assertEqual(term.sequence, TermSequence.FIRST)
 
     def test_refuses_to_run_before_classes_exist(self):

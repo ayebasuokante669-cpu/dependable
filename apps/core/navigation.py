@@ -229,9 +229,14 @@ NAVIGATION: tuple[NavSection, ...] = (
     NavSection(
         label="School",
         items=(
-            NavItem("Branches", "admin:schools_branch_changelist", "branches",
-                    (Role.PLATFORM_OWNER, Role.SCHOOL_OWNER)),
-            NavItem("Staff", "admin:accounts_user_changelist", "users", _LEADERSHIP),
+            # Real screens rather than admin links: the proprietor's own
+            # account is not `is_staff`, so an admin URL was a locked door for
+            # exactly the role that needs these most -- and the admin is not
+            # tenant-scoped, so letting them in would have been worse.
+            NavItem("Branches", "schools:branch_list", "branches", _LEADERSHIP,
+                    capability="view_branches"),
+            NavItem("Staff", "staff:list", "users", _LEADERSHIP,
+                    capability="view_staff"),
             # A bursar reads the roster to record payments against it;
             # owner/principal level enrols and edits (Capability.MANAGE_STUDENTS),
             # so every role gets the link.
@@ -253,7 +258,7 @@ NAVIGATION: tuple[NavSection, ...] = (
             # A bursar reads the fee structure; owner/principal level sets it
             # (see Capability.MANAGE_FEES), so every role gets the link.
             NavItem("Fee Structures", "fees:structure_list", "money", ALL_ROLES),
-            NavItem("Terms", "admin:fees_term_changelist", "calendar", _LEADERSHIP),
+            NavItem("Terms", "fees:term_list", "calendar", _LEADERSHIP),
             # A bursar records and confirms; owner and principal level also
             # view and void (see Capability.VOID_PAYMENTS), so every role gets
             # the link.

@@ -204,11 +204,16 @@ pages'. The JSON-LD is built there too -- see seo.structured_data.
     <div class="flex flex-col items-center justify-between gap-3 text-xs text-ink-500
                 sm:flex-row">
       <p>&copy; {% now "Y" %} {{ product_name }}. {{ product_tagline }}.</p>
-      <p>
-        Already have an account?
-        <a href="{% url 'login' %}" class="font-medium text-brand-700 hover:underline">
-          Sign in
+      <p class="flex items-center gap-4">
+        <a href="{% url 'core:privacy' %}" class="font-medium text-brand-700 hover:underline">
+          Privacy
         </a>
+        <span>
+          Already have an account?
+          <a href="{% url 'login' %}" class="font-medium text-brand-700 hover:underline">
+            Sign in
+          </a>
+        </span>
       </p>
     </div>
   </footer>

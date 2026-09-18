@@ -1,4 +1,4 @@
-"""Fulfilled Academy's First Term 2025/2026 fee schedule.
+"""Fulfilled Academy's First Term 2026/2027 fee schedule.
 
 The single source for seeding, the same way ``academics/curriculum.py`` is for
 classes and subjects: edit the tuples below and re-run
@@ -57,8 +57,8 @@ class StructureSpec:
 
 
 TERM = {
-    "name": "First Term 2025/2026",
-    "academic_year": "2025/2026",
+    "name": "First Term 2026/2027",
+    "academic_year": "2026/2027",
     "sequence": 1,
     "is_current": True,
     # Left unset on purpose. "Overdue" is a property of the term, not of a

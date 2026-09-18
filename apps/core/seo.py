@@ -69,6 +69,16 @@ PUBLIC_PAGES: tuple[PublicPage, ...] = (
         ),
     ),
     PublicPage(
+        url_name="core:privacy",
+        label="Privacy policy",
+        title=f"Privacy policy · {PRODUCT_NAME}",
+        description=(
+            "What student, parent and staff data a school holds in "
+            f"{PRODUCT_NAME}, who it is shared with, how long it is kept, and "
+            "how to ask to see, correct or delete it under Nigeria's NDPA."
+        ),
+    ),
+    PublicPage(
         url_name="login",
         label="Sign in",
         title=f"Sign in · {PRODUCT_NAME}",
@@ -87,6 +97,8 @@ _PAGES_BY_URL_NAME = {page.url_name: page for page in PUBLIC_PAGES}
 PRIVATE_PATHS: tuple[str, ...] = (
     "/admin/",
     "/accounts/",
+    "/branches/",
+    "/staff/",
     "/dashboard/",
     "/platform/",
     "/school/",

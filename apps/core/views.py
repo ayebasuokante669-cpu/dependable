@@ -23,6 +23,7 @@ flag that can lie.
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 from django.contrib import messages
@@ -40,7 +41,7 @@ from apps.fees.models import FeeComponent, FeeStructure, Term
 from apps.schools.models import Branch, School
 from apps.students.models import Student, StudentStatus
 
-from .branding import branding
+from .branding import PRIVACY_EMAIL, branding
 from .forms import SchoolProfileForm, SchoolSignupForm
 from .navigation import home_url_for, home_url_name
 from .permissions import Capability, CapabilityRequiredMixin
@@ -72,6 +73,26 @@ class LandingView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["structured_data"] = structured_data(self.request)
+        return context
+
+
+class PrivacyView(TemplateView):
+    """The privacy policy. Public, and readable signed in as well as out.
+
+    The date is a constant rather than ``now``: "last updated" has to mean the
+    day the words changed, and a template that printed today's date would claim
+    a review that never happened.
+    """
+
+    template_name = "core/privacy.html"
+    #: Bump when the policy text changes.
+    POLICY_UPDATED = date(2026, 9, 18)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["policy_updated"] = self.POLICY_UPDATED
+        context["privacy_email"] = PRIVACY_EMAIL
+        context["page_title"] = "Privacy"
         return context
 
 

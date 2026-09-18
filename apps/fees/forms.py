@@ -68,6 +68,21 @@ class FeeStructureForm(BranchScopedForm):
         return cleaned
 
 
+class TermForm(BranchScopedForm):
+    """A term at one campus.
+
+    ``is_current`` is a plain checkbox rather than anything cleverer because
+    ``Term.save()`` already stands down the branch's other current term -- the
+    model holds the invariant, so the form does not have to police it.
+    """
+
+    class Meta:
+        model = Term
+        fields = ["branch", "name", "academic_year", "sequence", "is_current", "due_date"]
+        widgets = {"due_date": forms.DateInput(attrs={"type": "date"})}
+        labels = {"is_current": "This is the term the school is in now"}
+
+
 class FeeComponentForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = FeeComponent

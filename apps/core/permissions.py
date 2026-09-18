@@ -34,6 +34,13 @@ class Capability(str, Enum):
     VIEW_MESSAGING_IDENTITY = "view_messaging_identity"
     MANAGE_MESSAGING_IDENTITY = "manage_messaging_identity"
     MANAGE_SCHOOL_PROFILE = "manage_school_profile"
+    # The school's campuses and the people who work at it. Separate from
+    # MANAGE_SCHOOL_PROFILE because opening a second campus, or changing who
+    # may sign in, is the proprietor's decision rather than the principal's.
+    VIEW_BRANCHES = "view_branches"
+    MANAGE_BRANCHES = "manage_branches"
+    VIEW_STAFF = "view_staff"
+    MANAGE_STAFF = "manage_staff"
     # Admissions. Four capabilities rather than the usual two, because the
     # client drew two lines here that the view/manage pair cannot express:
     # deciding on an application is narrower than working the pipeline, and
@@ -66,6 +73,10 @@ _LEADERSHIP = frozenset(
         # decision, and the principal's to correct. Not the bursar's -- they
         # take money, they do not decide how the school presents itself.
         Capability.MANAGE_SCHOOL_PROFILE,
+        # Both read their school's campuses and staff list. Changing either is
+        # granted separately, in _SCHOOL_ADMIN below.
+        Capability.VIEW_BRANCHES,
+        Capability.VIEW_STAFF,
         # Admissions: the principal and the owner run the pipeline and decide
         # who is offered a place. The client was explicit that the decision is
         # theirs and nobody else's.
@@ -77,12 +88,17 @@ _LEADERSHIP = frozenset(
     }
 )
 
+#: Opening a campus and changing who may sign in. The proprietor's decisions,
+#: and the platform's on their behalf -- not the principal's, who runs one
+#: campus rather than deciding how many there are.
+_SCHOOL_ADMIN = frozenset({Capability.MANAGE_BRANCHES, Capability.MANAGE_STAFF})
+
 #: The platform owner holds everything a school owner does, plus the actions
 #: only the party holding the gateway account can take. Registering and
 #: approving a school's Sender ID is one: the platform submits it to the
 #: gateway, so a school approving its own would be marking its own homework and
 #: the first message would be rejected anyway.
-_PLATFORM = _LEADERSHIP | {Capability.MANAGE_MESSAGING_IDENTITY}
+_PLATFORM = _LEADERSHIP | _SCHOOL_ADMIN | {Capability.MANAGE_MESSAGING_IDENTITY}
 
 #: A bursar collects against the fee structure but does not decide it, and
 #: records payments against the roster without owning it -- they need to find a
@@ -130,7 +146,7 @@ _EVERYTHING = frozenset(Capability)
 #: The grant table. Add a capability here, not with an ad-hoc check in a view.
 ROLE_CAPABILITIES: dict[str, frozenset[Capability]] = {
     Role.PLATFORM_OWNER: _PLATFORM,
-    Role.SCHOOL_OWNER: _LEADERSHIP,
+    Role.SCHOOL_OWNER: _LEADERSHIP | _SCHOOL_ADMIN,
     Role.PRINCIPAL: _LEADERSHIP,
     Role.BURSAR: _BURSAR,
 }

@@ -12,6 +12,10 @@
 {% for page in pages %}
 - [{{ page.label }}]({{ page.url }}): {{ page.description }}{% endfor %}
 
+## Data protection
+
+{{ product_name }} is the data processor; each school is the data controller for its own students, parents and staff, under Nigeria's Data Protection Act 2023 (NDPA). The privacy policy above sets out what is held, who it is shared with, how long it is kept, and how to ask to see, correct or delete it.
+
 ## Optional
 
 - [Sitemap]({{ sitemap_url }}): every public page

@@ -1,0 +1,255 @@
+{% comment %}
+The policy text itself, included twice by core/privacy.html -- once inside the
+signed-in shell and once on the signed-out page.
+
+Written in plain language on purpose. The people who read it are proprietors,
+principals and parents, and a policy nobody can read protects nobody. Nigeria's
+NDPA vocabulary (controller, processor, data subject) is used where it is the
+legal term, and explained in the same sentence.
+{% endcomment %}
+<div class="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+
+  <h1 class="text-2xl font-bold tracking-tight text-brand-900 sm:text-3xl">
+    Privacy policy
+  </h1>
+  <p class="mt-2 text-sm text-ink-500">
+    Last updated {{ policy_updated|date:"j F Y" }}.
+  </p>
+
+  <div class="prose-schoolcord mt-8 space-y-8 text-sm leading-relaxed text-ink-700">
+
+    <section class="card p-5">
+      <h2 class="text-base font-semibold text-ink-900">In short</h2>
+      <ul class="mt-3 list-disc space-y-1.5 pl-5">
+        <li>Your school decides what data goes into {{ product_name }} and what
+          happens to it. Under the Nigeria Data Protection Act 2023 (NDPA) the
+          school is the <strong>data controller</strong>.</li>
+        <li>{{ product_name }} runs the software and stores the data on the
+          school's instruction. We are the <strong>data processor</strong>.</li>
+        <li>We do not sell personal data, and we do not use a school's student
+          or parent records to advertise anything.</li>
+        <li>If you are a parent, the fastest route to your child's records is
+          your school, not us — see <a href="#your-rights">Your rights</a>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 class="text-base font-semibold text-ink-900">Who this covers</h2>
+      <p class="mt-2">
+        {{ product_name }} is school management software used by schools in
+        Nigeria to manage fees, student records and messages to parents. This
+        policy covers www.theschoolcord.com and the application behind it.
+      </p>
+      <p class="mt-2">
+        Each school using {{ product_name }} has its own separate account. One
+        school's staff cannot see another school's records.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-base font-semibold text-ink-900">What we hold</h2>
+      <p class="mt-2">Only what a school needs to run the things it uses us for:</p>
+      <div class="mt-3 overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="table-head">
+            <tr>
+              <th scope="col" class="px-4 py-2.5 font-semibold">About</th>
+              <th scope="col" class="px-4 py-2.5 font-semibold">What is held</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ink-200">
+            <tr>
+              <td class="px-4 py-3 font-medium text-ink-900">Students</td>
+              <td class="px-4 py-3">Name, admission number, class and campus,
+                date of birth, sex, enrolment status, and what the class is
+                charged each term against what has been paid.</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-3 font-medium text-ink-900">Parents and guardians</td>
+              <td class="px-4 py-3">Name, phone number, and email address where
+                the school records one, so the school can reach you about fees
+                and school matters.</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-3 font-medium text-ink-900">Staff with accounts</td>
+              <td class="px-4 py-3">Name, username, email address, phone number,
+                job title, the role that decides what they may see, and a
+                securely hashed password. We never store a readable password.</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-3 font-medium text-ink-900">Payments</td>
+              <td class="px-4 py-3">Amount, date, method, reference and who
+                recorded it. Payments are recorded in {{ product_name }};
+                card and bank details are not collected or stored by us.</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-3 font-medium text-ink-900">Messages</td>
+              <td class="px-4 py-3">The text the school sent, who it went to,
+                and whether the gateway delivered it.</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-3 font-medium text-ink-900">Applicants</td>
+              <td class="px-4 py-3">Where a school uses admissions: the enquiry
+                and application details a parent submits, and the school's
+                decision.</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-3 font-medium text-ink-900">Technical</td>
+              <td class="px-4 py-3">Sign-in times and ordinary server logs, kept
+                to keep accounts secure and the service working.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-base font-semibold text-ink-900">Why we hold it</h2>
+      <p class="mt-2">
+        To provide the service the school signed up for: keeping the roster,
+        working out what each student owes, recording payments, and sending the
+        school's own messages to parents. We also use it to keep accounts
+        secure and to support the school when it asks for help.
+      </p>
+      <p class="mt-2">
+        Under the NDPA the lawful basis is normally the contract between the
+        school and the parent, and the school's legitimate interest in running
+        the school. Where consent is the right basis, the school obtains it —
+        the school decides this, because the school is the controller.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-base font-semibold text-ink-900">Children's data</h2>
+      <p class="mt-2">
+        Most students are children. Their records are entered by the school,
+        not by the child, and a parent or guardian acts for them. We do not
+        create accounts for students, and students do not sign in to
+        {{ product_name }}.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-base font-semibold text-ink-900">Who else sees it</h2>
+      <p class="mt-2">
+        We share data only with the suppliers who make the service work, and
+        only as far as each needs. They act on our instruction and may not use
+        the data for anything of their own:
+      </p>
+      <ul class="mt-3 list-disc space-y-1.5 pl-5">
+        <li><strong>SMS gateway</strong> — the recipient's phone number and the
+          message text, so a parent's message can be delivered.</li>
+        <li><strong>Email provider</strong> — the recipient's address and the
+          message, for things like password-reset emails.</li>
+        <li><strong>Hosting and database providers</strong> — they store the
+          data so the service can run.</li>
+      </ul>
+      <p class="mt-2">
+        Some of these providers store data outside Nigeria. Where they do, the
+        transfer is covered by the provider's contractual data-protection
+        terms, as the NDPA requires.
+      </p>
+      <p class="mt-2">
+        We will also disclose data where the law requires it. We do not sell
+        personal data to anyone, and we never share one school's data with
+        another school.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-base font-semibold text-ink-900">How long we keep it</h2>
+      <ul class="mt-3 list-disc space-y-1.5 pl-5">
+        <li>While the school is using {{ product_name }}, its records are kept
+          so the school has its own history — student records and payment
+          history are part of the school's books.</li>
+        <li>If a school leaves, it can ask for its data to be exported and
+          deleted. Unless the school asks us to keep it, we delete or
+          irreversibly anonymise the school's data within 90 days of the
+          account closing.</li>
+        <li>Records we must keep by law — for example financial records — are
+          kept for as long as the law requires and no longer.</li>
+        <li>Deleting a record in the app removes it from the app. Encrypted
+          backups roll off on their own schedule, within 30 days.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 class="text-base font-semibold text-ink-900">How it is protected</h2>
+      <ul class="mt-3 list-disc space-y-1.5 pl-5">
+        <li>Traffic to and from the site is encrypted (HTTPS).</li>
+        <li>Passwords are stored hashed, never in readable form, and are checked
+          against known-breached password lists when they are set.</li>
+        <li>Each school's data is separated from every other school's, and staff
+          see only what their role allows — a bursar records payments without
+          being able to change what the school charges.</li>
+        <li>Access to production systems is limited to the people who maintain
+          the service.</li>
+      </ul>
+      <p class="mt-2">
+        If a breach happens that puts people at risk, we tell the affected
+        school without undue delay so the school can meet its own NDPA
+        obligations, and we support the school in notifying the Nigeria Data
+        Protection Commission (NDPC) and the people affected.
+      </p>
+    </section>
+
+    <section id="your-rights">
+      <h2 class="text-base font-semibold text-ink-900">Your rights</h2>
+      <p class="mt-2">Under the NDPA you can ask to:</p>
+      <ul class="mt-3 list-disc space-y-1.5 pl-5">
+        <li>see the personal data held about you or your child;</li>
+        <li>have it corrected where it is wrong;</li>
+        <li>have it deleted, where there is no legal reason to keep it;</li>
+        <li>object to a particular use, or ask that it be restricted;</li>
+        <li>receive a copy in a portable form;</li>
+        <li>withdraw consent, where the use relies on consent.</li>
+      </ul>
+      <p class="mt-3">
+        <strong>Ask your school first.</strong> The school is the controller: it
+        holds the records, knows the child, and can correct or delete them
+        directly. If a request reaches us instead, we pass it to the school and
+        act on the school's instruction. We do this without charge, and aim to
+        answer within 30 days.
+      </p>
+      <p class="mt-2">
+        If you are not satisfied, you can complain to the Nigeria Data
+        Protection Commission.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-base font-semibold text-ink-900">Cookies</h2>
+      <p class="mt-2">
+        {{ product_name }} uses only the cookies it needs to work: one that
+        keeps you signed in, and one that protects forms against cross-site
+        request forgery. Your theme choice (light or dark) is remembered in your
+        own browser. There is no advertising or third-party tracking on the
+        application.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-base font-semibold text-ink-900">Contact</h2>
+      <p class="mt-2">
+        Parents and guardians: please contact your school, which holds the
+        records.
+      </p>
+      <p class="mt-2">
+        Schools, and anyone who cannot reach their school, can contact
+        {{ product_name }} at
+        <a href="mailto:{{ privacy_email }}"
+           class="font-medium text-brand-700 hover:underline">{{ privacy_email }}</a>.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-base font-semibold text-ink-900">Changes</h2>
+      <p class="mt-2">
+        If this policy changes in a way that matters, we update the date at the
+        top and tell schools through the application. Continuing to use
+        {{ product_name }} after a change means the new version applies.
+      </p>
+    </section>
+
+  </div>
+</div>
