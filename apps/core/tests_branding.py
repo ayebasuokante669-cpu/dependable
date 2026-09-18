@@ -126,8 +126,11 @@ class BrandingIsAvailableSignedOutTests(TestCase):
         self.assertEqual(response.context["product_name"], PRODUCT_NAME)
 
     def test_the_page_title_uses_it(self):
+        # The public pages take their titles from apps/core/seo.py, which
+        # writes the separator as the character rather than as `&middot;`.
+        # Either way the tab ends in the product's name, which is the point.
         response = self.client.get(reverse("login"))
-        self.assertContains(response, f"&middot; {PRODUCT_NAME}</title>")
+        self.assertContains(response, f"· {PRODUCT_NAME}</title>")
 
 
 class PasswordResetBrandingTests(TestCase):

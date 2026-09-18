@@ -1500,6 +1500,28 @@ pass is everything that was *filler* dressed as real:
 
 Parent emails were already on `example.com`, which is reserved for this.
 
+## Search engines and AI assistants
+
+What crawlers see is driven by the tables in `apps/core/seo.py`, so the page
+`<head>`, `robots.txt`, `sitemap.xml` and `llms.txt` cannot drift apart.
+
+| URL | What it is |
+| --- | --- |
+| `/robots.txt` | Allows the public pages; disallows the admin, every signed-in area, `/media/` and each school's `/<slug>/enquiry/` page. Googlebot, Bingbot, Google-Extended, OAI-SearchBot, ClaudeBot, PerplexityBot and friends are named, with the same rules as `*`. |
+| `/sitemap.xml` | The public pages, from Django's sitemap framework. |
+| `/llms.txt` | A short Markdown summary of the product and links to its public pages. |
+
+* **Public pages** are `PUBLIC_PAGES`: the home page, signup and sign-in. Each
+  has its own `<title>`, meta description, Open Graph and Twitter tags. The
+  home page also carries schema.org JSON-LD for the Organization and the
+  SoftwareApplication. Other pages fall back to `PRODUCT_DESCRIPTION`.
+* **A new app** needs its URL prefix in `PRIVATE_PATHS`, or its page in
+  `PUBLIC_PAGES`. `apps/core/tests_seo.py` walks the URLconf and fails on a
+  route that is in neither list.
+* **Absolute URLs** (canonical, `og:image`, the sitemap) use `PUBLIC_BASE_URL`,
+  so the Railway domain points search engines at `https://www.theschoolcord.com`
+  instead of competing with it. Left blank, they fall back to the request.
+
 ## Navigation
 
 `nav_for(role)` in `apps/core/navigation.py` is the server-side equivalent of a

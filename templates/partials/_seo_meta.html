@@ -1,0 +1,35 @@
+{% comment %}
+Description, canonical URL and link-preview tags, for every page on base.html.
+
+Values come from apps/core/seo.py (the `seo` context processor): the public
+pages have their own title and description there, and everything else falls
+back to the product description. Pages behind a login carry the same tags
+harmlessly -- a crawler, or WhatsApp fetching a shared link, is never signed
+in, so all it ever sees of them is the redirect to sign in.
+
+The image is the square logo, which is why the Twitter card is `summary` rather
+than `summary_large_image`: the large card crops to 2:1 and would cut it.
+
+og:title is the public page's own title, or the product name on any other page:
+a page's <title> block cannot be read back from an include.
+{% endcomment %}
+<meta name="description" content="{{ seo_description }}">
+<link rel="canonical" href="{{ canonical_url }}">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{ product_name }}">
+<meta property="og:locale" content="en_NG">
+<meta property="og:title" content="{% firstof seo_title product_name %}">
+<meta property="og:description" content="{{ seo_description }}">
+<meta property="og:url" content="{{ canonical_url }}">
+<meta property="og:image" content="{{ social_image_url }}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1600">
+<meta property="og:image:height" content="1600">
+<meta property="og:image:alt" content="{{ product_name }} logo">
+
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{% firstof seo_title product_name %}">
+<meta name="twitter:description" content="{{ seo_description }}">
+<meta name="twitter:image" content="{{ social_image_url }}">
+<meta name="twitter:image:alt" content="{{ product_name }} logo">

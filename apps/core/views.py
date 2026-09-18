@@ -45,6 +45,7 @@ from .forms import SchoolProfileForm, SchoolSignupForm
 from .navigation import home_url_for, home_url_name
 from .permissions import Capability, CapabilityRequiredMixin
 from .roles import Role, scope_for
+from .seo import structured_data
 
 ZERO = Decimal("0")
 
@@ -67,6 +68,11 @@ class LandingView(TemplateView):
         if request.user.is_authenticated:
             return HttpResponseRedirect(home_url_for(request.user))
         return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["structured_data"] = structured_data(self.request)
+        return context
 
 
 class RoleAwareLoginView(LoginView):

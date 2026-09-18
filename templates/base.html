@@ -3,7 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ page_title|default:product_name }}{% endblock %} &middot; {{ product_name }}</title>
+  {% comment %}
+  The public pages' titles live in apps/core/seo.py with their descriptions, so
+  the tab, the search result and the link preview all say the same thing. Every
+  other page names itself with the `title` block, as before.
+  {% endcomment %}
+  <title>{% if seo_title %}{{ seo_title }}{% else %}{% block title %}{{ page_title|default:product_name }}{% endblock %} &middot; {{ product_name }}{% endif %}</title>
+  {% include "partials/_seo_meta.html" %}
   <meta name="theme-color" content="#0f2547">
 
   {% comment %}

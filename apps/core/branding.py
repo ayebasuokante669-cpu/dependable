@@ -20,6 +20,13 @@ PRODUCT_NAME = "SCHOOLCORD"
 #: One line, used on the landing page and in the footer.
 PRODUCT_TAGLINE = "School management that starts with the fees"
 
+#: What it is, for someone who has never heard of it: the meta description on
+#: the home page, link previews, structured data and llms.txt.
+PRODUCT_DESCRIPTION = (
+    "School management software for Nigerian schools. Manage school fees and "
+    "balances, keep student records, and message parents — all in one place."
+)
+
 #: The letter in the brand mark when the full logo will not fit.
 PRODUCT_INITIAL = "S"
 

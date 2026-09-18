@@ -5,6 +5,8 @@ __pycache__/
 
 node_modules/
 db.sqlite3
+# Left behind by `manage.py test --parallel`, one per worker.
+default_*.sqlite3
 staticfiles/
 media/
 

@@ -43,6 +43,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # sitemap.xml, for the public pages only. No models: the sites framework is
+    # deliberately not installed -- see apps/core/seo.py::PublicPageSitemap.
+    "django.contrib.sitemaps",
     # Tenancy foundation. `core` first: the others build on its abstractions.
     "apps.core",
     "apps.schools",
@@ -101,6 +104,8 @@ TEMPLATES = [
                 # The product's own name, on signed-out pages too -- which is
                 # where it matters most.
                 "apps.core.branding.branding",
+                # Meta description, canonical URL and link-preview tags.
+                "apps.core.seo.seo",
                 # The password minimum and the generator's URL, for the
                 # checklist in static/js/password.js.
                 "apps.accounts.context_processors.password_policy",
