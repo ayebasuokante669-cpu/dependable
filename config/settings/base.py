@@ -43,6 +43,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # sitemap.xml, for the public pages only. No models: the sites framework is
+    # deliberately not installed -- see apps/core/seo.py::PublicPageSitemap.
+    "django.contrib.sitemaps",
     # Anymail: the mail backend in production. Installed in every environment
     # so its checks run locally too, though dev still prints mail to the console.
     "anymail",
@@ -104,6 +107,8 @@ TEMPLATES = [
                 # The product's own name, on signed-out pages too -- which is
                 # where it matters most.
                 "apps.core.branding.branding",
+                # Meta description, canonical URL and link-preview tags.
+                "apps.core.seo.seo",
                 # The password minimum and the generator's URL, for the
                 # checklist in static/js/password.js.
                 "apps.accounts.context_processors.password_policy",

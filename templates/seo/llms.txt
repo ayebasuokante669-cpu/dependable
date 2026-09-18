@@ -1,0 +1,18 @@
+{% autoescape off %}# {{ product_name }}
+
+> {{ product_description }}
+
+{{ product_name }} is a web-based school management platform built for Nigerian schools. Each school has its own private account, with one or more campuses and staff who sign in by role. It is used by proprietors, principals and bursars to run fees, student records and communication with parents from one place, on a phone or a computer.
+
+## What it does
+{% for name, detail in features %}
+- **{{ name }}**: {{ detail }}{% endfor %}
+
+## Key pages
+{% for page in pages %}
+- [{{ page.label }}]({{ page.url }}): {{ page.description }}{% endfor %}
+
+## Optional
+
+- [Sitemap]({{ sitemap_url }}): every public page
+{% endautoescape %}

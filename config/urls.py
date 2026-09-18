@@ -1,9 +1,11 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
 from django.views.generic import RedirectView
 
+from apps.core import seo
 from apps.core.branding import PRODUCT_NAME
 from apps.core.views import BrandedPasswordResetView, RoleAwareLoginView
 
@@ -12,6 +14,10 @@ admin.site.site_title = f"{PRODUCT_NAME} admin"
 admin.site.index_title = "School management platform"
 
 urlpatterns = [
+    # For crawlers and AI assistants. What each says is in apps/core/seo.py.
+    path("robots.txt", seo.RobotsTxtView.as_view(), name="robots_txt"),
+    path("sitemap.xml", sitemap, {"sitemaps": seo.SITEMAPS}, name="sitemap"),
+    path("llms.txt", seo.LlmsTxtView.as_view(), name="llms_txt"),
     path("admin/", admin.site.urls),
     # Ours, before the include below, so this is the "login" that gets reversed.
     # Everything else in the auth set -- logout, and the whole password-reset

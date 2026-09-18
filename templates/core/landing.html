@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}{{ product_name }} — {{ product_tagline|lower }}{% endblock %}
+{% comment %}
+The title and meta description are in apps/core/seo.py, with the other public
+pages'. The JSON-LD is built there too -- see seo.structured_data.
+{% endcomment %}
+{% block extra_head %}
+  <script type="application/ld+json">{{ structured_data }}</script>
+{% endblock %}
 
 {% block anonymous_content %}
 <div class="min-h-full bg-surface">

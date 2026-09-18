@@ -1,0 +1,14 @@
+{% autoescape off %}# robots.txt for {{ product_name }}
+#
+# The public site -- the home page, signup and sign-in -- is open to every
+# crawler, search engines and AI assistants alike. Dashboards, the admin and
+# each school's own pages are not. Rules come from apps/core/seo.py.
+{% for crawler in named_crawlers %}
+User-agent: {{ crawler }}{% endfor %}
+{% for rule in rules %}{{ rule }}
+{% endfor %}
+User-agent: *
+{% for rule in rules %}{{ rule }}
+{% endfor %}
+Sitemap: {{ sitemap_url }}
+{% endautoescape %}
