@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 def _from_header(school) -> str:
-    """``"Fulfilled Academy" <no-reply@schoolcord.app>`` -- see the module docstring."""
+    """``"Fulfilled Academy" <noreply@send.theschoolcord.com>`` -- see the module docstring."""
     address = settings.DEFAULT_FROM_EMAIL
     # DEFAULT_FROM_EMAIL is usually already "Name <addr>"; take the address.
     if "<" in address and ">" in address:

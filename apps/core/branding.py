@@ -23,8 +23,13 @@ PRODUCT_TAGLINE = "School management that starts with the fees"
 #: The letter in the brand mark when the full logo will not fit.
 PRODUCT_INITIAL = "S"
 
-#: Sent as the From: name on transactional mail.
-SUPPORT_EMAIL = "no-reply@schoolcord.app"
+#: Sent as the From: address on transactional mail.
+#:
+#: It has to be on a domain verified with Resend, which is the *subdomain*
+#: send.theschoolcord.com and not the root domain -- Resend refuses to send
+#: from an unverified sender, so an address at @theschoolcord.com here would
+#: fail every password reset. Verify the root domain there before changing it.
+SUPPORT_EMAIL = "noreply@send.theschoolcord.com"
 
 
 def branding(request=None) -> dict:

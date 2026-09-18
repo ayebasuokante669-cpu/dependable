@@ -1332,7 +1332,8 @@ history and process listings.
 Platform owners are superusers with no school, and land on `/platform/`.
 `invite_school_owner` only attaches to a school that exists and never creates
 one, so a mistyped slug is an error, not a duplicate tenant. Emailed links use
-`PUBLIC_BASE_URL`; in production that is `https://www.theschoolcord.com`. The
+`PUBLIC_BASE_URL`; in production that is `https://www.theschoolcord.com`, and
+the mail itself goes out through Resend (see "How mail is sent"). The
 dev settings print mail to the console. So either send from production, or pass
 `--no-email` and have the person use "Forgot password" on the live sign-in page.
 
@@ -1446,6 +1447,34 @@ A school's own logo appears in its sidebar, on the platform roll, and on
 printed payment receipts — where the print stylesheet forces
 `print-color-adjust` so the fallback square is not dropped as a background
 colour.
+
+### How mail is sent
+
+Production sends through **Resend**, over HTTPS, via `django-anymail`. It used
+to use Django's SMTP backend, which did not fail so much as *hang*: the host
+blocks outbound port 587, so a password reset held a web worker until the
+request timed out and read to the user as a broken site.
+
+| Setting | Value |
+| --- | --- |
+| `EMAIL_BACKEND` | `anymail.backends.resend.EmailBackend` (production) |
+| `ANYMAIL["RESEND_API_KEY"]` | From `RESEND_API_KEY` in the environment. |
+| `DEFAULT_FROM_EMAIL` | `SCHOOLCORD <noreply@send.theschoolcord.com>` |
+
+The From: address must be on **`send.theschoolcord.com`** — the subdomain
+verified in Resend. The root domain is not verified, and Resend refuses to send
+from an unverified sender, so `@theschoolcord.com` would fail every reset. The
+address lives with the rest of the product's identity, in
+`apps/core/branding.py`.
+
+There are deliberately no `EMAIL_HOST`/`EMAIL_PORT`/`EMAIL_HOST_USER`/
+`EMAIL_HOST_PASSWORD` settings any more: Django reads those only for the SMTP
+backend, so keeping them would be live-looking configuration that nothing uses.
+Any left on the host are ignored. Dev still prints mail to the console.
+
+`apps/core/tests_email.py` asserts all of it, including a password reset
+arriving at Resend's API with the network stubbed and `smtplib` rigged to fail
+the test if anything reaches for a socket.
 
 ### The password-reset email
 

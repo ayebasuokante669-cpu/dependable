@@ -42,12 +42,22 @@ SECURE_HSTS_PRELOAD = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-EMAIL_USE_TLS = True
+# --- Mail ---------------------------------------------------------------
+# Resend over HTTPS, through Anymail. SMTP is deliberately gone: the host
+# blocks outbound 587, so django.core.mail's smtp backend did not fail -- it
+# hung, holding a web worker until the request timed out, which is how a
+# password reset came to look like a broken site rather than a mail problem.
+#
+# There is no EMAIL_HOST / EMAIL_PORT / EMAIL_HOST_USER / EMAIL_HOST_PASSWORD
+# here on purpose. Django reads those only for the smtp backend, so leaving
+# them set would be a live-looking configuration that nothing uses and that
+# the next person would reasonably believe is what sends the mail. Any such
+# variables still set on the host are ignored.
+EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
+ANYMAIL = {"RESEND_API_KEY": os.environ.get("RESEND_API_KEY", "")}
+
+# The From: address, which must be on the domain verified with Resend --
+# send.theschoolcord.com, not the root domain. See apps/core/branding.py.
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL", f"{PRODUCT_NAME} <{SUPPORT_EMAIL}>"
 )

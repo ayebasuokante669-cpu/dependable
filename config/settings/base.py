@@ -43,6 +43,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # Anymail: the mail backend in production. Installed in every environment
+    # so its checks run locally too, though dev still prints mail to the console.
+    "anymail",
     # Tenancy foundation. `core` first: the others build on its abstractions.
     "apps.core",
     "apps.schools",
