@@ -27,6 +27,8 @@ from io import StringIO
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.exceptions import ValidationError
+from unittest import mock
+
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
@@ -42,7 +44,12 @@ from apps.students.models import Student
 
 from . import enrolment, notifications
 from .access import can_decide, can_view_applicants
-from .admission_pricing import ADMISSION_FEES, pending_report
+from .admission_pricing import (
+    ADMISSION_FEES,
+    AdmissionSpec,
+    line,
+    pending_report,
+)
 from .models import (
     AdmissionFeeItem,
     AdmissionFeeKind,
@@ -949,12 +956,43 @@ class AdmissionPricingSheetTests(TestCase):
         for spec in ADMISSION_FEES:
             names = {item.name for item in spec.lines}
             with self.subTest(classes=spec.class_names):
-                self.assertIn("Admission Fee", names)
-                self.assertIn("Tuition", names)
-                self.assertIn("Uniform", names)
-                self.assertIn("Sportswear / Development Levy", names)
-                self.assertIn("Exam / Dossier", names)
-                self.assertIn("Tracksuit", names)
+                for expected in ("Admission Fee", "Tuition", "Development Levy",
+                                 "Exam / Dossier", "Track suit"):
+                    self.assertIn(expected, names)
+                # Junior and senior quote two sets; the younger bands one.
+                self.assertTrue({"Uniform", "Uniform (2)"} & names, names)
+                # Senior charges Practical where the rest charge Sportswear --
+                # a different item, not a renamed one.
+                self.assertTrue({"Sportswear", "Practical"} & names, names)
+
+    def test_every_sheet_totals_what_the_school_wrote(self):
+        """Except the nursery band, whose 1,000 gap has its own test below."""
+        for spec in ADMISSION_FEES:
+            if spec.client_total == Decimal("81000"):
+                continue
+            with self.subTest(classes=spec.class_names):
+                self.assertEqual(spec.computed_total, spec.client_total)
+
+    def test_books_are_left_out_of_what_is_due_at_intake(self):
+        """computed_total is the sheet's own total line, which excludes books."""
+        for spec in ADMISSION_FEES:
+            book_lines = [i for i in spec.lines if i.kind == "books"]
+            with self.subTest(classes=spec.class_names):
+                self.assertEqual(len(book_lines), 1)
+                self.assertEqual(
+                    spec.computed_total + book_lines[0].amount,
+                    sum(i.amount for i in spec.lines),
+                )
+
+    def test_the_senior_arms_differ_only_in_their_book_list(self):
+        arts, science = [
+            spec for spec in ADMISSION_FEES if "SSS 1" in spec.class_names
+        ]
+        self.assertEqual(arts.computed_total, science.computed_total)
+        self.assertNotEqual(
+            [i.amount for i in arts.lines if i.kind == "books"],
+            [i.amount for i in science.lines if i.kind == "books"],
+        )
 
     def test_compulsory_books_are_a_separate_add_on(self):
         for spec in ADMISSION_FEES:
@@ -974,29 +1012,96 @@ class AdmissionPricingSheetTests(TestCase):
         names = [item.name for item in nursery.lines]
         self.assertEqual(len(names), len(set(names)))
 
-    def test_unpriced_lines_are_reported_rather_than_seeded_as_zero(self):
-        """A real-looking 0 in front of a parent is worse than a named gap."""
-        report = pending_report()
-        for label, lines in report:
-            with self.subTest(classes=label):
-                self.assertTrue(lines)
+    def test_every_figure_has_now_been_supplied(self):
+        """The sheets are priced; nothing is waiting on the client."""
+        self.assertEqual(pending_report(), [])
+        for spec in ADMISSION_FEES:
+            with self.subTest(classes=spec.class_names):
+                self.assertTrue(spec.is_complete)
+
+    def test_an_unpriced_line_would_still_be_reported_rather_than_guessed(self):
+        """The refusal mechanism, on a sheet built for the purpose.
+
+        It outlives the gaps it was written for: the next sheet a school sends
+        may arrive incomplete too, and a 0 in front of a parent is worse than a
+        named gap.
+        """
+        incomplete = AdmissionSpec(
+            ("Primary 1",),
+            (line("Admission Fee", None, "admission"), line("Tuition", 26_000)),
+        )
+        self.assertFalse(incomplete.is_complete)
+        self.assertEqual(
+            [item.name for item in incomplete.pending_lines], ["Admission Fee"]
+        )
 
 
 class AdmissionFeeSeedTests(AdmissionsTestCase):
-    def test_the_seeder_names_what_it_is_waiting_for(self):
+    """The figures have landed, so the seeder now writes rather than waits."""
+
+    def seed(self) -> str:
         out = StringIO()
         call_command(
             "seed_admission_fees",
             "--school", "Alpha Schools", "--branch", "North",
             stdout=out,
         )
-        output = out.getvalue()
-        self.assertIn("skipped", output)
-        self.assertIn("Admission Fee", output)
-        # And it seeded nothing rather than seeding zeros.
+        return out.getvalue()
+
+    def test_it_writes_a_schedule_per_class_from_the_sheet(self):
+        self.seed()
+        # One per class at the branch: KG 2, Primary 1, SSS 1 Science.
+        schedules = AdmissionFeeSchedule.all_objects.filter(branch=self.north)
+        self.assertEqual(schedules.count(), 3)
+        kg2 = schedules.get(school_class=self.north_kg2)
+        self.assertEqual(kg2.admission_total, Decimal("3000"))
+        self.assertEqual(kg2.compulsory_total, Decimal("82000"))
+        self.assertEqual(kg2.books_total, Decimal("35000"))
+
+    def test_the_senior_arm_gets_its_own_book_list(self):
+        self.seed()
+        sss1 = AdmissionFeeSchedule.all_objects.get(school_class=self.north_sss1)
+        self.assertEqual(sss1.compulsory_total, Decimal("106000"))
+        self.assertEqual(sss1.books_total, Decimal("75000"))  # Science
+        names = [item.name for item in sss1.items.all()]
+        self.assertIn("Practical", names)
+        self.assertNotIn("Sportswear", names)
+
+    def test_it_warns_about_the_nursery_gap_without_balancing_it(self):
+        output = self.seed()
+        self.assertIn("82,000", output)
+        self.assertIn("81,000", output)
+        kg2 = AdmissionFeeSchedule.all_objects.get(school_class=self.north_kg2)
+        # Seeded as supplied: seven compulsory lines, no invented eighth.
+        compulsory = [i for i in kg2.items.all() if i.kind != "books"]
+        self.assertEqual(len(compulsory), 7)
+
+    def test_it_never_seeds_a_zero(self):
+        self.seed()
         self.assertFalse(
             AdmissionFeeItem.all_objects.filter(amount=Decimal("0")).exists()
         )
+
+    def test_seeding_twice_rewrites_rather_than_duplicates(self):
+        self.seed()
+        first = AdmissionFeeItem.all_objects.count()
+        self.seed()
+        self.assertEqual(AdmissionFeeItem.all_objects.count(), first)
+
+    def test_a_sheet_still_missing_a_figure_is_named_not_guessed(self):
+        """The refusal path, with a deliberately unpriced sheet standing in."""
+        unpriced = AdmissionSpec(
+            ("Primary 1",),
+            (line("Admission Fee", None, "admission"), line("Tuition", 26_000)),
+        )
+        with mock.patch(
+            "apps.admissions.management.commands.seed_admission_fees.specs_for",
+            lambda klass: [unpriced] if klass.name == "Primary 1" else [],
+        ):
+            output = self.seed()
+        self.assertIn("skipped", output)
+        self.assertIn("Admission Fee", output)
+        self.assertFalse(AdmissionFeeSchedule.all_objects.exists())
 
 
 # ===========================================================================
