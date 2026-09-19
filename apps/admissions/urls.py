@@ -18,6 +18,21 @@ urlpatterns = [
     path("new/", views.EnquiryCreateView.as_view(), name="enquiry_create"),
     path("fees/", views.FeeScheduleListView.as_view(), name="fee_schedules"),
     path("settings/", views.AdmissionsSettingsView.as_view(), name="settings"),
+    path(
+        "requirements/",
+        views.RequirementListView.as_view(),
+        name="requirements",
+    ),
+    path(
+        "requirements/<int:level>/edit/",
+        views.RequirementUpdateView.as_view(),
+        name="requirement_update",
+    ),
+    path(
+        "requirements/<int:level>/reset/",
+        views.RequirementResetView.as_view(),
+        name="requirement_reset",
+    ),
 
     path("<int:pk>/", views.ApplicantDetailView.as_view(), name="applicant_detail"),
     path(

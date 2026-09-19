@@ -41,6 +41,10 @@ class Capability(str, Enum):
     MANAGE_BRANCHES = "manage_branches"
     VIEW_STAFF = "view_staff"
     MANAGE_STAFF = "manage_staff"
+    # What each level must bring to be admitted. The proprietor's policy, not
+    # the principal's: a principal runs the pipeline under the rules, they do
+    # not rewrite the rules. Everyone who can see admissions reads them.
+    MANAGE_ADMISSION_REQUIREMENTS = "manage_admission_requirements"
     # Admissions. Four capabilities rather than the usual two, because the
     # client drew two lines here that the view/manage pair cannot express:
     # deciding on an application is narrower than working the pipeline, and
@@ -91,7 +95,13 @@ _LEADERSHIP = frozenset(
 #: Opening a campus and changing who may sign in. The proprietor's decisions,
 #: and the platform's on their behalf -- not the principal's, who runs one
 #: campus rather than deciding how many there are.
-_SCHOOL_ADMIN = frozenset({Capability.MANAGE_BRANCHES, Capability.MANAGE_STAFF})
+_SCHOOL_ADMIN = frozenset(
+    {
+        Capability.MANAGE_BRANCHES,
+        Capability.MANAGE_STAFF,
+        Capability.MANAGE_ADMISSION_REQUIREMENTS,
+    }
+)
 
 #: The platform owner holds everything a school owner does, plus the actions
 #: only the party holding the gateway account can take. Registering and

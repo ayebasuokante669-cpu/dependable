@@ -23,15 +23,18 @@ from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
 from django.http import HttpResponseRedirect, JsonResponse
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_POST
-from django.views.generic import ListView, TemplateView
+from django.views.generic import FormView, ListView, TemplateView, View
+
+from django.urls import reverse, reverse_lazy
 
 from apps.core.navigation import home_url_for
 from apps.core.permissions import Capability, CapabilityRequiredMixin
 from apps.core.roles import Role
 
-from .forms import AccountPasswordForm, EmailChangeForm
+from .forms import AccountPasswordForm, EmailChangeForm, StaffAccountForm
+from .invites import send_set_password_email
 from .passwords import generate_password
 
 logger = logging.getLogger(__name__)
@@ -176,4 +179,80 @@ class StaffListView(CapabilityRequiredMixin, ListView):
         context["page_title"] = "Staff"
         context["role_labels"] = dict(Role.choices)
         return context
+
+class ManageStaffMixin(CapabilityRequiredMixin):
+    """The proprietor, and the platform on their behalf. Not a bursar."""
+
+    capability = Capability.MANAGE_STAFF
+
+
+class StaffCreateView(ManageStaffMixin, FormView):
+    """Create a login for a member of staff and email them a link to set it.
+
+    The invitation is the same machinery the invite_school_owner command uses,
+    and therefore the same email a "forgot password" produces -- one message to
+    keep working rather than two that drift apart.
+    """
+
+    template_name = "accounts/staff_form.html"
+    form_class = StaffAccountForm
+    success_url = reverse_lazy("staff:list")
+    extra_context = {"page_title": "New staff account"}
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["creator"] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        user = form.save()
+        # Outside the transaction that made the account on purpose: a mail
+        # failure must not roll back a user who now exists as far as the
+        # proprietor is concerned. If it fails they are told, and the Resend
+        # button on the staff list is the fix.
+        try:
+            send_set_password_email(user)
+        except Exception:
+            logger.exception("Invite email failed for %s", user.pk)
+            messages.warning(
+                self.request,
+                f"{user.get_full_name() or user.username} was created, but the "
+                f"invitation email to {user.email} could not be sent. Use "
+                f"Resend invite to try again.",
+            )
+        else:
+            messages.success(
+                self.request,
+                f"{user.get_full_name() or user.username} can now sign in as "
+                f"{user.get_role_display().lower()}. A link to set their own "
+                f"password has been emailed to {user.email}.",
+            )
+        return HttpResponseRedirect(self.get_success_url())
+
+
+class ResendStaffInviteView(ManageStaffMixin, View):
+    """Send the set-a-password link again.
+
+    POST only, and scoped to the caller's own school: an id from another
+    tenant is a 404 here rather than an email sent to a stranger.
+    """
+
+    def post(self, request, *args, **kwargs):
+        school = getattr(request.user, "school", None)
+        people = get_user_model().objects.all()
+        if school is not None:
+            people = people.filter(school_id=school.pk)
+        elif not request.user.is_superuser:
+            people = people.none()
+        user = get_object_or_404(people, pk=kwargs["pk"])
+        try:
+            send_set_password_email(user)
+        except Exception:
+            logger.exception("Invite resend failed for %s", user.pk)
+            messages.error(
+                request, f"The email to {user.email} could not be sent."
+            )
+        else:
+            messages.success(request, f"A new link was emailed to {user.email}.")
+        return HttpResponseRedirect(reverse("staff:list"))
 

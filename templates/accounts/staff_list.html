@@ -6,6 +6,18 @@
   </p>
 {% endblock %}
 
+{% block page_actions %}
+  {% if "manage_staff" in capabilities %}
+    <a href="{% url 'staff:create' %}" class="btn btn-primary text-sm">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <span class="hidden sm:inline">New staff account</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
 {% block content %}
   <section class="card overflow-hidden">
     <div class="overflow-x-auto">
@@ -18,6 +30,9 @@
             <th scope="col" class="px-5 py-2.5 font-semibold">Job title</th>
             <th scope="col" class="px-5 py-2.5 font-semibold">Campus</th>
             <th scope="col" class="px-5 py-2.5 font-semibold">Status</th>
+            {% if "manage_staff" in capabilities %}
+              <th scope="col" class="px-5 py-2.5 text-right font-semibold">Invite</th>
+            {% endif %}
           </tr>
         </thead>
         <tbody class="divide-y divide-ink-200">
@@ -46,10 +61,26 @@
                   <span class="status-pill status-unpaid">Disabled</span>
                 {% endif %}
               </td>
+              {% if "manage_staff" in capabilities %}
+                <td class="px-5 py-3 text-right">
+                  {% if person.email %}
+                    <form method="post"
+                          action="{% url 'staff:resend_invite' person.pk %}">
+                      {% csrf_token %}
+                      <button type="submit"
+                              class="text-sm font-medium text-brand-700 hover:underline">
+                        Resend invite
+                      </button>
+                    </form>
+                  {% else %}
+                    <span class="text-ink-400">&mdash;</span>
+                  {% endif %}
+                </td>
+              {% endif %}
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6" class="px-5 py-8 text-center text-ink-600">
+              <td colspan="7" class="px-5 py-8 text-center text-ink-600">
                 No staff accounts yet.
               </td>
             </tr>
@@ -66,9 +97,8 @@
   {% endcomment %}
   {% if "manage_staff" in capabilities %}
     <p class="mt-4 text-sm text-ink-600">
-      To add someone, ask your platform contact to send them an invitation —
-      they set their own password from the emailed link. Everyone changes their
-      own email and password under
+      New accounts set their own password from the emailed link, so nobody else
+      ever knows it. Everyone changes their own email and password under
       <a href="{% url 'accounts:settings' %}"
          class="font-medium text-brand-700 hover:underline">Account settings</a>.
     </p>

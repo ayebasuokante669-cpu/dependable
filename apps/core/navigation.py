@@ -278,6 +278,8 @@ NAVIGATION: tuple[NavSection, ...] = (
                     _LEADERSHIP, capability="manage_admissions"),
             NavItem("Admission fees", "admissions:fee_schedules", "money", ALL_ROLES,
                     capability="view_admission_payments"),
+            NavItem("Requirements", "admissions:requirements", "clipboard",
+                    ALL_ROLES, capability="view_admissions"),
             NavItem("Admissions settings", "admissions:settings", "cog",
                     _LEADERSHIP, capability="manage_admissions"),
         ),

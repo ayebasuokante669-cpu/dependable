@@ -40,7 +40,7 @@ from .models import (
     Assessment,
     AssessmentOutcome,
 )
-from .requirements import DOCUMENT_KINDS, profile_for
+from .requirements import DOCUMENT_KINDS, RequirementKind, profile_for
 
 #: The enquiry fields, in the order both enquiry forms ask for them. Declared
 #: once so the public form and the walk-in form cannot drift apart -- they
@@ -610,6 +610,122 @@ class AdmissionsConfigForm(StyledFormMixin, forms.ModelForm):
         self.fields["require_payment_before_enrolment"].label = (
             "Require the admission fee before enrolling"
         )
+
+
+class RequirementSetForm(StyledFormMixin, forms.Form):
+    """What one level must bring, as the school's own policy.
+
+    Three states per line, not two. "Not asked" and "optional" are different
+    answers -- a school will take a transfer letter from a Primary 3 applicant
+    without refusing the application for want of one, and a form that offers a
+    four-year-old's school report as an optional upload is asking for something
+    that does not exist. The model stores the difference as a row that is
+    absent versus a row with ``is_required=False``; this form is where a person
+    says which.
+
+    Saving writes the school-wide set (``branch`` null). A campus-level
+    override is a real thing the model supports, but it is not something a
+    proprietor has asked to do from a screen, and offering it here would make
+    the common case -- one policy, every campus -- the harder one.
+    """
+
+    REQUIRED = "required"
+    OPTIONAL = "optional"
+    NOT_ASKED = "not_asked"
+
+    CHOICES = (
+        (REQUIRED, "Required"),
+        (OPTIONAL, "Optional"),
+        (NOT_ASKED, "Not asked"),
+    )
+    #: The exam is sat or it is not. An "optional" exam would satisfy nothing:
+    #: `requires_assessment` reads `is_required`, so an optional one is a line
+    #: the pipeline ignores while the screen implies it matters.
+    EXAM_CHOICES = (
+        (REQUIRED, "Sits the entrance exam"),
+        (NOT_ASKED, "No entrance exam"),
+    )
+
+    def __init__(self, *args, level=None, school=None, **kwargs):
+        self.level = level
+        self.school = school
+        super().__init__(*args, **kwargs)
+        profile = profile_for(level, school=school)
+        current = {line.kind: line for line in profile.lines}
+
+        for kind in DOCUMENT_KINDS:
+            self.fields[kind] = forms.ChoiceField(
+                label=RequirementKind(kind).label,
+                choices=self.CHOICES,
+                widget=forms.RadioSelect,
+                initial=self._state_of(current.get(kind)),
+            )
+        exam = current.get(RequirementKind.ENTRANCE_EXAM)
+        self.fields[RequirementKind.ENTRANCE_EXAM] = forms.ChoiceField(
+            label=RequirementKind(RequirementKind.ENTRANCE_EXAM).label,
+            choices=self.EXAM_CHOICES,
+            widget=forms.RadioSelect,
+            # Collapsed to the two states this field offers. The defaults list
+            # Nursery's exam as an optional line, which means "does not sit
+            # one"; leaving it as OPTIONAL here would be a value not in
+            # `choices`, and the radio would open with nothing selected.
+            initial=(
+                self.REQUIRED
+                if exam is not None and exam.is_required
+                else self.NOT_ASKED
+            ),
+        )
+
+    @classmethod
+    def _state_of(cls, line) -> str:
+        if line is None:
+            return cls.NOT_ASKED
+        return cls.REQUIRED if line.is_required else cls.OPTIONAL
+
+    def clean(self):
+        cleaned = super().clean()
+        asked = [
+            kind for kind, state in cleaned.items() if state != self.NOT_ASKED
+        ]
+        if not asked:
+            # A set with no lines is read as a half-finished configuration and
+            # falls back to the defaults, so saving one would look like a
+            # change and behave like none.
+            raise forms.ValidationError(
+                "A level has to ask for at least one thing. To go back to the "
+                "platform's own policy, use Reset to default instead."
+            )
+        return cleaned
+
+    def save(self):
+        """Write the school-wide set for this level, replacing its lines."""
+        from .models import Requirement, RequirementSet
+
+        requirement_set, _ = RequirementSet.all_objects.update_or_create(
+            school=self.school,
+            branch=None,
+            level=self.level,
+            defaults={"is_active": True},
+        )
+        requirement_set.requirements.all().delete()
+        Requirement.all_objects.bulk_create(
+            [
+                Requirement(
+                    school=self.school,
+                    requirement_set=requirement_set,
+                    kind=kind,
+                    is_required=self.cleaned_data[kind] == self.REQUIRED,
+                    position=position,
+                )
+                # Document order first, exam last: the order the application
+                # form and the checklist read in.
+                for position, kind in enumerate(
+                    DOCUMENT_KINDS + (RequirementKind.ENTRANCE_EXAM,)
+                )
+                if self.cleaned_data[kind] != self.NOT_ASKED
+            ]
+        )
+        return requirement_set
 
 
 class PipelineFilterForm(StyledFormMixin, forms.Form):

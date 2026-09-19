@@ -48,6 +48,7 @@ from . import enrolment, notifications
 from .access import (
     DecideAdmissionsMixin,
     ManageAdmissionsMixin,
+    ManageRequirementsMixin,
     RecordAdmissionPaymentsMixin,
     ViewAdmissionPaymentsMixin,
     ViewAdmissionsMixin,
@@ -65,6 +66,7 @@ from .forms import (
     EnrolmentForm,
     PipelineFilterForm,
     PublicEnquiryForm,
+    RequirementSetForm,
     StaffEnquiryForm,
 )
 from .models import (
@@ -76,6 +78,7 @@ from .models import (
     Applicant,
     ApplicantStatus,
     Assessment,
+    RequirementSet,
 )
 from .requirements import profile_for
 
@@ -774,3 +777,113 @@ class AdmissionsSettingsView(ManageAdmissionsMixin, UpdateView):
         response = super().form_valid(form)
         messages.success(self.request, "Admissions settings saved.")
         return response
+
+# ---------------------------------------------------------------------------
+# Admission requirements
+#
+# The settings screen showed these read-only and told the reader to edit them
+# "in the admin" -- which the proprietor's own account cannot open. So they are
+# editable here, by the proprietor only: a principal runs the pipeline under
+# the rules, they do not rewrite the rules.
+# ---------------------------------------------------------------------------
+
+
+class RequirementListView(ViewAdmissionsMixin, TemplateView):
+    """What each level asks for today, and whether it is ours or the default."""
+
+    template_name = "admissions/requirement_list.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        school = getattr(self.request.user, "school", None)
+        branch = getattr(self.request.user, "branch", None)
+        context["profiles"] = [
+            profile_for(level.value, school=school, branch=branch) for level in Level
+        ]
+        context["page_title"] = "Admission requirements"
+        return context
+
+
+class RequirementUpdateView(ManageRequirementsMixin, FormView):
+    """Edit one level's policy.
+
+    The level comes from the URL and is checked against the ladder, not trusted:
+    an unknown one is a 404 rather than a set filed under a level that does not
+    exist.
+    """
+
+    template_name = "admissions/requirement_form.html"
+    form_class = RequirementSetForm
+    success_url = reverse_lazy("admissions:requirements")
+
+    def dispatch(self, request, *args, **kwargs):
+        self.level = self._resolve_level(kwargs.get("level"))
+        return super().dispatch(request, *args, **kwargs)
+
+    @staticmethod
+    def _resolve_level(raw) -> int:
+        try:
+            return Level(int(raw)).value
+        except (TypeError, ValueError):
+            raise Http404("No such level.")
+
+    def _school(self):
+        school = getattr(self.request.user, "school", None)
+        if school is None:
+            # Platform staff have no school of their own whose policy this
+            # would be. Cross-tenant work belongs in the admin.
+            raise Http404("This account is not attached to a school.")
+        return school
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["level"] = self.level
+        kwargs["school"] = self._school()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        profile = profile_for(self.level, school=self._school())
+        context["profile"] = profile
+        context["level_label"] = profile.level_label
+        context["page_title"] = f"{profile.level_label} requirements"
+        return context
+
+    def form_valid(self, form):
+        form.save()
+        messages.success(
+            self.request,
+            f"{Level(self.level).label} requirements saved. They apply to every "
+            f"new application from now on.",
+        )
+        return super().form_valid(form)
+
+
+class RequirementResetView(ManageRequirementsMixin, View):
+    """Delete a level's own policy, so the platform default applies again.
+
+    POST only: a link that a crawler or a prefetch could follow must not undo a
+    school's configuration.
+    """
+
+    def post(self, request, *args, **kwargs):
+        level = RequirementUpdateView._resolve_level(kwargs.get("level"))
+        school = getattr(request.user, "school", None)
+        if school is None:
+            raise Http404("This account is not attached to a school.")
+        # Scoped manager: a set belonging to another school is not found here,
+        # rather than found and deleted.
+        deleted, _ = RequirementSet.objects.filter(
+            school=school, level=level, branch__isnull=True
+        ).delete()
+        if deleted:
+            messages.success(
+                request,
+                f"{Level(level).label} requirements are back to the platform default.",
+            )
+        else:
+            messages.info(
+                request, f"{Level(level).label} was already on the default."
+            )
+        return HttpResponseRedirect(reverse("admissions:requirements"))
+

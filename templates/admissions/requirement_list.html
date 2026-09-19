@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    What each level must bring to be admitted
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-5">
+
+  <p class="text-sm text-ink-600">
+    A level marked <span class="chip">Default</span> runs on the platform's
+    policy. Change one and only your school moves — every new application at
+    that level is checked against your own list from then on.
+  </p>
+
+  {% for profile in profiles %}
+    <section class="card overflow-hidden">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b
+                  border-ink-200 px-5 py-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 class="text-sm font-semibold text-ink-900">{{ profile.level_label }}</h2>
+          {% if profile.is_configured %}
+            <span class="status-pill status-paid">Your own</span>
+          {% else %}
+            <span class="chip">Default</span>
+          {% endif %}
+          {% if profile.requires_assessment %}
+            <span class="status-pill status-partial">Sits the entrance exam</span>
+          {% else %}
+            <span class="chip">No entrance exam</span>
+          {% endif %}
+        </div>
+
+        {% if "manage_admission_requirements" in capabilities %}
+          <div class="flex items-center gap-2">
+            <a href="{% url 'admissions:requirement_update' profile.level %}"
+               class="btn btn-secondary text-sm">Edit</a>
+            {% if profile.is_configured %}
+              <form method="post"
+                    action="{% url 'admissions:requirement_reset' profile.level %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost text-sm">
+                  Reset to default
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="px-5 py-4">
+        <ul class="flex flex-wrap gap-1.5">
+          {% for line in profile.lines %}
+            <li class="chip {% if not line.is_required %}opacity-60{% endif %}">
+              {{ line.label }}{% if not line.is_required %} (optional){% endif %}
+            </li>
+          {% empty %}
+            <li class="text-sm text-ink-500">Nothing asked for.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+  {% endfor %}
+
+  {% if "manage_admission_requirements" not in capabilities %}
+    <p class="rounded-md bg-ink-50 px-3 py-2 text-xs text-ink-600">
+      Only the school owner can change these. Your role can read them.
+    </p>
+  {% endif %}
+</div>
+{% endblock %}

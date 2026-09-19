@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    What a {{ level_label }} applicant must bring
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong" role="alert">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Documents</h2>
+        <p class="field-hint mt-0.5">
+          <strong>Required</strong> blocks a decision until it is supplied.
+          <strong>Optional</strong> is asked for and shown on the checklist, but
+          never holds up an application. <strong>Not asked</strong> leaves it off
+          the form altogether.
+        </p>
+      </div>
+
+      <div class="divide-y divide-ink-200">
+        {% for field in form %}
+          <fieldset class="px-5 py-4">
+            <legend class="text-sm font-medium text-ink-900">{{ field.label }}</legend>
+            {% if field.errors %}
+              <p class="mt-1 text-xs text-overdue-strong">{{ field.errors|join:" " }}</p>
+            {% endif %}
+            <div class="mt-2 flex flex-wrap gap-4">
+              {% for choice in field %}
+                <label class="flex items-center gap-2 text-sm text-ink-700">
+                  {{ choice.tag }}
+                  <span>{{ choice.choice_label }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </fieldset>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <a href="{% url 'admissions:requirements' %}" class="btn btn-secondary text-sm">
+        Cancel
+      </a>
+      <button type="submit" class="btn btn-primary text-sm">
+        Save {{ level_label }} requirements
+      </button>
+    </div>
+  </form>
+
+  {% if profile.is_configured %}
+    <form method="post" class="mt-4 text-center"
+          action="{% url 'admissions:requirement_reset' profile.level %}">
+      {% csrf_token %}
+      <button type="submit" class="text-xs font-medium text-brand-700 hover:underline">
+        Reset this level to the platform default
+      </button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

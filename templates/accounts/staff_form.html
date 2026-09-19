@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    They set their own password from an emailed link
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong" role="alert">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Who they are</h2>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        {% include "partials/_field.html" with field=form.full_name %}
+        {% include "partials/_field.html" with field=form.email %}
+        {% include "partials/_field.html" with field=form.phone %}
+      </div>
+    </div>
+
+    <div class="card mt-5 overflow-hidden">
+      <div class="border-b border-ink-200 px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">What they may do</h2>
+        <p class="field-hint mt-0.5">
+          The permission role decides what the account can see and change. The
+          job title is what they do at the school and has no effect on access —
+          promoting a bursar to "Head of Finance" is an HR change, not an
+          access change.
+        </p>
+      </div>
+      <div class="space-y-5 p-5 sm:p-6">
+        {% include "partials/_field.html" with field=form.role %}
+        {% include "partials/_field.html" with field=form.branch %}
+        {% include "partials/_field.html" with field=form.job_title %}
+      </div>
+    </div>
+
+    <p class="mt-4 rounded-md bg-ink-50 px-3 py-2 text-xs text-ink-600">
+      No password is set here. The account is created with one nobody knows —
+      not even you — and they choose their own from the link emailed to them.
+    </p>
+
+    <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <a href="{% url 'staff:list' %}" class="btn btn-secondary text-sm">Cancel</a>
+      <button type="submit" class="btn btn-primary text-sm">
+        Create account and send invite
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

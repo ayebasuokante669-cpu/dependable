@@ -1087,6 +1087,32 @@ the paper book this feature exists to replace. "Required" is enforced where it
 matters — `applicant.missing_requirements`, which the detail screen lists and
 the decision screen shows the principal before they decide.
 
+#### The school edits them, not the admin
+
+`/admissions/requirements/` lists what each level asks for and, for the school
+owner, edits it. Previously the only way to change a `RequirementSet` was the
+Django admin — so the policy belonged to whoever had a shell rather than to the
+proprietor whose school it is.
+
+Each line has **three** states, not two, because "optional" and "not asked" are
+different answers: an optional transfer letter is requested and shown on the
+checklist but never blocks a decision, while one that is not asked for is off
+the form altogether. The entrance exam is the exception — it offers only
+*sits it* / *does not*, since `requires_assessment` reads `is_required` and an
+"optional exam" would be a line the pipeline ignores while the screen implies
+it matters.
+
+Saving writes the **school-wide** set (`branch` null). Campus-level overrides
+remain a thing the model supports and `profile_for` resolves, but they are not
+offered from a screen — one policy across every campus is the case schools
+actually have. **Reset to default** deletes the set, so the built-in policy
+applies again; it is POST-only, because a link a prefetch could follow must not
+undo a school's configuration.
+
+Only the school owner writes it (`manage_admission_requirements`, held by
+school owner and platform owner). A principal runs the pipeline *under* the
+rules and reads them; that is the line the client drew.
+
 ### Admission fees are not termly fees
 
 `fees.FeeStructure` is what a class owes **per term** and is repriced every
@@ -1255,6 +1281,42 @@ signs in as each role and follows the sidebar links, asserting on what comes
 back and that no href is an `/admin/` URL; that is the check the suite lacked,
 because every existing test asked whether the *view* allowed the role and the
 view in question was Django's.
+
+#### Creating staff accounts
+
+`/staff/new/` is where a proprietor gives a colleague a login. Before it, every
+account after the first came from somebody with a shell running
+`invite_school_owner` — fine for the first owner, since there is nobody at the
+school yet, and wrong for everyone after.
+
+* **No password field.** The account gets a long random password nobody sees —
+  not even the proprietor creating it — and the person sets their own from the
+  emailed link, the same `send_set_password_email` the invite command uses and
+  the same message "forgot password" produces. Random rather than unusable:
+  Django's reset form skips accounts with an unusable password, which would
+  shut the only door.
+* **Permission role and job title stay separate.** The role decides access; the
+  title is what they do. A bursar promoted to "Head of Finance" gains nothing.
+* **Assignable roles are school owner, principal and bursar.** `platform_owner`
+  is absent from the choices *and* rejected in `clean_role`, so a hand-rolled
+  POST cannot mint one. Platform staff come from `create_platform_owner`.
+* **Tenant-scoped by construction.** The school is never a form field — it is
+  read from the signed-in account — so a posted `school` is ignored, and the
+  campus dropdown runs through the scoped manager, so another school's campus
+  is not selectable and is rejected if sent by hand.
+* A branch-scoped role (principal, bursar) must name a campus; an owner account
+  stores none, because an owner sees them all.
+
+The invite email is sent **outside** the transaction that creates the account:
+a mail failure must not roll back a user the proprietor has just been told
+about. If it fails they are warned, and **Resend invite** on the staff list is
+the fix — itself scoped, so an id from another tenant is a 404 rather than an
+email to a stranger.
+
+`apps/accounts/tests_staff_provisioning.py` follows the emailed link to the
+end: sets a password, signs in with it, checks the new bursar lands on the
+screens their role allows and is refused the ones it does not, and that the
+link is single-use.
 
 ### The privacy policy
 

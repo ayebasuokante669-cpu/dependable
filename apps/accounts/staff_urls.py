@@ -13,4 +13,10 @@ app_name = "staff"
 
 urlpatterns = [
     path("", views.StaffListView.as_view(), name="list"),
+    path("new/", views.StaffCreateView.as_view(), name="create"),
+    path(
+        "<int:pk>/resend-invite/",
+        views.ResendStaffInviteView.as_view(),
+        name="resend_invite",
+    ),
 ]

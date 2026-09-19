@@ -56,6 +56,16 @@ def config_for(user) -> AdmissionsConfig | None:
     return cached
 
 
+def can_manage_requirements(user) -> bool:
+    """May this account rewrite the school's admission requirements?
+
+    A plain capability check, unlike can_view_applicants: whether a bursar sees
+    the pipeline is the school's decision, but who writes the policy is not
+    configurable -- it is the proprietor.
+    """
+    return has_capability(user, Capability.MANAGE_ADMISSION_REQUIREMENTS)
+
+
 def can_view_applicants(user) -> bool:
     """May this account see the pipeline and the applicants on it?
 
@@ -163,6 +173,23 @@ class DecideAdmissionsMixin(_GateMixin):
 
     def test(self, user) -> bool:
         return can_decide(user)
+
+
+class ManageRequirementsMixin(_GateMixin):
+    """Rewrite what a level must bring. The proprietor's policy, nobody else's.
+
+    Deliberately narrower than ManageAdmissionsMixin: a principal runs the
+    pipeline under the rules and cannot change them, which is the line the
+    client drew between running admissions and setting admissions policy.
+    """
+
+    denied_message = (
+        "Only a school owner can change what each level must bring. Your role "
+        "can read the requirements but not rewrite them."
+    )
+
+    def test(self, user) -> bool:
+        return can_manage_requirements(user)
 
 
 class ViewAdmissionPaymentsMixin(_GateMixin):

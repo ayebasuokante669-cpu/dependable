@@ -90,9 +90,7 @@
       <h2 class="text-sm font-semibold text-ink-900">Requirements by level</h2>
       <p class="field-hint mt-0.5">
         What is in force today. Levels marked <em>default</em> run on the
-        platform's policy; edit a level under
-        <span class="numeric">Admission requirement sets</span> in the admin to
-        make it your own.
+        platform's policy.
       </p>
     </div>
 
@@ -123,6 +121,14 @@
         </div>
       {% endfor %}
     </div>
+
+    {% if "manage_admission_requirements" in capabilities %}
+      <div class="border-t border-ink-200 px-5 py-4">
+        <a href="{% url 'admissions:requirements' %}" class="btn btn-secondary text-sm">
+          Edit requirements
+        </a>
+      </div>
+    {% endif %}
   </section>
 </div>
 {% endblock %}
