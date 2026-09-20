@@ -1,5 +1,18 @@
 {% extends "base.html" %}
-{% load money %}
+{% load money charts %}
+
+{% comment %}
+The bursar's term at a glance.
+
+Three figures, then two pictures of them, then the table the pictures came
+from. Every number on this page is produced by the view from the one
+derivation in apps/payments/balances.py -- nothing here adds anything up, and
+the charts are widths written from figures that were already worked out.
+
+The charts are CSS: no library, no runtime, no load. They follow the theme
+because their colours are tokens, and each one keeps its figures on screen as
+text beside the bar, so the page is readable without reading a picture.
+{% endcomment %}
 
 {% block page_subtitle %}
   <p class="truncate text-sm text-ink-600">
@@ -33,9 +46,20 @@
     </div>
   {% endif %}
 
+  {# ===== The three figures ============================================== #}
   <div class="grid gap-4 sm:grid-cols-3">
+
     <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Expected this term</div>
+      <div class="flex items-start justify-between gap-3">
+        <div class="text-sm font-medium text-ink-600">Expected this term</div>
+        <span class="icon-tile icon-tile-sm accent-blue">
+          <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+               stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+        </span>
+      </div>
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">
         {{ expected_total|naira }}
       </div>
@@ -43,8 +67,18 @@
         Across {{ student_count }} enrolled student{{ student_count|pluralize }}
       </div>
     </div>
+
     <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Collected</div>
+      <div class="flex items-start justify-between gap-3">
+        <div class="text-sm font-medium text-ink-600">Collected</div>
+        <span class="icon-tile icon-tile-sm accent-emerald">
+          <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+               stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+        </span>
+      </div>
       <div class="numeric mt-2 text-3xl font-semibold
                   {% if collected_total %}text-paid-strong{% else %}text-ink-400{% endif %}">
         {{ collected_total|naira }}
@@ -60,8 +94,18 @@
         {% endif %}
       </div>
     </div>
+
     <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Outstanding</div>
+      <div class="flex items-start justify-between gap-3">
+        <div class="text-sm font-medium text-ink-600">Outstanding</div>
+        <span class="icon-tile icon-tile-sm accent-rose">
+          <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+               stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+          </svg>
+        </span>
+      </div>
       <div class="numeric mt-2 text-3xl font-semibold text-overdue-strong">
         {{ outstanding_total|naira }}
       </div>
@@ -71,8 +115,91 @@
         </a>
       </div>
     </div>
+
   </div>
 
+  {# ===== The two pictures =============================================== #}
+  <div class="grid gap-4 lg:grid-cols-2">
+
+    {% comment %}
+    Collection against the term. One measure against its own whole, so it is a
+    meter rather than a chart -- the headline is the percentage and the bar is
+    there to say how far along that is. Pending is drawn as its own segment
+    because money handed in but not yet confirmed is genuinely a third state,
+    and a bursar reading this needs to see it separately from both.
+    {% endcomment %}
+    <div class="card p-5 sm:p-6">
+      <div class="flex items-baseline justify-between gap-3">
+        <h2 class="text-sm font-semibold text-ink-900">Collected against the term</h2>
+        <p class="numeric text-2xl font-bold text-brand-900">
+          {{ collected_total|percent_label:expected_total }}
+        </p>
+      </div>
+
+      <div class="chart-stack mt-4 h-4" role="img"
+           aria-label="{{ collected_total|percent_label:expected_total }} of
+                       {{ expected_total|naira }} collected">
+        <span class="chart-stack-part"
+              style="--part: {{ collected_total|percent_of:expected_total }}%;
+                     --part-color: var(--color-paid);"></span>
+        {% if pending_total %}
+          <span class="chart-stack-part"
+                style="--part: {{ pending_total|percent_of:expected_total }}%;
+                       --part-color: var(--color-partial);"></span>
+        {% endif %}
+      </div>
+
+      <dl class="mt-4 space-y-2.5">
+        <div class="flex items-center justify-between gap-3">
+          <dt class="flex items-center gap-2 text-xs text-ink-600">
+            <span class="status-dot status-dot-paid" aria-hidden="true"></span>
+            Confirmed
+          </dt>
+          <dd class="numeric text-sm font-semibold text-ink-900">
+            {{ collected_total|naira }}
+          </dd>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <dt class="flex items-center gap-2 text-xs text-ink-600">
+            <span class="status-dot status-dot-partial" aria-hidden="true"></span>
+            Pending confirmation
+          </dt>
+          <dd class="numeric text-sm font-semibold text-ink-900">
+            {{ pending_total|naira }}
+          </dd>
+        </div>
+        <div class="flex items-center justify-between gap-3 border-t border-ink-200 pt-2.5">
+          <dt class="flex items-center gap-2 text-xs text-ink-600">
+            <span class="status-dot bg-ink-300" aria-hidden="true"></span>
+            Still to come
+          </dt>
+          <dd class="numeric text-sm font-semibold text-ink-900">
+            {{ outstanding_total|naira }}
+          </dd>
+        </div>
+      </dl>
+    </div>
+
+    {# The roster split across the four payment states. #}
+    <div class="card p-5 sm:p-6">
+      {% include "partials/_status_breakdown.html" with breakdown=status.buckets breakdown_total=status.total %}
+      {% if status.total %}
+        <a href="{% url 'payments:outstanding' %}"
+           class="mt-5 inline-flex items-center gap-1.5 text-xs font-semibold
+                  text-brand-700 hover:underline">
+          See who still owes
+          <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2"
+               stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+          </svg>
+        </a>
+      {% endif %}
+    </div>
+
+  </div>
+
+  {# ===== The table the pictures came from ============================== #}
   <div class="card overflow-hidden">
     <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
       <h2 class="text-sm font-semibold text-ink-900">What each class is worth</h2>
@@ -88,6 +215,14 @@
             <th scope="col" class="px-5 py-3 text-right font-semibold">Per student</th>
             <th scope="col" class="px-5 py-3 text-right font-semibold">Students</th>
             <th scope="col" class="px-5 py-3 text-right font-semibold">Expected</th>
+            {% comment %}
+            The bar column is the same figure as the one beside it, drawn. It
+            is decoration for the eye scanning the column and is hidden from
+            screen readers, which already have the number.
+            {% endcomment %}
+            <th scope="col" class="hidden w-40 px-5 py-3 font-semibold sm:table-cell">
+              <span class="sr-only">Share of the term</span>
+            </th>
           </tr>
         </thead>
         <tbody class="divide-y divide-ink-200">
@@ -103,10 +238,17 @@
               <td class="numeric px-5 py-3 text-right font-medium text-ink-900">
                 {{ row.expected|naira }}
               </td>
+              <td class="hidden px-5 py-3 sm:table-cell" aria-hidden="true">
+                <span class="chart-bar-track">
+                  <span class="chart-bar-fill"
+                        style="--bar: {{ row.expected|percent_of:busiest_expected }}%;
+                               --bar-color: var(--color-brand-500);"></span>
+                </span>
+              </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="4" class="px-5 py-8 text-center text-ink-500">
+              <td colspan="5" class="px-5 py-8 text-center text-ink-500">
                 {% if term %}
                   No class has fees set for {{ term.name }} yet.
                 {% else %}

@@ -14,6 +14,7 @@ and as are "Home Economics" (primary/junior) and "Home Management" (SSS Arts).
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from .models import Level
@@ -173,4 +174,132 @@ def classes_for(spec: SubjectSpec, classes) -> list:
         klass
         for klass in classes
         if any(placement.matches(klass) for placement in spec.placements)
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Reading a class name
+#
+# The ladder above is also the best guess anyone can make about a class name
+# typed by hand: a school that writes "JSS 2" means the junior band, second
+# year, and making them then pick both from dropdowns is two decisions the
+# software could have made itself.
+#
+# These are *defaults*, never overrides. The bulk-add form only consults them
+# for a row where the field was left blank, and whatever they return lands in
+# an ordinary form field the person can see and correct before saving. A wrong
+# guess therefore costs one correction, and never a wrong record saved
+# silently.
+# ---------------------------------------------------------------------------
+
+#: Checked in order, first hit wins -- so the specific spellings ("sss", "jss")
+#: are ahead of the looser ones they contain. Matched against whole words, not
+#: substrings: "Primary 3" must not be read as a senior class because "pry"
+#: happens to appear inside some other word.
+_LEVEL_KEYWORDS: tuple[tuple[tuple[str, ...], int], ...] = (
+    (("sss", "ss", "senior"), SENIOR),
+    (("jss", "js", "junior"), JUNIOR),
+    (("primary", "pry", "grade", "standard"), PRIMARY),
+    (
+        ("nursery", "kg", "kindergarten", "creche", "playgroup", "reception",
+         "toddler", "pre", "prekg", "preschool"),
+        NURSERY,
+    ),
+)
+
+#: "Basic" is the one spelling that cannot be read from the word alone: Basic 1
+#: to 6 is primary and Basic 7 to 9 is junior secondary, so it is decided by
+#: the number beside it.
+_BASIC_SPLIT = 6
+
+
+def _words(name: str) -> list[str]:
+    """The name as lowercase words, with punctuation treated as a space.
+
+    "Pre-KG" becomes ["pre", "kg"] rather than ["pre-kg"], which is what lets
+    a single keyword list cover every way a school spells the same rung.
+    """
+    return [word for word in re.split(r"[^a-z0-9]+", name.lower()) if word]
+
+
+def infer_year(name: str) -> int | None:
+    """The year within the level, read off the end of the name.
+
+    "Primary 4" is 4; "JSS 2A" is 2. Returns ``None`` when there is no number
+    to read -- "Reception", "Pre-KG" -- and the caller keeps its own default.
+    """
+    numbers = re.findall(r"\d+", name)
+    if not numbers:
+        return None
+    year = int(numbers[-1])
+    # A year outside this range is not a year -- it is an admission number or a
+    # year of entry that has ended up in the name field.
+    return year if 0 <= year <= 20 else None
+
+
+def infer_level(name: str) -> int | None:
+    """Which band a class name belongs to, or ``None`` if it cannot be read."""
+    words = _words(name)
+    if not words:
+        return None
+
+    if "basic" in words:
+        year = infer_year(name)
+        if year is None:
+            return PRIMARY
+        return PRIMARY if year <= _BASIC_SPLIT else JUNIOR
+
+    for keywords, level in _LEVEL_KEYWORDS:
+        if any(keyword in words for keyword in keywords):
+            return level
+    return None
+
+
+def ladder_presets() -> list[dict]:
+    """The class ladder, grouped into the batches a school actually adds.
+
+    Returned as plain dicts because this is rendered into the bulk-add page as
+    JSON for a preset button: one press fills the rows it would otherwise take
+    to type the whole band. The rung list is :data:`CLASSES`, so the front page
+    of the app and the seeding command can never describe different ladders.
+
+    An arm'd rung ("SSS 1" with Arts and Science) expands to one row per arm,
+    which is what the school ends up with either way.
+    """
+    groups: dict[int, list[dict]] = {}
+    for spec in CLASSES:
+        rows = groups.setdefault(spec.level, [])
+        for stream in spec.streams or ("",):
+            rows.append(
+                {
+                    "name": spec.name,
+                    "level": str(spec.level),
+                    "year_in_level": str(spec.year_in_level),
+                    "stream": stream,
+                }
+            )
+    return [
+        {"label": Level(level).label, "rows": rows}
+        for level, rows in sorted(groups.items())
+    ]
+
+
+def subject_presets() -> list[dict]:
+    """The seed subject sets, grouped by the band they are taught in.
+
+    Same idea as :func:`ladder_presets`, for the subjects screen. A subject
+    that spans several bands (Mathematics runs from Primary to SSS) appears
+    under each band it is placed at -- the form de-duplicates by name before
+    saving, so pressing two bands in a row cannot create it twice.
+    """
+    groups: dict[int, list[dict]] = {}
+    for spec in SUBJECTS:
+        for placement in spec.placements:
+            rows = groups.setdefault(placement.level, [])
+            if any(row["name"] == spec.name for row in rows):
+                continue
+            rows.append({"name": spec.name, "code": spec.code})
+    return [
+        {"label": Level(level).label, "rows": rows}
+        for level, rows in sorted(groups.items())
     ]

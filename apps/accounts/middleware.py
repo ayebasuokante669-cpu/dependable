@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
 
@@ -26,6 +27,17 @@ class RequirePasswordChangeMiddleware:
             and getattr(user, "must_change_password", False)
             and not self._exempt(request.path_info)
         ):
+            # Say why the click went somewhere else. The settings page carries a
+            # persistent notice about the state -- which is the right place for
+            # something the user *must* act on -- but nothing there explains why
+            # pressing "Students" landed them on Account settings.
+            #
+            # Safe to add here: MessageMiddleware is listed ahead of this one, so
+            # `request._messages` exists. One message per redirect, and the
+            # redirect renders the settings page immediately, which consumes it.
+            messages.warning(
+                request, "Choose your own password before carrying on."
+            )
             return redirect("accounts:settings")
         return self.get_response(request)
 

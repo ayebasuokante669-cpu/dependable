@@ -184,3 +184,91 @@ class StaffAccountForm(StyledFormMixin, forms.Form):
         user.save()
         return user
 
+
+# ---------------------------------------------------------------------------
+# Bulk invitations
+#
+# A school opening for the term issues several logins at once -- a principal, a
+# bursar, maybe a second bursar for the other campus -- and doing that one form
+# at a time means finding the New button again between each.
+#
+# The row form below is StaffAccountForm with the optional fields dropped, so
+# the same validation and the same "nobody ever knows the password" creation
+# path is used. Nothing about an account created here differs from one created
+# singly; only the number of page loads does.
+# ---------------------------------------------------------------------------
+
+
+class StaffRowForm(StaffAccountForm):
+    """One row of the bulk invitation table.
+
+    Name, email, role and campus. Job title and phone are left off: they are
+    optional, they are the fields nobody has to hand when setting up, and
+    four columns is the most a row can hold and stay readable. Both are
+    editable afterwards on the person's own record.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ("job_title", "phone"):
+            self.fields.pop(name, None)
+        # Labels live in the table head on this screen, so the per-field help
+        # text would be four copies of the same sentence down the page.
+        for field in self.fields.values():
+            field.help_text = ""
+
+    def has_changed(self):
+        """A row counts as filled only when an email address was typed.
+
+        The email is the one field a staff invitation cannot do without -- it
+        is where the set-a-password link goes -- so it is what decides whether
+        a row is meant to exist. Without this, a row where somebody picked a
+        role and then thought better of it would be reported as three missing
+        fields rather than ignored.
+        """
+        return bool((self.data.get(self.add_prefix("email")) or "").strip())
+
+
+class BaseStaffRowFormSet(forms.BaseFormSet):
+    """Validates the batch as a batch.
+
+    One thing no single row can see: two rows inviting the same address. The
+    per-row check catches an address that already exists in the database; this
+    catches the one being created twice in the same submission, which would
+    otherwise fail on the second insert with the first already sent an email.
+    """
+
+    def filled_forms(self) -> list:
+        return [form for form in self.forms if form.cleaned_data.get("email")]
+
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+
+        filled = self.filled_forms()
+        if not filled:
+            raise ValidationError("Add at least one person before saving.")
+
+        # Keys read up front: `add_error` removes the field it names from that
+        # form's cleaned_data, so a second pass would raise KeyError on a row
+        # the first pass has already flagged.
+        keyed = [(form, form.cleaned_data["email"].casefold()) for form in filled]
+        seen: dict[str, int] = {}
+        for position, (form, email) in enumerate(keyed, start=1):
+            if email in seen:
+                form.add_error(
+                    "email",
+                    f"Same address as row {seen[email]} above — remove one of them.",
+                )
+            else:
+                seen[email] = position
+
+
+#: Three blank rows to begin with: a principal and two bursars is the shape of
+#: most first batches. `extra` is ignored once bound, so a failed submit does
+#: not grow the table.
+StaffRowFormSet = forms.formset_factory(
+    StaffRowForm, formset=BaseStaffRowFormSet, extra=3, can_delete=False
+)
+

@@ -61,16 +61,23 @@
     </div>
   {% endif %}
 
+  {% comment %}
+  The same stepped spine the landing page promises, now carrying state: a done
+  step keeps its position in the ladder and changes its marker rather than
+  disappearing, so "three of four" is something you can see rather than read.
+  {% endcomment %}
   <ol class="card divide-y divide-ink-200 overflow-hidden">
     {% for step in setup.steps %}
       <li class="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-ink-50
                  sm:flex-row sm:items-center">
-        <span class="grid size-8 shrink-0 place-items-center rounded-md text-sm
-                     font-semibold
+        <span class="grid size-10 shrink-0 place-items-center rounded-md text-sm
+                     font-bold
                      {% if step.done %}bg-paid-soft text-paid-strong
-                     {% else %}bg-brand-50 text-brand-800{% endif %}">
+                     {% else %}text-on-accent{% endif %}"
+              {% if not step.done %}style="background: var(--gradient-brand);
+                                           box-shadow: var(--shadow-glow);"{% endif %}>
           {% if step.done %}
-            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2"
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2.2"
                  stroke="currentColor" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
             </svg>

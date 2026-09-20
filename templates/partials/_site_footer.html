@@ -1,0 +1,112 @@
+{% comment %}
+The public footer: what this is, who makes it, and where to find them.
+
+Every social href is "#" for now -- placeholders the school's own accounts will
+replace. They are still real links with real labels rather than dead <span>s,
+so swapping the href in later changes one attribute and nothing about the
+markup, the styling or the accessible name.
+{% endcomment %}
+<footer class="border-t border-ink-200 bg-surface">
+  <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
+
+    <div class="grid gap-10 lg:grid-cols-4">
+
+      {# The mark, the one-line pitch, and the socials under it. #}
+      <div class="lg:col-span-2">
+        <a href="{% url 'core:landing' %}" class="flex items-center gap-2.5">
+          {% include "partials/_brand_mark.html" with size="size-10" %}
+          <span class="text-lg font-semibold tracking-tight text-brand-900">
+            {{ product_name }}
+          </span>
+        </a>
+        <p class="mt-4 max-w-sm text-sm text-ink-600">
+          {{ product_tagline }}. Built for Nigerian schools — fees, students
+          and parent messages in one place.
+        </p>
+
+        <ul class="mt-6 flex items-center gap-2.5" aria-label="Social accounts">
+          <li>
+            <a href="#" class="footer-social" aria-label="{{ product_name }} on X">
+              <svg class="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+            </a>
+          </li>
+          <li>
+            <a href="#" class="footer-social" aria-label="{{ product_name }} on Instagram">
+              <svg class="size-[18px]" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+                   stroke="currentColor" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="5" />
+                <circle cx="12" cy="12" r="4" />
+                <circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none" />
+              </svg>
+            </a>
+          </li>
+          <li>
+            <a href="#" class="footer-social" aria-label="{{ product_name }} on LinkedIn">
+              <svg class="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29ZM5.34 7.43a2.07 2.07 0 1 1 0-4.13 2.07 2.07 0 0 1 0 4.13ZM7.12 20.45H3.55V9h3.57v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.72V1.72C24 .77 23.2 0 22.22 0Z" />
+              </svg>
+            </a>
+          </li>
+          <li>
+            <a href="#" class="footer-social" aria-label="{{ product_name }} on Facebook">
+              <svg class="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.85c0-2.52 1.49-3.91 3.77-3.91 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.78-1.63 1.57v1.89h2.78l-.45 2.91h-2.33V22c4.78-.76 8.44-4.92 8.44-9.94Z" />
+              </svg>
+            </a>
+          </li>
+          <li>
+            <a href="#" class="footer-social" aria-label="Message {{ product_name }} on WhatsApp">
+              <svg class="size-[18px]" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12.04 2C6.6 2 2.18 6.42 2.18 11.86c0 1.74.46 3.44 1.32 4.94L2.1 22l5.34-1.4a9.85 9.85 0 0 0 4.6 1.16h.01c5.44 0 9.86-4.42 9.86-9.86 0-2.64-1.03-5.12-2.9-6.98A9.8 9.8 0 0 0 12.04 2Zm0 1.86c2.14 0 4.15.84 5.66 2.35a7.94 7.94 0 0 1 2.35 5.65c0 4.42-3.6 8.01-8.02 8.01a8.2 8.2 0 0 1-4.18-1.14l-.3-.18-3.1.81.83-3.02-.2-.31a8.18 8.18 0 0 1-1.25-4.36c0-4.42 3.6-8.01 8.02-8.01Zm-2.2 4.1c-.17 0-.44.06-.67.31-.23.25-.88.86-.88 2.1 0 1.24.9 2.44 1.03 2.6.13.17 1.76 2.7 4.31 3.78.6.26 1.07.42 1.44.53.6.2 1.15.17 1.58.1.48-.07 1.48-.6 1.7-1.19.2-.58.2-1.08.14-1.19-.06-.1-.23-.16-.48-.29-.25-.12-1.48-.73-1.7-.81-.23-.09-.4-.13-.56.12-.17.25-.65.81-.8.98-.14.16-.29.19-.54.06-.25-.12-1.05-.39-2-1.24a7.5 7.5 0 0 1-1.39-1.72c-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.43.13-.15.17-.25.25-.42.09-.17.04-.31-.02-.44-.06-.12-.55-1.36-.76-1.86-.2-.48-.4-.42-.55-.42h-.47Z" />
+              </svg>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-ink-500">
+          About
+        </h2>
+        <ul class="mt-4 space-y-2.5">
+          {% comment %}
+          Absolute rather than bare fragments: this footer is shared with the
+          privacy page, where a lone "#features" would go nowhere.
+          {% endcomment %}
+          <li><a href="{% url 'core:landing' %}#features" class="footer-link">What you get</a></li>
+          <li><a href="{% url 'core:landing' %}#setup" class="footer-link">Getting set up</a></li>
+          <li><a href="{% url 'core:landing' %}#faq" class="footer-link">Questions</a></li>
+          <li><a href="{% url 'core:privacy' %}" class="footer-link">Privacy policy</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-ink-500">
+          Company
+        </h2>
+        <ul class="mt-4 space-y-2.5">
+          <li><a href="#" class="footer-link">About us</a></li>
+          <li><a href="#" class="footer-link">Contact</a></li>
+          <li><a href="#" class="footer-link">Careers</a></li>
+          <li>
+            <a href="{% url 'login' %}" class="footer-link" data-auth-swap>Log in</a>
+          </li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="mt-12 flex flex-col items-center justify-between gap-3
+                border-t border-ink-200 pt-6 text-xs text-ink-500 sm:flex-row">
+      <p>&copy; {% now "Y" %} {{ product_name }}. All rights reserved.</p>
+      <p class="flex items-center gap-4">
+        <a href="{% url 'core:privacy' %}"
+           class="font-medium text-brand-700 hover:underline">Privacy</a>
+        <span>powered by Dependable</span>
+      </p>
+    </div>
+
+  </div>
+</footer>

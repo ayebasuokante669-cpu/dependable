@@ -1,37 +1,59 @@
 {% comment %}
 Renders the navigation tree produced server-side by apps.core.navigation.nav_for().
 Shared by the desktop sidebar and the mobile drawer so the two can never drift.
+
+Each glyph sits in a small tinted tile rather than floating as a bare stroke:
+on the navy panel it is a white wash, which is the one treatment that reads
+against the panel colour in both themes, and it gives the active row something
+to brighten. The active row also carries a rail on the left edge -- so which
+page you are on survives being glanced at, instead of resting on a five-percent
+background difference.
 {% endcomment %}
 <nav class="flex-1 overflow-y-auto px-3 pb-6" aria-label="{{ nav_label|default:'Main' }}">
   {% for section in nav_sections %}
     <div class="nav-section-label">{{ section.label }}</div>
-    <ul class="space-y-0.5">
+    <ul class="space-y-1">
       {% for item in section.items %}
         <li>
           {% if item.available %}
             <a href="{{ item.href }}"
                class="nav-link {% if item.active %}nav-link-active{% endif %}"
                {% if item.active %}aria-current="page"{% endif %}>
-              <svg class="size-5 shrink-0" fill="none" viewBox="0 0 24 24"
-                   stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                {% for d in item.icon_paths %}
-                  <path stroke-linecap="round" stroke-linejoin="round" d="{{ d }}" />
-                {% endfor %}
-              </svg>
+              <span class="nav-icon">
+                <svg class="size-[18px]" fill="none" viewBox="0 0 24 24"
+                     stroke-width="1.7" stroke="currentColor" aria-hidden="true">
+                  {% for d in item.icon_paths %}
+                    <path stroke-linecap="round" stroke-linejoin="round" d="{{ d }}" />
+                  {% endfor %}
+                </svg>
+              </span>
               <span class="truncate">{{ item.label }}</span>
             </a>
           {% else %}
+            {% comment %}
+            A visible row that goes nowhere is a question the interface should
+            answer when it is asked. Clicking it raises an informational toast
+            rather than doing nothing and leaving the reader to wonder whether
+            the click landed. It stays a <span>: it is not a control, and
+            making it focusable would put a dead stop in the tab order.
+            {% endcomment %}
             <span class="nav-link nav-link-disabled" aria-disabled="true"
-                  title="Coming soon">
-              <svg class="size-5 shrink-0" fill="none" viewBox="0 0 24 24"
-                   stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                {% for d in item.icon_paths %}
-                  <path stroke-linecap="round" stroke-linejoin="round" d="{{ d }}" />
-                {% endfor %}
-              </svg>
+                  title="Coming soon"
+                  data-toast-on-click="{{ item.label }} is not ready yet — it is coming in a later release."
+                  data-toast-on-click-level="info">
+              <span class="nav-icon">
+                <svg class="size-[18px]" fill="none" viewBox="0 0 24 24"
+                     stroke-width="1.7" stroke="currentColor" aria-hidden="true">
+                  {% for d in item.icon_paths %}
+                    <path stroke-linecap="round" stroke-linejoin="round" d="{{ d }}" />
+                  {% endfor %}
+                </svg>
+              </span>
               <span class="truncate">{{ item.label }}</span>
-              <span class="ml-auto text-[10px] font-semibold uppercase tracking-wide
-                           text-panel-subtle/70">soon</span>
+              <span class="ml-auto rounded-xs bg-white/10 px-1.5 py-0.5 text-[10px]
+                           font-semibold uppercase tracking-wide text-panel-subtle/80">
+                soon
+              </span>
             </span>
           {% endif %}
         </li>

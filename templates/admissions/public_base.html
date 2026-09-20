@@ -34,6 +34,7 @@ Pages fill `heading`, `intro` and `body`.
   <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script src="{% static 'js/ui.js' %}" defer></script>
 </head>
 <body class="h-full">
 
@@ -74,6 +75,15 @@ Pages fill `heading`, `intro` and `body`.
     </p>
   </div>
 </div>
+
+{% comment %}
+This shell deliberately does not extend base.html -- it is the school's page,
+not the platform's -- which means it does not inherit the notification region
+either. Included here so a message flashed on the enquiry flow reaches the
+parent reading it rather than being consumed by the template engine. Nothing
+flashes one today; the point is that adding one later works.
+{% endcomment %}
+{% include "partials/_toasts.html" %}
 
 </body>
 </html>

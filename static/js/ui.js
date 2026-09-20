@@ -4,12 +4,51 @@
  * behaviour here is an enhancement over markup that already works without it,
  * so a blocked or failed script costs polish and never content.
  *
- * Contents: theme switching, the setup-step card fan, and scroll reveals.
+ * Contents:
+ *   - performance tier      what this device can afford
+ *   - theme                 light/dark switching
+ *   - scroll reveals        sections arriving as they are reached
+ *   - landing nav           sticky state and scroll-spy
+ *   - auth panel swap       sign-in <-> sign-up
+ *   - repeatable rows       bulk entry: classes, subjects, staff, fee items
+ *   - toasts                every action's answer, from the bottom of the screen
  */
 (function () {
   'use strict';
 
   var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ====================================================================== *
+   * Performance tier
+   *
+   * Frosted glass and a blurred full-bleed hero are the two most expensive
+   * things this design does, and both are decoration. Rather than have each
+   * component guess, one attribute on <html> says what the device can
+   * afford and the stylesheet's `[data-perf="lite"]` block turns the
+   * expensive half off in one place.
+   *
+   * The signals are coarse on purpose. `deviceMemory` and `hardwareConcurrency`
+   * are not precise, but a 2GB/4-core Android is exactly the machine a
+   * Nigerian school office actually runs, and getting that case right matters
+   * more than classifying every laptop correctly. Absent values mean "assume
+   * capable", because Safari reports neither and is not a slow browser.
+   * ====================================================================== */
+  function initPerfTier() {
+    var root = document.documentElement;
+    var memory = navigator.deviceMemory;          // GB, in steps, Chromium only
+    var cores = navigator.hardwareConcurrency;    // logical processors
+
+    var lite =
+      (typeof memory === 'number' && memory > 0 && memory <= 4) ||
+      (typeof cores === 'number' && cores > 0 && cores <= 4);
+
+    // A data saver request is an explicit statement about this connection and
+    // outranks anything inferred from the hardware.
+    var connection = navigator.connection;
+    if (connection && connection.saveData) lite = true;
+
+    if (lite) root.setAttribute('data-perf', 'lite');
+  }
 
   /* ====================================================================== *
    * Theme
@@ -103,169 +142,33 @@
   }
 
   /* ====================================================================== *
-   * The card fan
-   *
-   * The four setup steps live in an ordinary CSS grid and are laid out by it
-   * at all times. "Stacked" is not a different layout -- it is a transform
-   * per card, measured from where the grid already put it, which is what
-   * makes the movement a single interpolable property and keeps it on the
-   * compositor.
-   *
-   * Consequences worth keeping: with JS off the grid renders as-is; and
-   * re-measuring on resize means the effect survives a breakpoint change
-   * instead of snapping.
-   * ====================================================================== */
-  var PEEK = 12;      // px each card behind the top one drops by
-  var SHIFT = 7;      // px of horizontal spread across the deck, centred
-  var SHRINK = 0.035; // scale lost per card of depth
-  var TILT = 1.1;     // deg, alternating -- a hand-placed pile, not a ruler
-
-  function initFan(root) {
-    var grid = root.querySelector('[data-fan-grid]');
-    var trigger = root.querySelector('[data-fan-trigger]');
-    var viewport = root.querySelector('[data-fan-viewport]');
-    var items = Array.prototype.slice.call(root.querySelectorAll('[data-fan-item]'));
-    if (!grid || !trigger || !viewport || items.length < 2) return;
-
-    var stacked = false;
-    var offsets = [];
-
-    function measure() {
-      var previous = items.map(function (el) { return el.style.transform; });
-      items.forEach(function (el) { el.style.transform = 'none'; });
-
-      var base = items[0].getBoundingClientRect();
-      var centre = grid.getBoundingClientRect();
-      var centreX = centre.left + centre.width / 2;
-
-      offsets = items.map(function (el) {
-        var rect = el.getBoundingClientRect();
-        return {
-          // Horizontally, every card converges on the middle of the grid, so
-          // the deck sits centred and opens outwards in both directions --
-          // the first two cards travel left, the last two right.
-          dx: centreX - (rect.left + rect.width / 2),
-          // Vertically, only as far as the top row. The viewport crops to the
-          // deck's height, and a deck centred in a tall (mobile) grid would
-          // land below that crop.
-          dy: base.top - rect.top
-        };
-      });
-
-      items.forEach(function (el, i) { el.style.transform = previous[i]; });
-      return base.height;
-    }
-
-    function stackTransform(i) {
-      var o = offsets[i];
-      // Spread the deck's own offset around its middle rather than running it
-      // off to one side, so the pile stays centred on the grid's centre line.
-      var fromMiddle = i - (items.length - 1) / 2;
-      var tilt = i === 0 ? 0 : (i % 2 ? TILT : -TILT);
-      return 'translate(' + (o.dx + fromMiddle * SHIFT) + 'px, ' +
-                            (o.dy + i * PEEK) + 'px)' +
-             ' rotate(' + tilt + 'deg)' +
-             ' scale(' + (1 - i * SHRINK) + ')';
-    }
-
-    function render(height) {
-      items.forEach(function (el, i) {
-        // Front card first in the paint order, so the pile has a clear top.
-        el.style.zIndex = String(items.length - i);
-        el.style.transform = stacked ? stackTransform(i) : '';
-      });
-
-      // The grid still reserves its full height, which would leave a hole
-      // under the pile. The viewport crops that down and animates the change.
-      viewport.style.height = (stacked
-        ? height + (items.length - 1) * PEEK
-        : grid.getBoundingClientRect().height) + 'px';
-    }
-
-    function setStacked(next, animate) {
-      stacked = next;
-      root.classList.toggle('is-stacked', stacked);
-      trigger.setAttribute('aria-expanded', stacked ? 'false' : 'true');
-      trigger.hidden = !stacked;
-
-      // A silent re-form has to kill the card transitions as well as the
-      // viewport's, or the deck is still sliding back together when you
-      // scroll up to it. The reflow between add and remove is what commits
-      // the no-transition state -- without it both class changes collapse
-      // into one style recalculation and nothing is suppressed.
-      if (!animate) root.classList.add('fan-instant');
-      render(measure());
-      if (!animate) {
-        void root.offsetHeight;
-        root.classList.remove('fan-instant');
-      }
-    }
-
-    function open() {
-      if (!stacked) return;
-      setStacked(false, true);
-      // Send focus to the first card's heading so the keyboard lands where
-      // the eye does, rather than back at the top of the page.
-      var heading = items[0].querySelector('h3');
-      if (heading) {
-        heading.setAttribute('tabindex', '-1');
-        heading.focus({ preventScroll: true });
-      }
-    }
-
-    trigger.addEventListener('click', open);
-    // The deck itself is the obvious thing to click. The button stays as the
-    // keyboard and screen-reader route to the same action.
-    viewport.addEventListener('click', open);
-
-    var resizeTimer;
-    window.addEventListener('resize', function () {
-      window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(function () { render(measure()); }, 120);
-    });
-
-    // Reduced motion never sees the pile: it would be a state change with no
-    // transition to explain it, which is worse than simply showing the four.
-    if (reduceMotion.matches) {
-      setStacked(false, false);
-      trigger.hidden = true;
-      return;
-    }
-
-    setStacked(true, false);
-
-    // Scrolling past the cards re-forms the deck, so coming back to it shows
-    // the pile again rather than the row you already opened -- the effect is
-    // repeatable without reloading.
-    //
-    // The observed element is the deck itself, not the section around it.
-    // Watching the section meant waiting for its heading, copy and padding to
-    // clear the viewport too, which on a tall screen never quite happens.
-    //
-    // Every entry is checked rather than just entries[0]: a burst of scrolling
-    // delivers several records in one callback, and only the last is current.
-    if ('IntersectionObserver' in window) {
-      // Held in the closure rather than left anonymous: the closure is kept
-      // alive by the listeners above, so the observer cannot be collected out
-      // from under the effect.
-      var reformObserver = new IntersectionObserver(function (entries) {
-        var latest = entries[entries.length - 1];
-        if (!latest.isIntersecting && !stacked) setStacked(true, false);
-      }, { threshold: 0 });
-      reformObserver.observe(viewport);
-    }
-  }
-
-  /* ====================================================================== *
    * Scroll reveal
    *
    * Armed from JS rather than in the stylesheet: the markup ships visible, so
    * the failure mode of this whole section is "no animation", never "no
    * content".
+   *
+   * `data-reveal-group` staggers its children instead of revealing them as
+   * one block. The delay is capped at four steps -- past that a grid stops
+   * looking sequenced and starts looking slow.
    * ====================================================================== */
+  var STAGGER_MS = 70;
+  var STAGGER_CAP = 4;
+
   function initReveals() {
     var targets = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
     if (!targets.length || reduceMotion.matches || !('IntersectionObserver' in window)) return;
+
+    // Stagger before arming, so the delay is in place the first time each
+    // element is painted in its armed state.
+    var groups = document.querySelectorAll('[data-reveal-group]');
+    for (var g = 0; g < groups.length; g++) {
+      var children = groups[g].querySelectorAll('.reveal');
+      for (var c = 0; c < children.length; c++) {
+        var step = Math.min(c, STAGGER_CAP);
+        children[c].style.setProperty('--reveal-delay', (step * STAGGER_MS) + 'ms');
+      }
+    }
 
     targets.forEach(function (el) { el.classList.add('reveal-armed'); });
 
@@ -276,16 +179,769 @@
         entry.target.classList.add('reveal-in');
         observer.unobserve(entry.target);
       });
-    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.05 });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
 
     targets.forEach(function (el) { observer.observe(el); });
+
+    // A reveal that never fires is content nobody can read. The net below
+    // catches that: a few seconds in, anything still armed *and already on
+    // screen* is shown regardless of what the observer thinks.
+    //
+    // Scoped to what is on screen on purpose. Un-arming everything would mean
+    // that a visitor who spends ten seconds on the hero gets no animation for
+    // the rest of the page -- the net would have quietly disabled the effect
+    // it exists to protect.
+    window.setTimeout(function () {
+      targets.forEach(function (el) {
+        if (!el.classList.contains('reveal-armed')) return;
+        var box = el.getBoundingClientRect();
+        var onScreen = box.top < window.innerHeight && box.bottom > 0;
+        if (!onScreen) return;
+        el.classList.remove('reveal-armed');
+        el.classList.add('reveal-in');
+      });
+    }, 4000);
   }
 
+  /* ====================================================================== *
+   * Landing navigation
+   *
+   * Two jobs: tell the bar when it has left the top of the hero, and mark
+   * which section is currently being read.
+   *
+   * The scroll-spy sets `aria-current` rather than a class of its own, so the
+   * underline and the announced state are the same fact. Scrolling itself is
+   * the browser's -- `scroll-behavior: smooth` plus `scroll-padding-top` in
+   * the stylesheet -- which means the links stay real anchors that work with
+   * the keyboard, open in a new tab, and survive this script failing.
+   * ====================================================================== */
+  function initLandingNav() {
+    var nav = document.querySelector('[data-lp-nav]');
+    if (!nav) return;
+
+    var links = Array.prototype.slice.call(nav.querySelectorAll('[data-lp-link]'));
+    var sections = links
+      .map(function (link) {
+        var id = (link.getAttribute('href') || '').replace(/^#/, '');
+        return id ? document.getElementById(id) : null;
+      })
+      .filter(Boolean);
+
+    // The bar's own state. rAF-throttled: a scroll handler that writes a class
+    // on every event is the classic way to make a smooth page stutter.
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () {
+        nav.classList.toggle('is-scrolled', window.scrollY > 24);
+        ticking = false;
+      });
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+
+    if (!sections.length || !('IntersectionObserver' in window)) return;
+
+    function mark(id) {
+      links.forEach(function (link) {
+        var mine = (link.getAttribute('href') || '') === '#' + id;
+        if (mine) link.setAttribute('aria-current', 'true');
+        else link.removeAttribute('aria-current');
+      });
+    }
+
+    // Which section "is being read" is the topmost one whose box crosses the
+    // upper third of the viewport. Tracking visibility ratios instead gives
+    // the wrong answer whenever one section is much taller than another.
+    var visible = {};
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        visible[entry.target.id] = entry.isIntersecting;
+      });
+      for (var i = 0; i < sections.length; i++) {
+        if (visible[sections[i].id]) { mark(sections[i].id); return; }
+      }
+    }, { rootMargin: '-25% 0px -60% 0px', threshold: 0 });
+
+    sections.forEach(function (section) { spy.observe(section); });
+  }
+
+  /* ====================================================================== *
+   * Auth panel swap
+   *
+   * Sign-in and sign-up are two ordinary pages, not one page with a toggle --
+   * which is the right shape for a form that posts, and keeps both URLs
+   * bookmarkable. The swap is therefore an *entry* animation on the page you
+   * land on: the visual panel slides in from the side it now lives on, and
+   * the form slides in from the other.
+   *
+   * A flag in sessionStorage is what tells the second page it was reached
+   * from the first, so the crossing is played at full travel when the two
+   * screens genuinely traded places, and kept to a short settle otherwise.
+   * ====================================================================== */
+  var SWAP_KEY = 'schoolcord-auth-swap';
+
+  function initAuthSwap() {
+    var shell = document.querySelector('[data-auth-shell]');
+
+    // Arm the flag on the way out, from whichever page carries the link.
+    document.addEventListener('click', function (event) {
+      var link = event.target.closest && event.target.closest('[data-auth-swap]');
+      if (!link) return;
+      try {
+        window.sessionStorage.setItem(SWAP_KEY, String(Date.now()));
+      } catch (e) { /* storage disabled: the swap simply plays short */ }
+    });
+
+    if (!shell || reduceMotion.matches) return;
+
+    var swapped = false;
+    try {
+      var stamp = parseInt(window.sessionStorage.getItem(SWAP_KEY) || '0', 10);
+      // Only counts as a swap if it happened just now. A stale flag from
+      // yesterday's session should not animate a cold visit.
+      swapped = stamp > 0 && (Date.now() - stamp) < 5000;
+      window.sessionStorage.removeItem(SWAP_KEY);
+    } catch (e) { /* see above */ }
+
+    // Where cross-document view transitions are supported, the browser is
+    // already moving these two panels from where they were to where they now
+    // are -- the stylesheet names them on both pages for exactly that. Adding
+    // the CSS fallback on top would play the movement twice.
+    if (typeof document.startViewTransition === 'function') return;
+
+    if (swapped) shell.classList.add('is-swapping');
+
+    var visual = shell.querySelector('[data-auth-visual]');
+    var form = shell.querySelector('[data-auth-form]');
+    if (visual) visual.classList.add('auth-swap-visual');
+    if (form) form.classList.add('auth-swap-form');
+  }
+
+  /* ====================================================================== *
+   * Repeatable rows
+   *
+   * One implementation behind every "add several without going back to the
+   * list" screen: classes, subjects, staff invitations and fee line items.
+   * They are all Django formsets, so they all need the same three things --
+   * clone the empty form, renumber what follows it, and keep TOTAL_FORMS
+   * honest.
+   *
+   * Markup contract (see templates/partials/_repeat_rows.html):
+   *   [data-repeat][data-repeat-prefix="<formset prefix>"]
+   *     [data-repeat-rows]        the container
+   *       [data-repeat-row][data-new="true|false"]
+   *     [data-repeat-template]    a <template> holding one blank row
+   *     [data-repeat-add]         the button
+   *     [data-repeat-count]       optional live count
+   *
+   * Without this script the server still renders `extra` blank rows and the
+   * form still submits -- you simply get the rows you were given.
+   * ====================================================================== */
+  function initRepeat(root) {
+    var prefix = root.getAttribute('data-repeat-prefix');
+    var container = root.querySelector('[data-repeat-rows]');
+    var template = root.querySelector('[data-repeat-template]');
+    var addButtons = root.querySelectorAll('[data-repeat-add]');
+    var totalForms = document.getElementById('id_' + prefix + '-TOTAL_FORMS');
+    var initialField = document.getElementById('id_' + prefix + '-INITIAL_FORMS');
+    if (!container || !template || !totalForms) return;
+
+    var initialForms = initialField ? parseInt(initialField.value, 10) : 0;
+    var maxForms = parseInt(
+      (document.getElementById('id_' + prefix + '-MAX_NUM_FORMS') || {}).value || '1000', 10
+    );
+
+    function rows() {
+      return Array.prototype.slice.call(
+        container.querySelectorAll('[data-repeat-row]')
+      );
+    }
+
+    function liveRows() {
+      return rows().filter(function (row) {
+        return !row.classList.contains('is-removed');
+      });
+    }
+
+    function updateCount() {
+      var count = liveRows().length;
+      var outputs = root.querySelectorAll('[data-repeat-count]');
+      for (var i = 0; i < outputs.length; i++) {
+        outputs[i].textContent = String(count);
+      }
+      // The remove control is hidden on the last remaining row: a formset with
+      // nothing in it is a dead end, and re-adding a row is an extra step
+      // nobody asked for.
+      var only = count <= 1;
+      rows().forEach(function (row) {
+        var button = row.querySelector('[data-repeat-remove]');
+        if (button) button.hidden = only && !row.classList.contains('is-removed');
+      });
+      for (var b = 0; b < addButtons.length; b++) {
+        addButtons[b].disabled = rows().length >= maxForms;
+      }
+      // Renumber the visible position markers, which are display-only and owe
+      // nothing to the formset index.
+      liveRows().forEach(function (row, index) {
+        var marker = row.querySelector('[data-repeat-index]');
+        if (marker) marker.textContent = String(index + 1);
+      });
+    }
+
+    // Only rows after INITIAL_FORMS are renumbered: Django maps the first
+    // INITIAL_FORMS entries to existing objects by position, so those must
+    // keep the index they were rendered with.
+    function reindexNewRows() {
+      var newRows = container.querySelectorAll('[data-repeat-row][data-new="true"]');
+      Array.prototype.forEach.call(newRows, function (row, offset) {
+        var index = initialForms + offset;
+        var fields = row.querySelectorAll('input, select, textarea, label');
+        Array.prototype.forEach.call(fields, function (el) {
+          ['name', 'id', 'for'].forEach(function (key) {
+            var current = el.getAttribute(key);
+            if (!current) return;
+            el.setAttribute(
+              key,
+              current.replace(
+                new RegExp(prefix + '-(\\d+|__prefix__)-'),
+                prefix + '-' + index + '-'
+              )
+            );
+          });
+        });
+      });
+      totalForms.value = String(initialForms + newRows.length);
+    }
+
+    function addRow(focus) {
+      if (rows().length >= maxForms) return null;
+      var index = parseInt(totalForms.value, 10);
+      var markup = template.innerHTML.replace(/__prefix__/g, String(index));
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = markup.trim();
+      var row = wrapper.firstElementChild;
+      if (!row) return null;
+      container.appendChild(row);
+      totalForms.value = String(index + 1);
+      if (!reduceMotion.matches) {
+        row.classList.add('is-fresh');
+        row.addEventListener('animationend', function () {
+          row.classList.remove('is-fresh');
+        }, { once: true });
+      }
+      if (focus !== false) {
+        var first = row.querySelector('input:not([type="hidden"]), select, textarea');
+        if (first) first.focus();
+      }
+      updateCount();
+      root.dispatchEvent(new CustomEvent('repeat:added', { detail: { row: row } }));
+      return row;
+    }
+
+    function removeRow(row) {
+      if (row.getAttribute('data-new') === 'true') {
+        row.remove();
+        reindexNewRows();
+      } else {
+        // An existing record: tick DELETE and leave the row on screen so a
+        // mis-click can be undone before the form is submitted.
+        row.classList.add('is-removed');
+        var box = row.querySelector('input[name$="-DELETE"]');
+        if (box) box.checked = true;
+        var button = row.querySelector('[data-repeat-remove]');
+        if (button) {
+          button.setAttribute('aria-label', 'Restore');
+          button.setAttribute('data-repeat-remove', 'undo');
+        }
+      }
+      updateCount();
+      root.dispatchEvent(new CustomEvent('repeat:changed'));
+    }
+
+    function restoreRow(row) {
+      row.classList.remove('is-removed');
+      var box = row.querySelector('input[name$="-DELETE"]');
+      if (box) box.checked = false;
+      var button = row.querySelector('[data-repeat-remove]');
+      if (button) {
+        button.setAttribute('aria-label', 'Remove');
+        button.setAttribute('data-repeat-remove', '');
+      }
+      updateCount();
+      root.dispatchEvent(new CustomEvent('repeat:changed'));
+    }
+
+    for (var a = 0; a < addButtons.length; a++) {
+      addButtons[a].addEventListener('click', function () { addRow(true); });
+      addButtons[a].hidden = false;
+    }
+
+    container.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-repeat-remove]');
+      if (!button) return;
+      var row = button.closest('[data-repeat-row]');
+      if (!row) return;
+      if (button.getAttribute('data-repeat-remove') === 'undo') restoreRow(row);
+      else removeRow(row);
+    });
+
+    // Enter moves down the table instead of submitting it: to the next row, or
+    // to a new one when you are already on the last. On a screen whose whole
+    // purpose is entering nineteen of something, a stray Enter that saves and
+    // navigates away is the exact round trip this is here to remove -- and
+    // losing your place at row seven is worse than the small surprise of an
+    // extra blank row (which is ignored on save anyway).
+    //
+    // Ctrl/Cmd+Enter still submits, and so does the Save button: there is a
+    // deliberate way out, it is just not the one you hit by accident.
+    container.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' || event.shiftKey) return;
+      if (event.ctrlKey || event.metaKey) return;
+      var field = event.target;
+      // Text-ish inputs only. A select has its own meaning for Enter and a
+      // textarea needs it for newlines.
+      if (!field.matches || !field.matches('input:not([type="hidden"])')) return;
+      var row = field.closest('[data-repeat-row]');
+      if (!row) return;
+
+      event.preventDefault();
+
+      var all = liveRows();
+      var next = all[all.indexOf(row) + 1];
+      if (next) {
+        var first = next.querySelector('input:not([type="hidden"]), select, textarea');
+        if (first) first.focus();
+        return;
+      }
+      addRow(true);
+    });
+
+    // Rows a failed submit marked for deletion come back dimmed rather than
+    // silently gone.
+    var deleted = container.querySelectorAll('input[name$="-DELETE"]');
+    Array.prototype.forEach.call(deleted, function (box) {
+      if (box.checked) {
+        var row = box.closest('[data-repeat-row]');
+        if (row && row.getAttribute('data-new') !== 'true') removeRow(row);
+      }
+    });
+
+    // Published for the screens that need to fill rows from a preset.
+    root.repeat = { addRow: addRow, rows: rows, liveRows: liveRows,
+                    updateCount: updateCount };
+    updateCount();
+  }
+
+  /* ====================================================================== *
+   * Presets
+   *
+   * The class ladder, one press. A Nigerian school adding classes is almost
+   * never inventing names: it is typing out Primary 1 to Primary 6, or JSS 1
+   * to JSS 3, in order, every time. A preset button fills the rows it would
+   * have taken to type -- and they are ordinary form rows afterwards, so
+   * anything wrong is fixed in place rather than by starting over.
+   *
+   * The preset data lives in the markup as JSON, because what a ladder is
+   * called is a product decision that belongs with the template, not here.
+   * ====================================================================== */
+  function initPresets() {
+    var buttons = document.querySelectorAll('[data-preset]');
+    if (!buttons.length) return;
+
+    Array.prototype.forEach.call(buttons, function (button) {
+      button.hidden = false;
+      button.addEventListener('click', function () {
+        var target = document.querySelector(
+          button.getAttribute('data-preset-target') || '[data-repeat]'
+        );
+        if (!target || !target.repeat) return;
+
+        var entries;
+        try {
+          entries = JSON.parse(button.getAttribute('data-preset'));
+        } catch (e) {
+          return;
+        }
+        if (!Array.isArray(entries)) return;
+
+        // Fill blank rows before adding new ones, so pressing a preset on a
+        // screen that opened with three empty rows does not leave three empty
+        // rows stranded under the filled ones.
+        var blanks = target.repeat.liveRows().filter(function (row) {
+          var first = row.querySelector('input[type="text"]');
+          return first && !first.value.trim();
+        });
+
+        entries.forEach(function (entry) {
+          var row = blanks.shift() || target.repeat.addRow(false);
+          if (!row) return;
+          Object.keys(entry).forEach(function (field) {
+            var input = row.querySelector('[name$="-' + field + '"]');
+            if (!input) return;
+            input.value = entry[field];
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          });
+        });
+
+        target.repeat.updateCount();
+        var focusTarget = target.querySelector('[data-repeat-row] input[type="text"]');
+        if (focusTarget) focusTarget.focus();
+      });
+    });
+  }
+
+  /* ====================================================================== *
+   * Live totals
+   *
+   * Any container marked `data-total-of="<suffix>"` sums the numeric inputs
+   * whose name ends in that suffix and writes the figure into its
+   * `[data-total-out]`. Display only -- the server recomputes from what was
+   * actually saved, so a wrong number here can never become a wrong number
+   * in the database.
+   * ====================================================================== */
+  function initTotals() {
+    var scopes = document.querySelectorAll('[data-total-of]');
+    if (!scopes.length) return;
+
+    Array.prototype.forEach.call(scopes, function (scope) {
+      var suffix = scope.getAttribute('data-total-of');
+      var out = scope.querySelector('[data-total-out]');
+      if (!out) return;
+
+      function recalc() {
+        var sum = 0;
+        var inputs = scope.querySelectorAll('input[name$="-' + suffix + '"]');
+        Array.prototype.forEach.call(inputs, function (input) {
+          var row = input.closest('[data-repeat-row]');
+          if (row && row.classList.contains('is-removed')) return;
+          var value = parseFloat(input.value);
+          if (!isNaN(value)) sum += value;
+        });
+        // Match the server-side `naira` filter: kobo only when there are any.
+        var fixed = Math.round(sum * 100) / 100;
+        var opts = Number.isInteger(fixed)
+          ? { minimumFractionDigits: 0, maximumFractionDigits: 0 }
+          : { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+        out.textContent = '₦' + fixed.toLocaleString('en-NG', opts);
+      }
+
+      scope.addEventListener('input', recalc);
+      scope.addEventListener('repeat:changed', recalc);
+      scope.addEventListener('repeat:added', recalc);
+      recalc();
+    });
+  }
+
+  /* ====================================================================== *
+   * Toasts
+   *
+   * One notification path for the whole app. Two ways in:
+   *
+   *   - the server renders Django messages into the region as real markup,
+   *     already open, and this code takes them over on load;
+   *   - anything on the page calls `window.toast(message, level)`.
+   *
+   * The movement is scripted rather than declared because it has four stages
+   * with a hold in the middle -- rise, open, wait, close, drop -- and a CSS
+   * animation cannot be paused on hover halfway through. Each stage is a
+   * class change; the stylesheet owns every duration and curve.
+   *
+   * Nothing here is load-bearing: with the script blocked, the server-rendered
+   * toasts simply stay on screen as readable notices.
+   * ====================================================================== */
+  var TOAST_LEVELS = {
+    success: { label: 'Success', hold: 4000 },
+    error: { label: 'Error', hold: 8000, dismissible: true },
+    warning: { label: 'Warning', hold: 6500, dismissible: true },
+    info: { label: 'Information', hold: 4500 }
+  };
+
+  //: Above this, the oldest is retired early. Four is about what fits above
+  //: the fold on a phone before the stack starts covering the page.
+  var TOAST_MAX = 4;
+
+  //: How long the close-then-drop tail takes. Kept in step with
+  //: --duration-settle; a little generous so a toast is never removed from
+  //: the DOM while it is still visibly moving.
+  var TOAST_CLOSE_MS = 420;
+
+  var ICON_PATHS = {
+    success: ['M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'],
+    error: ['M9.75 9.75l4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'],
+    warning: ['M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 ' +
+              '2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 ' +
+              '0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z'],
+    info: ['M11.25 11.25l.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 ' +
+           '1.063.852l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z']
+  };
+
+  var toastRegion = null;
+
+  function ensureRegion() {
+    if (toastRegion && document.body.contains(toastRegion)) return toastRegion;
+    toastRegion = document.querySelector('[data-toast-region]');
+    if (!toastRegion) {
+      toastRegion = document.createElement('div');
+      toastRegion.className = 'toast-region';
+      toastRegion.setAttribute('data-toast-region', '');
+      // Polite, not assertive: a toast reports what just happened, it does
+      // not interrupt. `aria-atomic` so each toast is read whole rather than
+      // as the words that changed.
+      toastRegion.setAttribute('role', 'status');
+      toastRegion.setAttribute('aria-live', 'polite');
+      toastRegion.setAttribute('aria-atomic', 'false');
+      document.body.appendChild(toastRegion);
+    }
+    return toastRegion;
+  }
+
+  function levelOf(name) {
+    return TOAST_LEVELS[name] ? name : 'info';
+  }
+
+  function buildToast(message, level) {
+    var meta = TOAST_LEVELS[level];
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + level;
+    el.setAttribute('data-toast', '');
+    el.setAttribute('data-toast-level', level);
+
+    var icon = document.createElement('span');
+    icon.className = 'toast-icon';
+    icon.innerHTML = iconMarkup(level);
+    el.appendChild(icon);
+
+    var panel = document.createElement('div');
+    panel.className = 'toast-panel';
+    var inner = document.createElement('div');
+    var body = document.createElement('p');
+    body.className = 'toast-message';
+    // The category as a word, for anyone who cannot see the colour or the
+    // glyph. This is the "never colour alone" rule, in the one place the rule
+    // is easiest to forget.
+    var prefix = document.createElement('span');
+    prefix.className = 'sr-only';
+    prefix.textContent = meta.label + ': ';
+    body.appendChild(prefix);
+    body.appendChild(document.createTextNode(message));
+    inner.appendChild(body);
+    // Inside the panel, not beside it: a control outside would not collapse
+    // with the message, and the closed toast would be a lozenge rather than a
+    // circle. Mirrors partials/_toast.html exactly.
+    if (meta.dismissible) inner.appendChild(buildClose());
+    panel.appendChild(inner);
+    el.appendChild(panel);
+    return el;
+  }
+
+  function iconMarkup(level) {
+    var paths = (ICON_PATHS[level] || ICON_PATHS.info)
+      .map(function (d) {
+        return '<path stroke-linecap="round" stroke-linejoin="round" d="' + d + '" />';
+      })
+      .join('');
+    return '<svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8" ' +
+           'stroke="currentColor" aria-hidden="true">' + paths + '</svg>';
+  }
+
+  function buildClose() {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'toast-close';
+    button.setAttribute('data-toast-close', '');
+    button.setAttribute('aria-label', 'Dismiss');
+    button.innerHTML =
+      '<svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2" ' +
+      'stroke="currentColor" aria-hidden="true">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />' +
+      '</svg>';
+    return button;
+  }
+
+  /* Drive one toast through rise -> open -> hold -> close -> drop. */
+  function runToast(el, level) {
+    var meta = TOAST_LEVELS[level] || TOAST_LEVELS.info;
+    var timers = [];
+    var finished = false;
+
+    function later(fn, ms) {
+      timers.push(window.setTimeout(fn, ms));
+    }
+
+    function clearTimers() {
+      timers.forEach(window.clearTimeout);
+      timers = [];
+    }
+
+    function dismiss() {
+      if (finished) return;
+      finished = true;
+      clearTimers();
+      // Close back into the circle first, then let it drop -- the entrance
+      // played backwards, which is what makes the two read as one object
+      // rather than two effects.
+      el.classList.remove('is-open');
+      later(function () {
+        el.classList.remove('is-in');
+        later(function () {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        }, TOAST_CLOSE_MS);
+      }, reduceMotion.matches ? 0 : 220);
+    }
+
+    function hold() {
+      clearTimers();
+      later(dismiss, meta.hold);
+    }
+
+    el.dismissToast = dismiss;
+
+    // Reading takes longer than the timer allows sometimes. Hovering or
+    // focusing anything inside restarts the clock rather than freezing it,
+    // so a toast never sits on screen forever because a cursor was parked.
+    el.addEventListener('mouseenter', clearTimers);
+    el.addEventListener('mouseleave', hold);
+    el.addEventListener('focusin', clearTimers);
+    el.addEventListener('focusout', hold);
+    el.addEventListener('click', function (event) {
+      if (event.target.closest('[data-toast-close]')) dismiss();
+    });
+
+    // Two frames: one to commit the closed start state the stylesheet
+    // declares, one to move off it. Without the gap the browser collapses
+    // both into a single style recalculation and nothing transitions.
+    requestAnimationFrame(function () {
+      el.classList.add('is-in');
+      requestAnimationFrame(function () {
+        el.classList.add('is-open');
+        hold();
+      });
+    });
+  }
+
+  function trimRegion(region) {
+    var toasts = region.querySelectorAll('[data-toast]');
+    for (var i = 0; i < toasts.length - TOAST_MAX; i++) {
+      if (toasts[i].dismissToast) toasts[i].dismissToast();
+    }
+  }
+
+  /** Public API. `toast("Saved", "success")`. */
+  function showToast(message, level) {
+    if (!message) return null;
+    var resolved = levelOf(level);
+    var region = ensureRegion();
+    var el = buildToast(String(message), resolved);
+    region.appendChild(el);
+    trimRegion(region);
+    runToast(el, resolved);
+    return el;
+  }
+
+  function initToasts() {
+    var region = document.querySelector('[data-toast-region]');
+    if (region) {
+      toastRegion = region;
+      // Server-rendered toasts ship open so they are readable without this
+      // script. Close them, then let each play its entrance -- staggered, so
+      // three messages from one request arrive as a sequence rather than a
+      // wall.
+      //
+      // Each is detached and re-appended rather than merely re-classed. A live
+      // region announces what is *added* to it, and content already present
+      // when the region is parsed is not an addition -- so without the round
+      // trip a screen reader would stay silent on exactly the messages that
+      // came from the server.
+      var existing = Array.prototype.slice.call(region.querySelectorAll('[data-toast]'));
+      existing.forEach(function (el, index) {
+        var level = levelOf(el.getAttribute('data-toast-level'));
+        el.classList.remove('is-in', 'is-open');
+        el.parentNode.removeChild(el);
+        window.setTimeout(function () {
+          region.appendChild(el);
+          runToast(el, level);
+        }, index * 140);
+      });
+    }
+
+    // Declarative toasts: anything can carry `data-toast-on-click`, which is
+    // how a control that is visibly present but not permitted explains itself
+    // without a dialog. See partials/_nav.html.
+    document.addEventListener('click', function (event) {
+      var trigger = event.target.closest && event.target.closest('[data-toast-on-click]');
+      if (!trigger) return;
+      showToast(
+        trigger.getAttribute('data-toast-on-click'),
+        trigger.getAttribute('data-toast-on-click-level') || 'info'
+      );
+    });
+
+    announceFormErrors(region);
+  }
+
+  /* A rejected form, announced once.
+   *
+   * Django re-renders the page with the errors printed beside the fields it
+   * rejected, which is the right place for them -- and easy to miss on a long
+   * form when the thing you were looking at was the Save button. `.field-error`
+   * only exists on a form that has been submitted and refused, so its presence
+   * is the signal; no view has to remember to flash anything.
+   *
+   * Skipped when the server already sent a toast, because a page that has just
+   * said "Sign-in failed" does not also need "2 fields need attention".
+   */
+  function announceFormErrors(region) {
+    if (region && region.querySelector('[data-toast]')) return;
+
+    var errors = document.querySelectorAll('.field-error');
+    if (!errors.length) return;
+
+    // Counted per field, not per message: two complaints about the same input
+    // are still one place to go and look. Deduped by the element the error
+    // sits under, which is the field's own wrapper.
+    var owners = [];
+    Array.prototype.forEach.call(errors, function (node) {
+      var owner = node.parentElement;
+      if (owner && owners.indexOf(owner) === -1) owners.push(owner);
+    });
+    var total = owners.length || errors.length;
+
+    showToast(
+      total === 1
+        ? 'One field needs attention. Nothing was saved.'
+        : total + ' fields need attention. Nothing was saved.',
+      'warning'
+    );
+  }
+
+  // Exposed before init so anything inline on a page can call it.
+  window.toast = showToast;
+  window.toast.success = function (m) { return showToast(m, 'success'); };
+  window.toast.error = function (m) { return showToast(m, 'error'); };
+  window.toast.warning = function (m) { return showToast(m, 'warning'); };
+  window.toast.info = function (m) { return showToast(m, 'info'); };
+
+  /* ====================================================================== *
+   * Boot
+   * ====================================================================== */
   function init() {
+    // The performance tier is decided first: it sets the attribute the
+    // stylesheet reads to switch glass off, and a toast is a glass surface
+    // that starts animating immediately after.
+    initPerfTier();
+    initToasts();
     initTheme();
     initReveals();
-    var fans = document.querySelectorAll('[data-fan]');
-    for (var i = 0; i < fans.length; i++) initFan(fans[i]);
+    initLandingNav();
+    initAuthSwap();
+
+    var repeats = document.querySelectorAll('[data-repeat]');
+    for (var i = 0; i < repeats.length; i++) initRepeat(repeats[i]);
+
+    initPresets();
+    initTotals();
   }
 
   if (document.readyState === 'loading') {

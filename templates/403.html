@@ -1,50 +1,113 @@
 {% extends "base.html" %}
 
 {% comment %}
-Shown when a signed-in account reaches something its role does not allow --
-a bursar opening an academic-setup edit URL, for instance.
+Shown when a signed-in account reaches something its role does not allow -- a
+bursar opening an academic-setup edit URL, for instance.
+
+Styling only. The status is still 403 and the refusal is still the refusal:
+the view never ran, and apps.core.views.permission_denied renders this without
+touching what was decided. The toast carrying the reason comes from the same
+place, through the ordinary message framework, so this page says what happened
+twice over -- once in passing and once in full.
+
+What this page must never become is a prompt for credentials. Whoever is
+reading it is already signed in; asking them to authenticate again answers a
+question nobody asked and hides the real one. There is no password field here
+and no link to the sign-in page, and a test asserts both.
 {% endcomment %}
 
 {% block title %}Not allowed{% endblock %}
 {% block page_title %}Not allowed{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-lg">
-  <div class="card p-6 text-center">
-    <span class="mx-auto grid size-12 place-items-center rounded-md bg-overdue-soft
-                 text-overdue-strong">
-      <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-           stroke="currentColor" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round"
-              d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0
-                 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0
-                 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-      </svg>
-    </span>
-    <h2 class="mt-4 text-base font-semibold text-ink-900">
-      Your role can't do that
-    </h2>
-    <p class="mt-2 text-sm text-ink-600">
-      {% if exception %}{{ exception }}{% else %}
-        This action needs a higher access level than {{ current_role_label|default:"your role" }}.
-      {% endif %}
-    </p>
-    <p class="mt-1 text-sm text-ink-500">
-      Ask a school owner or principal if you need it changed.
-    </p>
-    <a href="{% url 'core:dashboard' %}" class="btn btn-secondary mt-5 text-sm">
-      Back to dashboard
-    </a>
+<div class="mx-auto max-w-3xl py-4 sm:py-8">
+
+  {% comment %}
+  The navy band is the same gradient as the hero, the auth panel and the
+  closing CTA -- one surface seen in another place. `isolate` gives it a
+  stacking context so the grid texture inside paints above its own background
+  instead of disappearing behind it.
+  {% endcomment %}
+  <div class="relative isolate overflow-hidden rounded-2xl px-5 py-12 sm:px-10 sm:py-16"
+       style="background: var(--gradient-brand);">
+    <div class="hero-grid"></div>
+
+    <div class="glass-dark glass-lit mx-auto max-w-md p-7 text-center sm:p-9">
+
+      <span class="mx-auto grid size-14 place-items-center rounded-md bg-white/15
+                   text-white">
+        <svg class="size-7" fill="none" viewBox="0 0 24 24" stroke-width="1.6"
+             stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0
+                   0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0
+                   0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+        </svg>
+      </span>
+
+      <h2 class="mt-5 text-xl font-bold tracking-tight text-white sm:text-2xl">
+        Your role doesn&rsquo;t have access to this
+      </h2>
+
+      <p class="mt-3 text-sm leading-relaxed text-brand-100">
+        {% if exception %}
+          {{ exception }}
+        {% else %}
+          This needs a higher access level than
+          {{ current_role_label|default:"your role" }} has.
+        {% endif %}
+      </p>
+
+      <p class="mt-2 text-sm text-brand-200">
+        Nothing was changed. Ask a school owner or principal if you need this
+        opened up.
+      </p>
+
+      <a href="{% url 'core:dashboard' %}" class="btn btn-on-panel mt-7">
+        Back to my dashboard
+        <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2"
+             stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+        </svg>
+      </a>
+
+    </div>
   </div>
+
 </div>
 {% endblock %}
 
 {% block anonymous_content %}
-<div class="grid min-h-full place-items-center px-4 py-12">
-  <div class="card max-w-sm p-6 text-center">
-    <h2 class="text-base font-semibold text-ink-900">Not allowed</h2>
-    <p class="mt-2 text-sm text-ink-600">You need to sign in to view this page.</p>
-    <a href="{% url 'login' %}" class="btn btn-primary mt-5 text-sm">Sign in</a>
+{% comment %}
+The signed-out half. Here a sign-in link is the right answer rather than the
+wrong one: this reader genuinely has no session, so the thing standing between
+them and the page really is authentication.
+{% endcomment %}
+<div class="relative isolate grid min-h-full place-items-center overflow-hidden px-4 py-12"
+     style="background: var(--gradient-brand);">
+  <div class="hero-grid"></div>
+
+  <div class="glass-dark glass-lit w-full max-w-sm p-7 text-center sm:p-9">
+    <a href="{% url 'core:landing' %}"
+       class="mb-6 flex items-center justify-center gap-2.5">
+      {% include "partials/_brand_mark.html" with size="size-10" %}
+      <span class="text-lg font-semibold tracking-tight text-white">
+        {{ product_name }}
+      </span>
+    </a>
+
+    <h2 class="text-xl font-bold tracking-tight text-white">
+      You need to be signed in
+    </h2>
+    <p class="mt-3 text-sm text-brand-100">
+      This page belongs to a school account. Sign in and we will take you
+      straight there.
+    </p>
+
+    <a href="{% url 'login' %}" class="btn btn-on-panel mt-7 w-full" data-auth-swap>
+      Sign in
+    </a>
   </div>
 </div>
 {% endblock %}

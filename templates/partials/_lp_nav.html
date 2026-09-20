@@ -1,0 +1,49 @@
+{% comment %}
+The public site's sticky bar.
+
+The section links are real anchors. Smooth scrolling and the offset that keeps
+a heading clear of this bar are both declared in the stylesheet
+(`scroll-behavior` / `scroll-padding-top`), so they work with the keyboard, in
+a new tab, and with this page's JavaScript blocked. js/ui.js adds only two
+things on top: `.is-scrolled` once the page has left the hero, and the
+`aria-current` that marks the section being read.
+
+The bar starts transparent over the navy hero and becomes frosted glass over
+the page -- so everything on it has two colour states, handled by `.lp-nav`
+descendant rules in the stylesheet rather than by classes here. The one
+exception is the primary button, which is navy-on-white in both and needs no
+switch.
+
+Shown on the landing page only -- the auth screens have their own chrome.
+{% endcomment %}
+<header class="lp-nav" data-lp-nav>
+  <div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
+
+    <a href="{% url 'core:landing' %}" class="flex shrink-0 items-center gap-2.5">
+      {% include "partials/_brand_mark.html" %}
+      <span class="lp-nav-brand text-base font-semibold tracking-tight">
+        {{ product_name }}
+      </span>
+    </a>
+
+    <nav class="ml-4 hidden flex-1 items-center gap-1 md:flex"
+         aria-label="Sections of this page">
+      <a href="#problems" class="lp-nav-link" data-lp-link>The problem</a>
+      <a href="#features" class="lp-nav-link" data-lp-link>What you get</a>
+      <a href="#setup" class="lp-nav-link" data-lp-link>Getting set up</a>
+      <a href="#faq" class="lp-nav-link" data-lp-link>Questions</a>
+    </nav>
+
+    <div class="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+      {% include "partials/_theme_toggle.html" %}
+      <a href="{% url 'login' %}" class="lp-nav-link hidden sm:inline-flex"
+         data-auth-swap>
+        Log in
+      </a>
+      <a href="{% url 'core:signup' %}" class="btn btn-primary text-sm" data-auth-swap>
+        Get started
+      </a>
+    </div>
+
+  </div>
+</header>

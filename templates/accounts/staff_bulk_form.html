@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% comment %}
+Invite several people at once.
+
+Same fields, same validation and the same invitation email as the single form
+-- this is only the arrangement. A row is "filled" as soon as an email address
+is typed into it; the rest are ignored, so there is no penalty for leaving
+spare rows on screen.
+
+No password field anywhere, in either shape: each account is created with one
+nobody has ever seen and the person sets their own from an emailed link.
+
+Without JavaScript the server renders three rows and an ordinary Save. The
+script adds the fourth -- which is why the "add another row" button ships
+`hidden` and is revealed by js/ui.js.
+{% endcomment %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    Each person sets their own password from an emailed link
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'staff:create' %}" class="btn btn-secondary text-sm">
+    <span class="hidden sm:inline">Add</span> one at a time
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if formset.non_form_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong" role="alert">
+        {% for error in formset.non_form_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card p-5 sm:p-6">
+      <div class="flex items-start gap-3">
+        <span class="icon-tile accent-indigo">
+          <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+               stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+          </svg>
+        </span>
+        <div class="min-w-0">
+          <h2 class="text-sm font-semibold text-ink-900">
+            The permission role decides what each account can see
+          </h2>
+          <p class="field-hint mt-0.5">
+            A principal runs one campus; a bursar records payments against the
+            fees without being able to change them. Job titles and phone
+            numbers can be added afterwards on each person&rsquo;s record — they
+            have no effect on access.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {# ===== The rows ==================================================== #}
+    <div class="card mt-5 overflow-hidden" id="staff-rows"
+         data-repeat data-repeat-prefix="{{ formset.prefix }}">
+      {{ formset.management_form }}
+
+      <div class="hidden border-b border-ink-200 bg-ink-50 px-5 py-2.5
+                  text-xs font-semibold uppercase tracking-wide text-ink-600 lg:flex
+                  lg:items-center lg:gap-3">
+        <span class="w-7 shrink-0"></span>
+        <span class="min-w-0 flex-1">Full name</span>
+        <span class="min-w-0 flex-1">Email address</span>
+        <span class="w-40 shrink-0">Role</span>
+        <span class="w-40 shrink-0">Campus</span>
+        <span class="w-11 shrink-0"></span>
+      </div>
+
+      <div class="row-stack" data-repeat-rows>
+        {% for row in formset %}
+          <div class="row-item" data-repeat-row data-new="true">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <span class="row-index" data-repeat-index aria-hidden="true">
+                {{ forloop.counter }}
+              </span>
+              <div class="min-w-0 flex-1">
+                <label for="{{ row.full_name.id_for_label }}"
+                       class="field-label lg:sr-only">Full name</label>
+                {{ row.full_name }}
+              </div>
+              <div class="min-w-0 flex-1">
+                <label for="{{ row.email.id_for_label }}"
+                       class="field-label lg:sr-only">Email address</label>
+                {{ row.email }}
+              </div>
+              <div class="w-full shrink-0 lg:w-40">
+                <label for="{{ row.role.id_for_label }}"
+                       class="field-label lg:sr-only">Role</label>
+                {{ row.role }}
+              </div>
+              <div class="w-full shrink-0 lg:w-40">
+                <label for="{{ row.branch.id_for_label }}"
+                       class="field-label lg:sr-only">Campus</label>
+                {{ row.branch }}
+              </div>
+              <button type="button" data-repeat-remove=""
+                      class="btn btn-ghost size-touch shrink-0 self-end px-0
+                             text-overdue-strong hover:bg-overdue-soft lg:self-auto"
+                      aria-label="Remove this row">
+                <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                     stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                        d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.2v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                </svg>
+              </button>
+            </div>
+            {% for field in row %}
+              {% for error in field.errors %}
+                <p class="field-error">{{ field.label }}: {{ error }}</p>
+              {% endfor %}
+            {% endfor %}
+            {% for error in row.non_field_errors %}
+              <p class="field-error">{{ error }}</p>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="row-actions">
+        <button type="button" data-repeat-add class="btn btn-secondary text-sm" hidden>
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+               stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Add another row
+        </button>
+        <p class="text-xs text-ink-500">
+          <span class="numeric font-semibold text-ink-800" data-repeat-count>
+            {{ formset|length }}
+          </span>
+          row{{ formset|length|pluralize }} — a row counts once it has an email
+          address. Blank ones are ignored.
+        </p>
+      </div>
+
+      <template data-repeat-template>
+        <div class="row-item" data-repeat-row data-new="true">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <span class="row-index" data-repeat-index aria-hidden="true"></span>
+            <div class="min-w-0 flex-1">
+              <label for="id_{{ formset.prefix }}-__prefix__-full_name"
+                     class="field-label lg:sr-only">Full name</label>
+              {{ formset.empty_form.full_name }}
+            </div>
+            <div class="min-w-0 flex-1">
+              <label for="id_{{ formset.prefix }}-__prefix__-email"
+                     class="field-label lg:sr-only">Email address</label>
+              {{ formset.empty_form.email }}
+            </div>
+            <div class="w-full shrink-0 lg:w-40">
+              <label for="id_{{ formset.prefix }}-__prefix__-role"
+                     class="field-label lg:sr-only">Role</label>
+              {{ formset.empty_form.role }}
+            </div>
+            <div class="w-full shrink-0 lg:w-40">
+              <label for="id_{{ formset.prefix }}-__prefix__-branch"
+                     class="field-label lg:sr-only">Campus</label>
+              {{ formset.empty_form.branch }}
+            </div>
+            <button type="button" data-repeat-remove=""
+                    class="btn btn-ghost size-touch shrink-0 self-end px-0
+                           text-overdue-strong hover:bg-overdue-soft lg:self-auto"
+                    aria-label="Remove this row">
+              <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                   stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.2v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <p class="mt-4 rounded-md bg-ink-50 px-3 py-2 text-xs text-ink-600">
+      No passwords are set here. Each account is created with one nobody knows —
+      not even you — and they choose their own from the link emailed to them.
+    </p>
+
+    <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <a href="{% url 'staff:list' %}" class="btn btn-secondary text-sm">Cancel</a>
+      <button type="submit" name="save_and_add_another" value="1"
+              class="btn btn-secondary text-sm">
+        Save and invite more
+      </button>
+      <button type="submit" class="btn btn-primary text-sm">
+        Create accounts and send invites
+      </button>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

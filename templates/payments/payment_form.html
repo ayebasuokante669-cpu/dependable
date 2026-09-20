@@ -78,7 +78,7 @@
               </a>
             {% else %}
               <a href="{{ form.instance.receipt.url }}" target="_blank" rel="noopener">
-                <img src="{{ form.instance.receipt.url }}" alt="Uploaded receipt"
+                <img src="{{ form.instance.receipt.url }}" alt="Uploaded receipt" loading="lazy" decoding="async"
                      class="mt-2 max-h-96 max-w-full rounded-md border border-ink-200">
               </a>
             {% endif %}

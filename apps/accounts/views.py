@@ -22,6 +22,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
+from django.db import transaction
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_POST
@@ -33,7 +34,12 @@ from apps.core.navigation import home_url_for
 from apps.core.permissions import Capability, CapabilityRequiredMixin
 from apps.core.roles import Role
 
-from .forms import AccountPasswordForm, EmailChangeForm, StaffAccountForm
+from .forms import (
+    AccountPasswordForm,
+    EmailChangeForm,
+    StaffAccountForm,
+    StaffRowFormSet,
+)
 from .invites import send_set_password_email
 from .passwords import generate_password
 
@@ -204,6 +210,16 @@ class StaffCreateView(ManageStaffMixin, FormView):
         kwargs["creator"] = self.request.user
         return kwargs
 
+    def get_success_url(self):
+        """Back to a blank form when asked, rather than to the list.
+
+        The second and third account of a batch are the ones this saves; the
+        bulk table is the better answer for more than that.
+        """
+        if "save_and_add_another" in self.request.POST:
+            return reverse("staff:create")
+        return super().get_success_url()
+
     def form_valid(self, form):
         user = form.save()
         # Outside the transaction that made the account on purpose: a mail
@@ -228,6 +244,73 @@ class StaffCreateView(ManageStaffMixin, FormView):
                 f"password has been emailed to {user.email}.",
             )
         return HttpResponseRedirect(self.get_success_url())
+
+
+class StaffBulkCreateView(ManageStaffMixin, TemplateView):
+    """Issue several logins in one submission.
+
+    A school opening for the term hands out a handful of accounts at once, and
+    doing it one form at a time means finding the New button again between
+    each. Same validation, same creation path, same invitation email as the
+    single form -- see StaffRowForm.
+
+    The accounts are created in one transaction and the emails are sent after
+    it commits, which is the same order the single form uses and for the same
+    reason: a mail failure must not roll back a colleague who now exists as far
+    as the proprietor is concerned.
+    """
+
+    template_name = "accounts/staff_bulk_form.html"
+    extra_context = {"page_title": "Invite staff"}
+
+    def build_formset(self, data=None):
+        return StaffRowFormSet(
+            data=data, form_kwargs={"creator": self.request.user}
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("formset", self.build_formset())
+        return context
+
+    def post(self, request, *args, **kwargs):
+        formset = self.build_formset(data=request.POST)
+        if not formset.is_valid():
+            return self.render_to_response(self.get_context_data(formset=formset))
+
+        with transaction.atomic():
+            created = [form.save() for form in formset.filled_forms()]
+
+        # Outside the transaction on purpose. Each failure is reported by name
+        # so the proprietor knows exactly who to press Resend for, rather than
+        # being told "some emails failed".
+        failed = []
+        for user in created:
+            try:
+                send_set_password_email(user)
+            except Exception:
+                logger.exception("Invite email failed for %s", user.pk)
+                failed.append(user)
+
+        sent = len(created) - len(failed)
+        if sent:
+            messages.success(
+                request,
+                f"{sent} account{'' if sent == 1 else 's'} created. A link to "
+                f"set their own password has been emailed to "
+                f"{'them' if sent > 1 else created[0].email}.",
+            )
+        if failed:
+            names = ", ".join(u.get_full_name() or u.username for u in failed)
+            messages.warning(
+                request,
+                f"Created, but the invitation email could not be sent to: "
+                f"{names}. Use Resend invite on the staff list to try again.",
+            )
+
+        if "save_and_add_another" in request.POST:
+            return HttpResponseRedirect(request.path)
+        return HttpResponseRedirect(reverse("staff:list"))
 
 
 class ResendStaffInviteView(ManageStaffMixin, View):

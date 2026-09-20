@@ -11,12 +11,15 @@
 
 {% block page_actions %}
   {% if "manage_academics" in capabilities %}
-    <a href="{% url 'academics:subject_create' %}" class="btn btn-primary text-sm">
+    <a href="{% url 'academics:subject_create' %}" class="btn btn-secondary text-sm">
+      <span class="hidden sm:inline">One</span> subject
+    </a>
+    <a href="{% url 'academics:subject_bulk_create' %}" class="btn btn-primary text-sm">
       <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
            stroke="currentColor" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
       </svg>
-      <span class="hidden sm:inline">New subject</span>
+      <span class="hidden sm:inline">Add subjects</span>
     </a>
   {% endif %}
 {% endblock %}
@@ -89,9 +92,14 @@
         Add the subjects this branch teaches, then tick the classes each one applies to.
       </p>
       {% if "manage_academics" in capabilities %}
-        <a href="{% url 'academics:subject_create' %}" class="btn btn-primary mt-5 text-sm">
-          Add the first subject
-        </a>
+        <div class="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
+          <a href="{% url 'academics:subject_bulk_create' %}" class="btn btn-primary text-sm">
+            Add a standard set
+          </a>
+          <a href="{% url 'academics:subject_create' %}" class="btn btn-secondary text-sm">
+            Add one subject
+          </a>
+        </div>
       {% else %}
         <p class="mt-4 text-xs">Your role can view the academic setup but not change it.</p>
       {% endif %}

@@ -131,7 +131,7 @@
                   </a>
                 {% else %}
                   <a href="{{ payment.receipt.url }}" target="_blank" rel="noopener">
-                    <img src="{{ payment.receipt.url }}"
+                    <img src="{{ payment.receipt.url }}" loading="lazy" decoding="async"
                          alt="Receipt for {{ payment.amount }}"
                          class="mt-2 max-h-56 w-full rounded-md border border-ink-200
                                 object-contain">

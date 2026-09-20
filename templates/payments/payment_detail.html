@@ -146,7 +146,7 @@
                class="btn btn-secondary text-sm">Open the PDF</a>
           {% else %}
             <a href="{{ payment.receipt.url }}" target="_blank" rel="noopener">
-              <img src="{{ payment.receipt.url }}" alt="Uploaded receipt"
+              <img src="{{ payment.receipt.url }}" alt="Uploaded receipt" loading="lazy" decoding="async"
                    class="max-h-[32rem] max-w-full rounded-md border border-ink-200">
             </a>
           {% endif %}

@@ -33,6 +33,17 @@
 
     <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
       <a href="{% url 'fees:term_list' %}" class="btn btn-secondary text-sm">Cancel</a>
+      {% comment %}
+      A school sets up three terms at a time, once a year -- few enough that a
+      table would be more ceremony than the job needs, often enough that
+      landing back on the list between each is a round trip worth removing.
+      {% endcomment %}
+      {% if not form.instance.pk %}
+        <button type="submit" name="save_and_add_another" value="1"
+                class="btn btn-secondary text-sm">
+          Save and add another
+        </button>
+      {% endif %}
       <button type="submit" class="btn btn-primary text-sm">{{ verb }} term</button>
     </div>
   </form>

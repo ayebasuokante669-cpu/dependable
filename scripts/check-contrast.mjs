@@ -108,6 +108,15 @@ const PAIRS = [
   ['ink-200', 'surface', 1.0, 'card border (decorative)'],
   ['brand-500', 'surface', 3.0, 'focus ring on a card'],
   ['brand-500', 'ink-50', 3.0, 'focus ring on the page ground'],
+
+  // Icon tiles: a glyph on its own tinted square. Non-text graphics, so the
+  // threshold is 3:1 (WCAG 1.4.11) rather than 4.5. Every accent is checked
+  // in both themes because the dark theme re-points both ends of each pair --
+  // the tile darkens and the glyph brightens -- and getting one of those two
+  // moves wrong is exactly the kind of regression nothing in a template shows.
+  ...['blue', 'indigo', 'violet', 'teal', 'emerald', 'amber', 'rose'].map(
+    (hue) => [`acc-${hue}`, `acc-${hue}-soft`, 3.0, `icon-tile accent-${hue}`]
+  ),
 ];
 
 const LITERAL = [

@@ -14,6 +14,8 @@ app_name = "staff"
 urlpatterns = [
     path("", views.StaffListView.as_view(), name="list"),
     path("new/", views.StaffCreateView.as_view(), name="create"),
+    # The table view of the same thing: several logins in one submission.
+    path("invite-many/", views.StaffBulkCreateView.as_view(), name="bulk_create"),
     path(
         "<int:pk>/resend-invite/",
         views.ResendStaffInviteView.as_view(),

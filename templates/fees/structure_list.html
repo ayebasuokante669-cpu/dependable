@@ -45,7 +45,7 @@
         A fee structure belongs to a term, so a term has to exist first.
       </p>
       {% if "manage_fees" in capabilities %}
-        <a href="{% url 'admin:fees_term_add' %}" class="btn btn-primary mt-5 text-sm">
+        <a href="{% url 'fees:term_create' %}" class="btn btn-primary mt-5 text-sm">
           Create a term
         </a>
       {% endif %}

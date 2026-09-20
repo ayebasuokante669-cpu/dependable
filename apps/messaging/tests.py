@@ -108,12 +108,22 @@ class MessagingTestCase(TestCase):
         # Every branch here can send: identity is exercised in
         # tests_identity.py, and a batch that cannot go out would make every
         # audience and delivery assertion below untestable.
+        #
+        # That goes for WhatsApp too. Two tests below send over it, and
+        # `dispatch.send` resolves the school's identity before writing
+        # anything -- so without an approved WhatsApp half they never reached
+        # the batch recording and the per-row failure they exist to assert,
+        # and errored on the identity guard instead. The guard is right and
+        # stays exactly as it is; it simply belongs to tests_identity.py.
         SchoolMessagingConfig.all_objects.create(
             school=cls.alpha,
             branch=None,
             sender_id="Alpha",
             provider=ProviderKey.BULKSMSNIGERIA,
             status=SenderIdStatus.APPROVED,
+            whatsapp_provider=ProviderKey.TERMII_WHATSAPP,
+            whatsapp_device_id="alpha-whatsapp-device",
+            whatsapp_status=SenderIdStatus.APPROVED,
         )
 
         cls.jss1_fees = FeeStructure.all_objects.create(

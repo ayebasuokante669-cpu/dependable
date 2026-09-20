@@ -1,0 +1,50 @@
+{% comment %}
+The notification region: every Django message on the page, as a toast.
+
+Included once from base.html, on both the signed-in shell and the signed-out
+pages -- before this, `messages` were only rendered inside the shell, so
+anything flashed on the way to the login screen was silently swallowed.
+
+Rendered **open** on purpose. js/ui.js closes each one and replays it as the
+rise-open-hold-close-drop sequence; without the script they stay exactly as
+they are here, which is a readable notice at the bottom of the page. That is
+the same bargain `.reveal` makes: a blocked script costs the animation, never
+the information.
+
+Level comes from the message's own tag, so a view keeps writing ordinary
+`messages.success(...)` and never learns that toasts exist. `error` covers
+Django's own tag; `debug` falls in with `info`.
+
+Accessibility: the region is a polite live region, each toast carries an icon,
+and js/ui.js prefixes the message with a visually-hidden category word. Colour
+is never the only signal.
+{% endcomment %}
+{% if messages %}
+  {% comment %}
+  With the script running, a toast floats over the page and leaves of its own
+  accord. Without it, one pinned to the bottom of the viewport would sit there
+  for as long as the page did, over whatever is underneath. So when there is
+  no script, the region stops floating and becomes an ordinary block at the
+  end of the document: still read, no longer in the way.
+  {% endcomment %}
+  <noscript>
+    <style>
+      .toast-region { position: static; padding-bottom: 1.5rem; }
+      .toast { box-shadow: none; }
+    </style>
+  </noscript>
+  <div class="toast-region" data-toast-region role="status" aria-live="polite"
+       aria-atomic="false">
+    {% for message in messages %}
+      {% if message.tags == "success" %}
+        {% include "partials/_toast.html" with level="success" label="Success" body=message %}
+      {% elif message.tags == "error" %}
+        {% include "partials/_toast.html" with level="error" label="Error" body=message %}
+      {% elif message.tags == "warning" %}
+        {% include "partials/_toast.html" with level="warning" label="Warning" body=message %}
+      {% else %}
+        {% include "partials/_toast.html" with level="info" label="Information" body=message %}
+      {% endif %}
+    {% endfor %}
+  </div>
+{% endif %}

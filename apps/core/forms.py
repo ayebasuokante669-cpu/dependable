@@ -36,7 +36,15 @@ class StyledFormMixin:
         for field in self.fields.values():
             widget = field.widget
             if isinstance(widget, self._UNSTYLED):
-                if isinstance(widget, forms.CheckboxInput):
+                # A single checkbox and a list of them are the same control
+                # drawn once or many times, so they take the same class.
+                # ``CheckboxSelectMultiple`` passes its attrs down to every
+                # sub-input, which is why one setdefault covers the whole list
+                # -- without this the tick boxes on "Taught in" were the only
+                # browser-default controls left in the app.
+                if isinstance(
+                    widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)
+                ):
                     widget.attrs.setdefault("class", "field-checkbox")
                 continue
             if isinstance(widget, forms.Textarea):

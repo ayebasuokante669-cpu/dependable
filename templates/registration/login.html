@@ -1,9 +1,10 @@
 {% extends "registration/_auth_base.html" %}
 
-{% block auth_heading %}Sign in{% endblock %}
+{% block auth_eyebrow %}Welcome back{% endblock %}
+{% block auth_heading %}Sign in to your school{% endblock %}
 
 {% block auth_intro %}
-  <p class="mt-1 text-sm text-ink-600">
+  <p class="mt-3 text-sm text-ink-600">
     Use the credentials issued by your school.
   </p>
 {% endblock %}
@@ -13,13 +14,13 @@
      a disabled account as its own message. Rendering them rather than a fixed
      sentence means the user is told which of the two actually happened. {% endcomment %}
   {% if form.non_field_errors %}
-    <div class="mt-4 rounded-md border border-overdue/30 bg-overdue-soft px-3 py-2.5
+    <div class="mt-5 rounded-md border border-overdue/30 bg-overdue-soft px-4 py-3
                 text-sm text-overdue-strong" role="alert">
       {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
     </div>
   {% endif %}
 
-  <form method="post" class="mt-5 space-y-4" novalidate>
+  <form method="post" class="mt-7 space-y-5" novalidate>
     {% csrf_token %}
 
     <div>
@@ -50,18 +51,31 @@
     </div>
 
     {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
-    <button type="submit" class="btn btn-primary w-full">Sign in</button>
+    <button type="submit" class="btn btn-primary w-full">
+      Sign in
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+      </svg>
+    </button>
   </form>
 {% endblock %}
 
 {% block auth_footer %}
-  <p class="mt-6 text-center text-sm text-ink-600">
+  <p class="mt-7 text-sm text-ink-600">
     New school?
-    <a href="{% url 'core:signup' %}" class="font-semibold text-brand-700 hover:underline">
-      Create an account
+    {% comment %}
+    `data-auth-swap` is what tells js/ui.js the next page was reached from this
+    one, so the panels are animated as a crossing rather than a fresh arrival.
+    It is an ordinary link with or without the script.
+    {% endcomment %}
+    <a href="{% url 'core:signup' %}" class="font-semibold text-brand-700 hover:underline"
+       data-auth-swap>
+      Start your journey
     </a>
   </p>
-  <p class="mt-2 text-center text-xs text-ink-500">
+  <p class="mt-2 text-xs text-ink-500">
     Staff accounts are issued by your school — ask your principal or proprietor.
   </p>
 {% endblock %}

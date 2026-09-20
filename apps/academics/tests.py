@@ -241,9 +241,18 @@ class ViewPermissionTests(AcademicsTestCase):
         self.assertNotIn("New class", body)
 
     def test_principal_sees_the_edit_controls(self):
+        """Asserted by destination rather than by button label.
+
+        The list now offers three ways in -- add many, add one, edit all -- and
+        their wording is a copy decision that should be free to change. What
+        must hold is that a principal is offered the screens their capability
+        allows, which is what the URLs say.
+        """
         self.client.force_login(self.north_principal)
         body = self.client.get(reverse("academics:class_list")).content.decode()
-        self.assertIn("New class", body)
+        self.assertIn(reverse("academics:class_create"), body)
+        self.assertIn(reverse("academics:class_bulk_create"), body)
+        self.assertIn(reverse("academics:class_edit_all"), body)
 
     def test_principal_can_create_a_class(self):
         self.client.force_login(self.north_principal)
@@ -438,6 +447,422 @@ class SeedCommandTests(TestCase):
 
         with self.assertRaises(CommandError):
             call_command("seed_academics", "--school", "Nope")
+
+
+class NameInferenceTests(TestCase):
+    """Reading a level and a year off a class name.
+
+    These are defaults offered to a form field, never silent writes, so the
+    bar is "right often enough to save typing" rather than "right always".
+    What must hold is that an unreadable name returns None instead of
+    guessing, because a wrong band sorts the class into the wrong place on
+    every screen afterwards.
+    """
+
+    def test_the_common_nigerian_spellings_are_read(self):
+        from .curriculum import infer_level
+
+        cases = {
+            "Pre-KG": Level.NURSERY,
+            "KG 2": Level.NURSERY,
+            "Nursery 1": Level.NURSERY,
+            "Reception": Level.NURSERY,
+            "Primary 4": Level.PRIMARY,
+            "Grade 5": Level.PRIMARY,
+            "JSS 1": Level.JUNIOR_SECONDARY,
+            "JSS 2A": Level.JUNIOR_SECONDARY,
+            "SSS 3": Level.SENIOR_SECONDARY,
+            "SS 2": Level.SENIOR_SECONDARY,
+        }
+        for name, expected in cases.items():
+            with self.subTest(name=name):
+                self.assertEqual(infer_level(name), expected)
+
+    def test_basic_is_decided_by_the_number_beside_it(self):
+        """Basic 1-6 is primary; Basic 7-9 is junior secondary."""
+        from .curriculum import infer_level
+
+        self.assertEqual(infer_level("Basic 3"), Level.PRIMARY)
+        self.assertEqual(infer_level("Basic 8"), Level.JUNIOR_SECONDARY)
+
+    def test_an_unreadable_name_is_not_guessed_at(self):
+        from .curriculum import infer_level
+
+        self.assertIsNone(infer_level("Butterfly Group"))
+        self.assertIsNone(infer_level(""))
+
+    def test_the_year_is_the_last_number_in_the_name(self):
+        from .curriculum import infer_year
+
+        self.assertEqual(infer_year("Primary 4"), 4)
+        self.assertEqual(infer_year("JSS 2A"), 2)
+        self.assertIsNone(infer_year("Pre-KG"))
+        # Not a year: a year of entry that has ended up in the name field.
+        self.assertIsNone(infer_year("Intake 2026"))
+
+
+class LadderPresetTests(TestCase):
+    def test_the_ladder_matches_the_seed_list(self):
+        """The preset buttons and `seed_academics` must describe one ladder."""
+        from .curriculum import CLASSES, ladder_presets
+
+        rows = [row for group in ladder_presets() for row in group["rows"]]
+        expected = sum(len(spec.streams) or 1 for spec in CLASSES)
+        self.assertEqual(len(rows), expected)
+
+    def test_an_armed_rung_becomes_one_row_per_arm(self):
+        from .curriculum import ladder_presets
+
+        senior = next(
+            group for group in ladder_presets()
+            if group["label"] == Level.SENIOR_SECONDARY.label
+        )
+        sss1 = [row for row in senior["rows"] if row["name"] == "SSS 1"]
+        self.assertEqual({row["stream"] for row in sss1}, {"Arts", "Science"})
+
+
+class ClassBulkCreateTests(AcademicsTestCase):
+    """The screen that replaced nineteen round trips with one."""
+
+    url = "academics:class_bulk_create"
+
+    def rows(self, *entries, prefix="form", total=None):
+        """POST data for a bulk submission, management form included."""
+        data = {
+            f"{prefix}-TOTAL_FORMS": str(total if total is not None else len(entries)),
+            f"{prefix}-INITIAL_FORMS": "0",
+            f"{prefix}-MIN_NUM_FORMS": "0",
+            f"{prefix}-MAX_NUM_FORMS": "1000",
+        }
+        for index, entry in enumerate(entries):
+            for field in ("name", "level", "year_in_level", "stream"):
+                data[f"{prefix}-{index}-{field}"] = entry.get(field, "")
+        return data
+
+    def test_the_principal_can_add_several_classes_in_one_post(self):
+        self.client.force_login(self.north_principal)
+        before = Class.all_objects.filter(branch=self.north).count()
+
+        response = self.client.post(
+            reverse(self.url),
+            {
+                "branch": str(self.north.pk),
+                **self.rows(
+                    {"name": "Primary 1"},
+                    {"name": "Primary 2"},
+                    {"name": "Primary 3"},
+                ),
+            },
+        )
+
+        self.assertRedirects(response, reverse("academics:class_list"))
+        self.assertEqual(
+            Class.all_objects.filter(branch=self.north).count(), before + 3
+        )
+
+    def test_the_level_and_year_are_filled_in_from_the_name(self):
+        self.client.force_login(self.north_principal)
+        self.client.post(
+            reverse(self.url),
+            {"branch": str(self.north.pk), **self.rows({"name": "Primary 5"})},
+        )
+        klass = Class.all_objects.get(branch=self.north, name="Primary 5")
+        self.assertEqual(klass.level, Level.PRIMARY)
+        self.assertEqual(klass.year_in_level, 5)
+
+    def test_a_typed_level_beats_the_guess(self):
+        """The inference is a default, so an explicit choice must win."""
+        self.client.force_login(self.north_principal)
+        self.client.post(
+            reverse(self.url),
+            {
+                "branch": str(self.north.pk),
+                **self.rows(
+                    {"name": "Primary 5", "level": str(Level.JUNIOR_SECONDARY)}
+                ),
+            },
+        )
+        klass = Class.all_objects.get(branch=self.north, name="Primary 5")
+        self.assertEqual(klass.level, Level.JUNIOR_SECONDARY)
+
+    def test_blank_rows_are_ignored_rather_than_rejected(self):
+        self.client.force_login(self.north_principal)
+        response = self.client.post(
+            reverse(self.url),
+            {
+                "branch": str(self.north.pk),
+                **self.rows(
+                    {"name": "Primary 1"}, {}, {}, {},
+                ),
+            },
+        )
+        self.assertRedirects(response, reverse("academics:class_list"))
+        self.assertEqual(
+            Class.all_objects.filter(branch=self.north, name="Primary 1").count(), 1
+        )
+
+    def test_a_name_that_cannot_be_read_asks_for_the_level(self):
+        self.client.force_login(self.north_principal)
+        response = self.client.post(
+            reverse(self.url),
+            {"branch": str(self.north.pk), **self.rows({"name": "Butterfly Group"})},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            Class.all_objects.filter(branch=self.north, name="Butterfly Group").exists()
+        )
+        self.assertIn("level", response.context["formset"].forms[0].errors)
+
+    def test_two_rows_naming_the_same_class_is_a_row_error(self):
+        self.client.force_login(self.north_principal)
+        response = self.client.post(
+            reverse(self.url),
+            {
+                "branch": str(self.north.pk),
+                **self.rows({"name": "Primary 1"}, {"name": "primary 1"}),
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("name", response.context["formset"].forms[1].errors)
+        self.assertFalse(Class.all_objects.filter(name__iexact="Primary 1").exists())
+
+    def test_a_row_clashing_with_an_existing_class_is_caught(self):
+        """The branch is not a row field, so only the formset can see this."""
+        self.client.force_login(self.north_principal)
+        response = self.client.post(
+            reverse(self.url),
+            {"branch": str(self.north.pk), **self.rows({"name": "JSS 1"})},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("name", response.context["formset"].forms[0].errors)
+        self.assertEqual(
+            Class.all_objects.filter(branch=self.north, name="JSS 1").count(), 1
+        )
+
+    def test_nothing_is_written_when_one_row_is_bad(self):
+        """One transaction: nine of nineteen saved is worse than none."""
+        self.client.force_login(self.north_principal)
+        before = Class.all_objects.count()
+        self.client.post(
+            reverse(self.url),
+            {
+                "branch": str(self.north.pk),
+                **self.rows({"name": "Primary 1"}, {"name": "Butterfly Group"}),
+            },
+        )
+        self.assertEqual(Class.all_objects.count(), before)
+
+    def test_save_and_add_more_comes_back_to_the_table(self):
+        self.client.force_login(self.north_principal)
+        url = reverse(self.url)
+        response = self.client.post(
+            url,
+            {
+                "branch": str(self.north.pk),
+                "save_and_add_another": "1",
+                **self.rows({"name": "Primary 1"}),
+            },
+        )
+        self.assertRedirects(response, url)
+
+    def test_a_principal_cannot_add_to_another_campus(self):
+        """The campus select is a scoped queryset, so South is not a choice."""
+        self.client.force_login(self.north_principal)
+        response = self.client.post(
+            reverse(self.url),
+            {"branch": str(self.south.pk), **self.rows({"name": "Primary 1"})},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            Class.all_objects.filter(branch=self.south, name="Primary 1").exists()
+        )
+
+    def test_a_bursar_cannot_reach_it(self):
+        self.client.force_login(self.north_bursar)
+        self.assertEqual(self.client.get(reverse(self.url)).status_code, 403)
+        before = Class.all_objects.count()
+        self.assertEqual(
+            self.client.post(
+                reverse(self.url),
+                {"branch": str(self.north.pk), **self.rows({"name": "Primary 1"})},
+            ).status_code,
+            403,
+        )
+        self.assertEqual(Class.all_objects.count(), before)
+
+
+class ClassEditAllTests(AcademicsTestCase):
+    """Editing every class in place, in one submission."""
+
+    url = "academics:class_edit_all"
+
+    def rows(self, *entries, prefix="form"):
+        """POST data for the edit table. Entries are dicts per rendered row."""
+        data = {
+            f"{prefix}-TOTAL_FORMS": str(len(entries)),
+            f"{prefix}-INITIAL_FORMS": str(len(entries)),
+            f"{prefix}-MIN_NUM_FORMS": "0",
+            f"{prefix}-MAX_NUM_FORMS": "1000",
+        }
+        for index, entry in enumerate(entries):
+            data[f"{prefix}-{index}-id"] = str(entry["id"])
+            for field in ("name", "level", "year_in_level", "stream"):
+                data[f"{prefix}-{index}-{field}"] = entry.get(field, "")
+            if entry.get("is_active", True):
+                data[f"{prefix}-{index}-is_active"] = "on"
+        return data
+
+    def test_a_class_is_renamed_without_visiting_its_own_page(self):
+        self.client.force_login(self.north_principal)
+        response = self.client.post(
+            reverse(self.url),
+            self.rows({
+                "id": self.north_jss1.pk, "name": "JSS One",
+                "level": str(Level.JUNIOR_SECONDARY), "year_in_level": "1",
+            }),
+        )
+        self.assertRedirects(response, reverse("academics:class_list"))
+        self.north_jss1.refresh_from_db()
+        self.assertEqual(self.north_jss1.name, "JSS One")
+
+    def test_a_class_can_be_deactivated_rather_than_deleted(self):
+        self.client.force_login(self.north_principal)
+        self.client.post(
+            reverse(self.url),
+            self.rows({
+                "id": self.north_jss1.pk, "name": "JSS 1",
+                "level": str(Level.JUNIOR_SECONDARY), "year_in_level": "1",
+                "is_active": False,
+            }),
+        )
+        self.north_jss1.refresh_from_db()
+        self.assertFalse(self.north_jss1.is_active)
+        # Still there, with its history.
+        self.assertTrue(Class.all_objects.filter(pk=self.north_jss1.pk).exists())
+
+    def test_the_screen_only_offers_classes_the_user_may_see(self):
+        self.client.force_login(self.north_principal)
+        response = self.client.get(reverse(self.url))
+        editing = {form.instance.pk for form in response.context["formset"].forms}
+        self.assertEqual(editing, {self.north_jss1.pk})
+
+    def test_renaming_into_a_clash_at_the_same_campus_is_refused(self):
+        other = Class.all_objects.create(
+            branch=self.north, name="JSS 2", level=Level.JUNIOR_SECONDARY,
+            year_in_level=2,
+        )
+        self.client.force_login(self.north_principal)
+        response = self.client.post(
+            reverse(self.url),
+            self.rows(
+                {"id": self.north_jss1.pk, "name": "JSS 1",
+                 "level": str(Level.JUNIOR_SECONDARY), "year_in_level": "1"},
+                {"id": other.pk, "name": "jss 1",
+                 "level": str(Level.JUNIOR_SECONDARY), "year_in_level": "2"},
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        other.refresh_from_db()
+        self.assertEqual(other.name, "JSS 2")
+
+    def test_the_same_name_at_a_different_campus_is_allowed(self):
+        """An owner editing two campuses must not be blocked by the other's names."""
+        self.client.force_login(self.alpha_owner)
+        response = self.client.post(
+            reverse(self.url),
+            self.rows(
+                {"id": self.north_jss1.pk, "name": "JSS 1",
+                 "level": str(Level.JUNIOR_SECONDARY), "year_in_level": "1"},
+                {"id": self.south_jss1.pk, "name": "JSS 1",
+                 "level": str(Level.JUNIOR_SECONDARY), "year_in_level": "1"},
+            ),
+        )
+        self.assertRedirects(response, reverse("academics:class_list"))
+
+    def test_a_bursar_cannot_reach_it(self):
+        self.client.force_login(self.north_bursar)
+        self.assertEqual(self.client.get(reverse(self.url)).status_code, 403)
+
+
+class SubjectBulkCreateTests(AcademicsTestCase):
+    url = "academics:subject_bulk_create"
+
+    def rows(self, *entries, prefix="form"):
+        data = {
+            f"{prefix}-TOTAL_FORMS": str(len(entries)),
+            f"{prefix}-INITIAL_FORMS": "0",
+            f"{prefix}-MIN_NUM_FORMS": "0",
+            f"{prefix}-MAX_NUM_FORMS": "1000",
+        }
+        for index, entry in enumerate(entries):
+            for field in ("name", "code"):
+                data[f"{prefix}-{index}-{field}"] = entry.get(field, "")
+        return data
+
+    def test_several_subjects_are_added_in_one_post(self):
+        self.client.force_login(self.north_principal)
+        response = self.client.post(
+            reverse(self.url),
+            {
+                "branch": str(self.north.pk),
+                **self.rows(
+                    {"name": "Physics", "code": "phy"},
+                    {"name": "Chemistry"},
+                ),
+            },
+        )
+        self.assertRedirects(response, reverse("academics:subject_list"))
+        self.assertTrue(
+            Subject.all_objects.filter(branch=self.north, name="Physics").exists()
+        )
+        # Codes are stored upper-cased whatever was typed.
+        self.assertEqual(
+            Subject.all_objects.get(branch=self.north, name="Physics").code, "PHY"
+        )
+
+    def test_the_batch_classes_are_attached_to_every_subject(self):
+        self.client.force_login(self.north_principal)
+        self.client.post(
+            reverse(self.url),
+            {
+                "branch": str(self.north.pk),
+                "classes": [str(self.north_jss1.pk)],
+                **self.rows({"name": "Physics"}, {"name": "Chemistry"}),
+            },
+        )
+        for name in ("Physics", "Chemistry"):
+            subject = Subject.all_objects.get(branch=self.north, name=name)
+            self.assertEqual(list(subject.classes.all()), [self.north_jss1])
+
+    def test_a_class_at_another_campus_is_not_attached(self):
+        """The same guard SubjectForm.clean applies, at batch scale."""
+        self.client.force_login(self.alpha_owner)
+        self.client.post(
+            reverse(self.url),
+            {
+                "branch": str(self.north.pk),
+                "classes": [str(self.south_jss1.pk)],
+                **self.rows({"name": "Physics"}),
+            },
+        )
+        subject = Subject.all_objects.get(branch=self.north, name="Physics")
+        self.assertEqual(list(subject.classes.all()), [])
+
+    def test_a_subject_the_campus_already_teaches_is_refused(self):
+        self.client.force_login(self.north_principal)
+        response = self.client.post(
+            reverse(self.url),
+            {"branch": str(self.north.pk), **self.rows({"name": "Mathematics"})},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("name", response.context["formset"].forms[0].errors)
+        self.assertEqual(
+            Subject.all_objects.filter(branch=self.north, name="Mathematics").count(), 1
+        )
+
+    def test_a_bursar_cannot_reach_it(self):
+        self.client.force_login(self.north_bursar)
+        self.assertEqual(self.client.get(reverse(self.url)).status_code, 403)
 
 
 class NavigationTests(TestCase):

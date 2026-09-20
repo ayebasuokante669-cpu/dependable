@@ -33,6 +33,17 @@
 
     <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
       <a href="{% url 'academics:class_list' %}" class="btn btn-secondary text-sm">Cancel</a>
+      {% comment %}
+      Only on the create screen -- an edit form has nothing to add another of.
+      The bulk table is the better answer for a whole ladder; this is for the
+      one new arm added mid-year.
+      {% endcomment %}
+      {% if not form.instance.pk %}
+        <button type="submit" name="save_and_add_another" value="1"
+                class="btn btn-secondary text-sm">
+          Save and add another
+        </button>
+      {% endif %}
       <button type="submit" class="btn btn-primary text-sm">{{ verb }} class</button>
     </div>
   </form>

@@ -64,8 +64,15 @@
 {% if user.is_authenticated %}
 <div class="min-h-full lg:flex">
 
-  {# ===== Desktop sidebar: permanent from lg up ============================ #}
-  <aside class="hidden lg:flex lg:w-sidebar lg:shrink-0 lg:flex-col
+  {% comment %}
+  ===== Desktop sidebar: permanent from lg up ==============================
+
+  `vt-sidebar` names it for the page transition. The shell is continuous
+  furniture: naming it means the browser treats it as the same element across a
+  navigation and leaves it alone while the content column changes, instead of
+  cross-fading the whole window and flickering the sidebar on every click.
+  {% endcomment %}
+  <aside class="vt-sidebar hidden lg:flex lg:w-sidebar lg:shrink-0 lg:flex-col
                 bg-panel lg:fixed lg:inset-y-0 lg:left-0">
     {% include "partials/_sidebar_header.html" %}
     {% include "partials/_nav.html" with nav_label="Main" %}
@@ -101,8 +108,13 @@
   {# ===== Content column =================================================== #}
   <div class="flex min-w-0 flex-1 flex-col lg:pl-sidebar">
 
+    {% comment %}
+    The page header is the one frosted surface in the app shell: it sits over
+    content that scrolls under it, which is the case glass is actually for.
+    `[data-perf="lite"]` drops the blur on low-end devices and the tint stays.
+    {% endcomment %}
     <header class="sticky top-0 z-30 flex min-h-touch items-center gap-3 border-b
-                   border-ink-200 bg-surface/95 px-4 py-2 backdrop-blur sm:px-6">
+                   border-ink-200 bg-surface/85 px-4 py-2.5 backdrop-blur-lg sm:px-6">
       <button type="button" id="mobile-nav-open"
               class="grid size-touch shrink-0 place-items-center rounded-md text-ink-700
                      hover:bg-ink-100 lg:hidden"
@@ -127,21 +139,13 @@
       </div>
     </header>
 
-    <main id="main" class="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-      {% if messages %}
-        <div class="mb-5 space-y-2">
-          {% for message in messages %}
-            <div class="card px-4 py-3 text-sm
-                        {% if message.tags == 'error' %}border-overdue/30 bg-overdue-soft text-overdue-strong
-                        {% elif message.tags == 'success' %}border-paid/30 bg-paid-soft text-paid-strong
-                        {% elif message.tags == 'warning' %}border-partial/30 bg-partial-soft text-partial-strong
-                        {% endif %}">
-              {{ message }}
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-
+    {% comment %}
+    Messages used to render as a stack of cards here, which pushed the page
+    down on arrival and left the reader to notice them. They are toasts now --
+    see partials/_toasts.html, included once at the end of <body> so the same
+    region serves the shell and the signed-out pages alike.
+    {% endcomment %}
+    <main id="main" class="vt-page flex-1 px-4 py-6 sm:px-6 lg:px-8">
       {% block content %}{% endblock %}
     </main>
   </div>
@@ -198,6 +202,14 @@
   {# Signed out: no shell, just the page (login, password reset). #}
   {% block anonymous_content %}{% endblock %}
 {% endif %}
+
+{% comment %}
+Outside the signed-in branch on purpose. A message flashed on the way *out* of
+the shell -- signed out, password reset requested, an invitation accepted --
+lands on a page that has no shell to render it, and before this those messages
+were consumed by the template engine and shown to nobody.
+{% endcomment %}
+{% include "partials/_toasts.html" %}
 
 {% block extra_body %}{% endblock %}
 </body>

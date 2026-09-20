@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% comment %}
+Every class, editable where it sits.
+
+The other half of the round-trip problem: adding a ladder has its own screen,
+and this is for correcting one. Rename a typo, add an arm's stream, deactivate
+the two SSS arms the school no longer runs — all in one submission instead of
+one page load per class.
+
+Edit-only on purpose: there are no blank rows at the bottom. A table whose last
+three rows behave differently from the rest is a table people stop trusting,
+and adding already has a screen of its own.
+
+Nothing here needs JavaScript: it is a plain formset and a Save button. The
+only enhancement on the page is the theme switch and the reveal, both of which
+belong to the shell.
+{% endcomment %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    Rename, restream or deactivate — one save for all of them
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'academics:class_bulk_create' %}" class="btn btn-secondary text-sm">
+    <span class="hidden sm:inline">Add</span> classes
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if formset.non_form_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong" role="alert">
+        {% for error in formset.non_form_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card overflow-hidden">
+      {{ formset.management_form }}
+
+      <div class="flex items-start gap-3 border-b border-ink-200 px-5 py-4">
+        <span class="icon-tile icon-tile-sm accent-teal">
+          <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+               stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+          </svg>
+        </span>
+        <div class="min-w-0">
+          <h2 class="text-sm font-semibold text-ink-900">
+            {{ formset.forms|length }} class{{ formset.forms|length|pluralize:"es" }}
+          </h2>
+          <p class="field-hint mt-0.5">
+            Deactivating keeps a class and its history — it stops appearing as a
+            choice for new students. Deleting one, from the list, takes its fee
+            structures with it.
+          </p>
+        </div>
+      </div>
+
+      {% if formset.forms %}
+        <div class="hidden border-b border-ink-200 bg-ink-50 px-5 py-2.5
+                    text-xs font-semibold uppercase tracking-wide text-ink-600 lg:flex
+                    lg:items-center lg:gap-3">
+          {% if show_branch %}<span class="w-32 shrink-0">Campus</span>{% endif %}
+          <span class="min-w-0 flex-1">Class name</span>
+          <span class="w-40 shrink-0">Level</span>
+          <span class="w-20 shrink-0">Year</span>
+          <span class="w-28 shrink-0">Stream</span>
+          <span class="w-24 shrink-0">Active</span>
+        </div>
+
+        <div class="row-stack">
+          {% for row in formset %}
+            <div class="row-item">
+              {{ row.id }}
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+                {% if show_branch %}
+                  <span class="w-full shrink-0 truncate text-xs font-medium text-ink-500
+                               lg:w-32">
+                    {{ row.instance.branch.name }}
+                  </span>
+                {% endif %}
+                <div class="min-w-0 flex-1">
+                  <label for="{{ row.name.id_for_label }}"
+                         class="field-label lg:sr-only">Class name</label>
+                  {{ row.name }}
+                </div>
+                <div class="w-full shrink-0 lg:w-40">
+                  <label for="{{ row.level.id_for_label }}"
+                         class="field-label lg:sr-only">Level</label>
+                  {{ row.level }}
+                </div>
+                <div class="w-full shrink-0 lg:w-20">
+                  <label for="{{ row.year_in_level.id_for_label }}"
+                         class="field-label lg:sr-only">Year</label>
+                  {{ row.year_in_level }}
+                </div>
+                <div class="w-full shrink-0 lg:w-28">
+                  <label for="{{ row.stream.id_for_label }}"
+                         class="field-label lg:sr-only">Stream</label>
+                  {{ row.stream }}
+                </div>
+                <label class="check-row w-full shrink-0 lg:w-24">
+                  {{ row.is_active }}
+                  <span class="text-sm text-ink-800 lg:text-xs">Active</span>
+                </label>
+              </div>
+              {% for field in row %}
+                {% for error in field.errors %}
+                  <p class="field-error">{{ field.label }}: {{ error }}</p>
+                {% endfor %}
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="row-actions">
+          <a href="{% url 'academics:class_list' %}" class="btn btn-ghost text-sm">
+            Back to the list
+          </a>
+          <button type="submit" class="btn btn-primary text-sm">
+            Save all changes
+          </button>
+        </div>
+      {% else %}
+        <div class="empty-state">
+          <p class="text-base font-medium text-ink-700">No classes to edit yet</p>
+          <a href="{% url 'academics:class_bulk_create' %}"
+             class="btn btn-primary mt-5 text-sm">
+            Add the whole ladder
+          </a>
+        </div>
+      {% endif %}
+    </div>
+
+  </form>
+</div>
+{% endblock %}

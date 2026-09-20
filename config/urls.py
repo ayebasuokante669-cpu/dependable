@@ -7,7 +7,11 @@ from django.views.generic import RedirectView
 
 from apps.core import seo
 from apps.core.branding import PRODUCT_NAME
-from apps.core.views import BrandedPasswordResetView, RoleAwareLoginView
+from apps.core.views import (
+    BrandedLogoutView,
+    BrandedPasswordResetView,
+    RoleAwareLoginView,
+)
 
 admin.site.site_header = PRODUCT_NAME
 admin.site.site_title = f"{PRODUCT_NAME} admin"
@@ -23,6 +27,10 @@ urlpatterns = [
     # Everything else in the auth set -- logout, and the whole password-reset
     # flow -- is Django's, driven by the templates in templates/registration/.
     path("accounts/login/", RoleAwareLoginView.as_view(), name="login"),
+    # Ours too, and for the same reason: signing out lands on a page that looks
+    # identical to never having signed in, so the confirmation has to be
+    # carried across the redirect as a message.
+    path("accounts/logout/", BrandedLogoutView.as_view(), name="logout"),
     # Also ours, and for the same reason: the reset *email* is rendered without
     # a request, so context processors do not run and the product name has to
     # be handed in explicitly. See BrandedPasswordResetView.
@@ -60,3 +68,7 @@ if settings.DEBUG:
     # Uploaded receipts. In production these are served by the web server or
     # object storage; Django deliberately refuses to do it with DEBUG off.
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Authorisation failures answer with a toast on the refusal page rather than a
+# bare wall -- see apps.core.views.permission_denied. The status stays 403.
+handler403 = "apps.core.views.permission_denied"

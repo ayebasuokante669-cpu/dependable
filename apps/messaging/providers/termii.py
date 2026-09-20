@@ -89,6 +89,10 @@ TIMEOUT_SECONDS = 15
 DND_CHANNEL = "dnd"
 #: Their promotional route. Blocked for DND numbers, refused 8pm-8am.
 GENERIC_CHANNEL = "generic"
+#: Their WhatsApp route. A destination, not a delivery class: none of what
+#: separates `dnd` from `generic` -- the Do-Not-Disturb register, the overnight
+#: curfew -- exists on WhatsApp.
+WHATSAPP_CHANNEL = "whatsapp"
 
 #: What their API calls a plain text message, as opposed to a flash SMS.
 MESSAGE_TYPE = "plain"
@@ -282,17 +286,33 @@ class TermiiProvider(TermiiGateway):
     def termii_channel(self, channel: str, purpose: str) -> str:
         """Which Termii route this message is allowed on.
 
-        The answer is the purpose, and the mapping is one way round only:
-        transactional goes on ``dnd``, and *only* something explicitly marked
-        promotional goes on ``generic``.
+        Two questions, and the channel is the first of them. ``dnd`` and
+        ``generic`` are two delivery classes of *SMS*; ``whatsapp`` is a
+        different destination entirely. Nothing that separates the two SMS
+        routes exists on WhatsApp -- there is no Do-Not-Disturb register to
+        route around and no overnight curfew to dodge -- so a purpose has
+        nothing to say about it. What WhatsApp prices and polices is the
+        template's own category, declared when the template was approved.
 
-        Written as "generic if promotional, else dnd" rather than as a lookup
-        table on purpose. A dict would make an unrecognised purpose fall
-        through to whatever ``.get()``'s default happened to be; this way every
-        value that is not the one promotional case -- including a blank, a
-        typo, or a purpose added later and not thought about here -- lands on
-        the transactional route, which is the one that arrives.
+        This method took a ``channel`` and ignored it, so a WhatsApp message
+        asked for an SMS route. Nothing shipped through it: WhatsApp goes out
+        via :class:`~.termii_whatsapp.TermiiWhatsAppProvider`, whose endpoint
+        and payload are different and which never calls this. It was wrong
+        waiting to be reached.
+
+        For SMS the answer is the purpose, and the mapping is one way round
+        only: transactional goes on ``dnd``, and *only* something explicitly
+        marked promotional goes on ``generic``.
+
+        Written as a pair of ifs rather than a lookup table on purpose. A dict
+        would make an unrecognised purpose fall through to whatever
+        ``.get()``'s default happened to be; this way every value that is not
+        the one promotional case -- including a blank, a typo, or a purpose
+        added later and not thought about here -- lands on the transactional
+        route, which is the one that arrives.
         """
+        if channel == Channel.WHATSAPP:
+            return WHATSAPP_CHANNEL
         if purpose == MessagePurpose.PROMOTIONAL:
             return GENERIC_CHANNEL
         return DND_CHANNEL

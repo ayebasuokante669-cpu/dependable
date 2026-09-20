@@ -329,3 +329,161 @@ class StaffProvisioningIsTenantScopedTests(StaffProvisioningTestCase):
         )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(mail.outbox, [])
+
+
+BULK_URL = reverse("staff:bulk_create")
+
+
+def bulk_rows(*entries, prefix="form") -> dict:
+    """POST data for the invite-many table, management form included."""
+    data = {
+        f"{prefix}-TOTAL_FORMS": str(len(entries)),
+        f"{prefix}-INITIAL_FORMS": "0",
+        f"{prefix}-MIN_NUM_FORMS": "0",
+        f"{prefix}-MAX_NUM_FORMS": "1000",
+    }
+    for index, entry in enumerate(entries):
+        for field in ("full_name", "email", "role", "branch"):
+            data[f"{prefix}-{index}-{field}"] = entry.get(field, "")
+    return data
+
+
+class OwnerInvitesSeveralAtOnceTests(StaffProvisioningTestCase):
+    """The table form. Same accounts, same emails, one page load.
+
+    What matters is that nothing about an account differs from one made on the
+    single form -- these tests check the batch path lands in the same place,
+    not that it is a different feature.
+    """
+
+    def setUp(self):
+        self.client.force_login(self.owner)
+
+    def test_the_table_opens(self):
+        self.assertEqual(self.client.get(BULK_URL).status_code, 200)
+
+    def test_several_accounts_are_created_from_one_submission(self):
+        response = self.client.post(
+            BULK_URL,
+            bulk_rows(
+                {"full_name": "Chidinma Eze", "email": "chidinma@example.com",
+                 "role": Role.BURSAR, "branch": str(self.branch.pk)},
+                {"full_name": "Tunde Bello", "email": "tunde@example.com",
+                 "role": Role.PRINCIPAL, "branch": str(self.branch.pk)},
+            ),
+        )
+        self.assertRedirects(response, LIST_URL)
+        self.assertEqual(self.created("chidinma@example.com").role, Role.BURSAR)
+        self.assertEqual(self.created("tunde@example.com").role, Role.PRINCIPAL)
+
+    def test_everybody_is_filed_under_the_creators_school(self):
+        """The school is never taken from the form, in either shape."""
+        self.client.post(
+            BULK_URL,
+            bulk_rows({"full_name": "Chidinma Eze", "email": "chidinma@example.com",
+                       "role": Role.BURSAR, "branch": str(self.branch.pk)}),
+        )
+        self.assertEqual(self.created().school_id, self.school.pk)
+
+    def test_each_person_is_emailed_a_link_and_no_password_is_set_here(self):
+        self.client.post(
+            BULK_URL,
+            bulk_rows(
+                {"full_name": "Chidinma Eze", "email": "chidinma@example.com",
+                 "role": Role.BURSAR, "branch": str(self.branch.pk)},
+                {"full_name": "Tunde Bello", "email": "tunde@example.com",
+                 "role": Role.PRINCIPAL, "branch": str(self.branch.pk)},
+            ),
+        )
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(
+            {to for message in mail.outbox for to in message.to},
+            {"chidinma@example.com", "tunde@example.com"},
+        )
+        # The proprietor never learns it, so it cannot be anything they typed.
+        for email in ("chidinma@example.com", "tunde@example.com"):
+            self.assertTrue(self.created(email).has_usable_password())
+
+    def test_blank_rows_are_ignored(self):
+        before = User.objects.count()
+        response = self.client.post(
+            BULK_URL,
+            bulk_rows(
+                {"full_name": "Chidinma Eze", "email": "chidinma@example.com",
+                 "role": Role.BURSAR, "branch": str(self.branch.pk)},
+                {}, {},
+            ),
+        )
+        self.assertRedirects(response, LIST_URL)
+        self.assertEqual(User.objects.count(), before + 1)
+
+    def test_the_same_address_twice_in_one_batch_is_a_row_error(self):
+        """Nothing is created: the second insert would fail after the first
+        person had already been emailed."""
+        before = User.objects.count()
+        response = self.client.post(
+            BULK_URL,
+            bulk_rows(
+                {"full_name": "Chidinma Eze", "email": "chidinma@example.com",
+                 "role": Role.BURSAR, "branch": str(self.branch.pk)},
+                {"full_name": "Someone Else", "email": "CHIDINMA@example.com",
+                 "role": Role.BURSAR, "branch": str(self.branch.pk)},
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("email", response.context["formset"].forms[1].errors)
+        self.assertEqual(User.objects.count(), before)
+        self.assertEqual(mail.outbox, [])
+
+    def test_one_bad_row_writes_nothing(self):
+        """One transaction, so a half-invited batch is never left behind."""
+        before = User.objects.count()
+        self.client.post(
+            BULK_URL,
+            bulk_rows(
+                {"full_name": "Chidinma Eze", "email": "chidinma@example.com",
+                 "role": Role.BURSAR, "branch": str(self.branch.pk)},
+                # A bursar works at one campus, so a blank branch is refused.
+                {"full_name": "Tunde Bello", "email": "tunde@example.com",
+                 "role": Role.BURSAR, "branch": ""},
+            ),
+        )
+        self.assertEqual(User.objects.count(), before)
+        self.assertEqual(mail.outbox, [])
+
+    def test_another_schools_campus_is_not_a_choice(self):
+        before = User.objects.count()
+        response = self.client.post(
+            BULK_URL,
+            bulk_rows({"full_name": "Chidinma Eze", "email": "chidinma@example.com",
+                       "role": Role.BURSAR, "branch": str(self.other_branch.pk)}),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(User.objects.count(), before)
+
+    def test_save_and_invite_more_comes_back_to_the_table(self):
+        response = self.client.post(
+            BULK_URL,
+            {
+                "save_and_add_another": "1",
+                **bulk_rows({"full_name": "Chidinma Eze",
+                             "email": "chidinma@example.com",
+                             "role": Role.BURSAR, "branch": str(self.branch.pk)}),
+            },
+        )
+        self.assertRedirects(response, BULK_URL)
+
+    def test_a_bursar_cannot_reach_it(self):
+        self.client.force_login(self.bursar)
+        self.assertEqual(self.client.get(BULK_URL).status_code, 403)
+        before = User.objects.count()
+        self.assertEqual(
+            self.client.post(
+                BULK_URL,
+                bulk_rows({"full_name": "Chidinma Eze",
+                           "email": "chidinma@example.com",
+                           "role": Role.BURSAR, "branch": str(self.branch.pk)}),
+            ).status_code,
+            403,
+        )
+        self.assertEqual(User.objects.count(), before)

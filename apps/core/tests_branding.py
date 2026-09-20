@@ -65,8 +65,16 @@ class TemplateCommentSyntaxTests(TestCase):
 class RenderedPageTests(TestCase):
     """What actually reaches the browser, on the pages a stranger can see."""
 
-    #: The pilot tenant is genuinely called this; it is not a leaked brand.
-    ALLOWED = ("Fulfilled Academy",)
+    #: Phrases stripped from the page before the checks below run, because
+    #: each is a deliberate use of a word that would otherwise look like a
+    #: leak:
+    #:
+    #:   * the pilot tenant is genuinely called "Fulfilled Academy";
+    #:   * "powered by Dependable" in the site footer is the maker's
+    #:     attribution, asked for by name. Only that exact phrase is allowed
+    #:     through -- a bare "Dependable" anywhere else is still the old
+    #:     codename escaping, which is what this class exists to catch.
+    ALLOWED = ("Fulfilled Academy", "powered by Dependable")
 
     def body(self, url) -> str:
         response = self.client.get(url)

@@ -29,9 +29,9 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView, PasswordResetView
+from django.contrib.auth.views import LoginView, LogoutView, PasswordResetView
 from django.db.models import Count, Q, Sum
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import FormView, TemplateView, UpdateView
@@ -65,6 +65,22 @@ class LandingView(TemplateView):
 
     template_name = "core/landing.html"
 
+    #: Static path to the hero's background photograph, relative to a
+    #: STATICFILES_DIRS root.
+    #:
+    #: Set to ``None`` and the template omits the <img> entirely rather than
+    #: pointing at a placeholder: the brand gradient underneath is a finished
+    #: hero on its own, so a missing asset costs texture rather than leaving a
+    #: broken image in the most prominent position on the site.
+    #:
+    #: Whatever goes here is treated heavily by `.hero-photo` -- thrown to
+    #: greyscale, re-tinted to the brand blue, darkened and blurred. That
+    #: treatment is atmosphere, **not** a privacy mechanism: a CSS filter is a
+    #: rendering choice and can be turned off. So the rule is about the file
+    #: itself -- an empty room, desks or a chalkboard, and never an
+    #: identifiable child.
+    HERO_IMAGE: str | None = "img/hero-classroom.jpg"
+
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             return HttpResponseRedirect(home_url_for(request.user))
@@ -73,6 +89,7 @@ class LandingView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["structured_data"] = structured_data(self.request)
+        context["hero_image"] = self.HERO_IMAGE
         return context
 
 
@@ -110,10 +127,75 @@ class RoleAwareLoginView(LoginView):
     def get_default_redirect_url(self) -> str:
         return home_url_for(self.request.user)
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # Greeting the person by name is the confirmation: it says the sign-in
+        # worked *and* which account it worked as, which matters at a school
+        # where one office computer is shared.
+        who = self.request.user.get_full_name() or self.request.user.username
+        messages.success(self.request, f"Signed in as {who}.")
+        return response
+
+    def form_invalid(self, form):
+        # The form already prints why inline, next to the fields. The toast is
+        # for the case that costs people the most time: pressing Sign in,
+        # looking away, and looking back at a page that seems unchanged.
+        messages.error(
+            self.request, "Sign-in failed. Check the email and password."
+        )
+        return super().form_invalid(form)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["page_title"] = "Sign in"
         return context
+
+
+class BrandedLogoutView(LogoutView):
+    """Django's logout, with something to show for it.
+
+    Signing out lands on the public landing page, which looks exactly like the
+    landing page of somebody who was never signed in -- so without this there
+    is no confirmation that the button did anything.
+
+    The message is added *after* the parent runs. ``logout()`` flushes the
+    session, and a message written before that would be flushed with it.
+    """
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        messages.success(request, "Signed out. See you soon.")
+        return response
+
+
+def permission_denied(request, exception=None, template_name="403.html"):
+    """Django's ``handler403``, with the refusal said out loud.
+
+    The refusal itself is unchanged: the view never ran, the status is still
+    403, and every test that asserts a bursar cannot reach an academic-setup
+    URL still asserts exactly that. What this adds is a toast carrying the
+    reason, so the answer arrives in the same place every other answer in the
+    app does rather than only as a page the reader has to stop and parse.
+
+    The message comes from the exception when the capability check wrote one
+    (``CapabilityRequiredMixin`` names the capability), and falls back to plain
+    language when something else raised it.
+
+    Note what this deliberately is *not*: a prompt for credentials. A signed-in
+    principal who lacks a capability does not need to authenticate again --
+    they are already who they are -- so asking would be theatre. They are told,
+    and they carry on.
+    """
+    from django.template import loader
+
+    detail = str(exception or "").strip()
+    messages.error(
+        request,
+        detail or "You are not authorised to perform this action.",
+    )
+    return HttpResponseForbidden(
+        loader.render_to_string(template_name, {"exception": detail}, request)
+    )
 
 
 class BrandedPasswordResetView(PasswordResetView):
@@ -276,6 +358,12 @@ class SchoolDashboardView(RoleDashboardMixin, TemplateView):
         context["branches_without_a_term"] = [
             b.name for b in branches if b.pk not in current_terms
         ]
+        # Display-only. `any current term` is the guard; the breakdown itself
+        # resolves each campus's own term -- see status_breakdown.
+        context["status"] = status_breakdown(next(iter(current_terms.values()), None))
+        context["busiest_campus"] = max(
+            (b.students_count for b in branches), default=0
+        )
         context["setup"] = setup_progress(self.request)
         context["page_title"] = "School overview"
         return context
@@ -323,6 +411,11 @@ class BranchDashboardView(RoleDashboardMixin, TemplateView):
             row for row in context["classes"]
             if not row["is_priced"] and row["klass"].students_count
         ]
+        # Display-only, from the same derivation the bursar's screen uses.
+        context["status"] = status_breakdown(term)
+        context["busiest_class"] = max(
+            (klass.students_count for klass in classes), default=0
+        )
         context["setup"] = setup_progress(self.request)
         context["page_title"] = "Branch dashboard"
         return context
@@ -399,6 +492,12 @@ class BursarDashboardView(RoleDashboardMixin, TemplateView):
         context.update(
             with_outstanding(collection_summary(term), expected_total)
         )
+        # Display-only, and derived from the same source as everything else on
+        # the page -- see status_breakdown.
+        context["status"] = status_breakdown(term)
+        context["busiest_expected"] = max(
+            (row["expected"] for row in rows), default=ZERO
+        )
         context["page_title"] = "Finance dashboard"
         return context
 
@@ -438,6 +537,69 @@ def with_outstanding(summary: dict, expected_total) -> dict:
         expected_total - summary["collected_total"], ZERO
     )
     return summary
+
+
+def status_breakdown(term) -> dict:
+    """How many students sit in each payment state, for the dashboard chart.
+
+    Counted, not stored, and counted from the same derivation every other
+    screen uses -- ``apps.students.fees`` -- so the chart, the outstanding list
+    and the pill beside a child's name can never disagree. Nothing here decides
+    what "paid" means; it asks the module that owns that question.
+
+    Resolved through the app registry for the same reason
+    :func:`collection_summary` is: the dashboards must render whether or not
+    the payments app is installed.
+
+    ``term`` is only a short-circuit -- "is any term current in this scope at
+    all". It is deliberately not used to price anything: ``fees.load`` resolves
+    each student's own campus term itself, which is what lets a proprietor
+    looking at four campuses on different terms get one honest breakdown
+    instead of three campuses measured against a fourth one's calendar.
+
+    Returns the four states in a fixed order with their counts, plus the total
+    they are a share of. The order is the ladder from settled to worst, which
+    is the order the legend and the stacked bar both read in -- and it never
+    changes with the data, so a state keeps its colour and its position even
+    when its count is zero.
+    """
+    from django.apps import apps as django_apps
+
+    buckets = [
+        {"key": "paid", "label": "Paid", "count": 0},
+        {"key": "partial", "label": "Part paid", "count": 0},
+        {"key": "unpaid", "label": "Unpaid", "count": 0},
+        {"key": "overdue", "label": "Overdue", "count": 0},
+    ]
+    if term is None or not django_apps.is_installed("apps.payments"):
+        return {"buckets": buckets, "total": 0}
+
+    from apps.students import fees as student_fees
+    from apps.students.models import Student, StudentStatus
+
+    students = list(
+        Student.objects.filter(status=StudentStatus.ACTIVE).select_related(
+            "school_class"
+        )
+    )
+    schedule = student_fees.load(students)
+
+    by_key = {bucket["key"]: bucket for bucket in buckets}
+    for student in students:
+        position = schedule.position_for(student)
+        # A student in a class with no fee structure is not in any of the four
+        # states -- they are unpriced, which is a setup gap rather than a
+        # payment state. Counting them as "unpaid" would invent a debt.
+        if not position.is_priced:
+            continue
+        bucket = by_key.get(position.state)
+        if bucket is not None:
+            bucket["count"] += 1
+
+    return {
+        "buckets": buckets,
+        "total": sum(bucket["count"] for bucket in buckets),
+    }
 
 
 # ===========================================================================

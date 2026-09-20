@@ -256,3 +256,50 @@ class NavigationTests(TestCase):
 
     def test_anonymous_gets_no_navigation(self):
         self.assertEqual(nav_for(None), [])
+
+
+class StatusBreakdownTests(TestCase):
+    """The payment-status chart on the dashboards.
+
+    Display-only, but two things about it must not drift: it has to render
+    when there is nothing to render, and its four buckets have to keep naming
+    the four states ``apps.students.fees`` actually produces. A rename there
+    would otherwise leave every dashboard quietly showing an empty chart, with
+    nothing failing anywhere.
+    """
+
+    def test_no_current_term_gives_four_empty_buckets(self):
+        from apps.core.views import status_breakdown
+
+        result = status_breakdown(None)
+        self.assertEqual(result["total"], 0)
+        self.assertEqual(
+            [bucket["key"] for bucket in result["buckets"]],
+            ["paid", "partial", "unpaid", "overdue"],
+        )
+        self.assertTrue(all(bucket["count"] == 0 for bucket in result["buckets"]))
+
+    def test_the_bucket_keys_are_the_states_the_fee_layer_produces(self):
+        """The chart and the pill beside a child's name read the same values."""
+        from apps.students.fees import FeeState
+        from apps.core.views import status_breakdown
+
+        keys = {bucket["key"] for bucket in status_breakdown(None)["buckets"]}
+        self.assertEqual(
+            keys,
+            {
+                FeeState.PAID,
+                FeeState.PARTIAL,
+                FeeState.UNPAID,
+                FeeState.OVERDUE,
+            },
+        )
+        # UNPRICED is deliberately absent: it is a setup gap, not a payment
+        # state, and counting it would invent a debt nobody owes.
+        self.assertNotIn(FeeState.UNPRICED, keys)
+
+    def test_the_order_is_fixed_so_a_state_keeps_its_colour(self):
+        from apps.core.views import status_breakdown
+
+        labels = [bucket["label"] for bucket in status_breakdown(None)["buckets"]]
+        self.assertEqual(labels, ["Paid", "Part paid", "Unpaid", "Overdue"])

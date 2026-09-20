@@ -1,222 +1,673 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% comment %}
+The public home page.
+
 The title and meta description are in apps/core/seo.py, with the other public
 pages'. The JSON-LD is built there too -- see seo.structured_data.
+
+Structure, top to bottom: hero, the problem, the answer to it, how setup goes,
+questions, the ask, the footer. The sticky bar jumps to each of the middle
+four, so the page is both a scroll and a menu.
+
+Performance notes, since this is the heaviest page on the site:
+  * every section below the hero carries `.lazy-section`, so the browser skips
+    its layout and paint until it is nearly on screen;
+  * the hero's background image (when one is supplied) is the only image above
+    the fold and is marked high priority; everything else is lazy;
+  * the glass and the drift are both switched off wholesale on low-end devices
+    by `[data-perf="lite"]` -- see the tail of assets/app.css.
 {% endcomment %}
+
 {% block extra_head %}
   <script type="application/ld+json">{{ structured_data }}</script>
 {% endblock %}
 
 {% block anonymous_content %}
-<div class="min-h-full bg-surface">
 
-  {# ===== Header ========================================================== #}
-  <header class="border-b border-ink-200">
-    <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-      <a href="{% url 'core:landing' %}" class="flex items-center gap-2.5">
-        {% include "partials/_brand_mark.html" %}
-        <span class="text-base font-semibold tracking-tight text-brand-900">
-          {{ product_name }}
-        </span>
-      </a>
-      <div class="flex items-center gap-2">
-        {% include "partials/_theme_toggle.html" %}
-        <a href="{% url 'login' %}" class="btn btn-ghost text-sm">Sign in</a>
-        <a href="{% url 'core:signup' %}" class="btn btn-primary text-sm">
-          Get started
-        </a>
-      </div>
-    </div>
-  </header>
+{% include "partials/_lp_nav.html" %}
+
+<main id="main">
 
   {# ===== Hero ============================================================ #}
-  <section class="mx-auto max-w-5xl px-4 pb-12 pt-14 sm:px-6 sm:pb-16 sm:pt-20">
-    <div class="max-w-2xl">
-      <span class="status-pill status-paid">For Nigerian schools</span>
-      <h1 class="mt-4 text-3xl font-bold tracking-tight text-brand-900 sm:text-4xl">
-        Know what every child owes, and who has paid.
-      </h1>
-      <p class="mt-4 text-base text-ink-700 sm:text-lg">
-        School fees, student records and parent communication in one simple
-        place.
-      </p>
-      <div class="mt-7 flex flex-col gap-2 sm:flex-row">
-        <a href="{% url 'core:signup' %}" class="btn btn-primary">
-          Set up my school
-        </a>
-        <a href="{% url 'login' %}" class="btn btn-secondary">
-          Sign in to your school
-        </a>
+  <section class="hero pb-20 pt-28 sm:pb-28 sm:pt-32 lg:pb-36 lg:pt-40">
+    {% comment %}
+    The treated classroom photograph. Blurred, darkened and pulled toward the
+    brand hue by the `.hero-photo` filter chain, so it reads as atmosphere
+    rather than as a picture of anywhere in particular -- and so that nothing
+    in it could be resolved as a face even if one were in frame. Until an
+    image is supplied the gradient below is the whole hero, which is why this
+    is guarded rather than pointing at a placeholder.
+    {% endcomment %}
+    {% if hero_image %}
+      <img src="{% static hero_image %}" alt="" aria-hidden="true"
+           class="hero-photo" fetchpriority="high" decoding="async">
+    {% endif %}
+    <div class="hero-wash"></div>
+    <div class="hero-grid"></div>
+
+    <div class="mx-auto grid max-w-6xl items-center gap-14 px-4 sm:px-6
+                lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10">
+
+      <div class="reveal max-w-xl">
+        <span class="hero-badge">
+          <span class="status-dot status-dot-paid"></span>
+          Built for Nigerian schools
+        </span>
+
+        <h1 class="mt-6 text-4xl font-bold leading-[1.1] tracking-tight text-white
+                   sm:text-5xl lg:text-6xl">
+          Know what every child owes, and who has paid
+        </h1>
+
+        <p class="mt-6 max-w-lg text-lg leading-relaxed text-brand-100">
+          {{ product_name }} keeps your fees, your students and your messages
+          to parents in one place — so the answer to
+          <em class="not-italic text-white">&ldquo;has this one paid?&rdquo;</em>
+          takes a second, not an afternoon with three notebooks.
+        </p>
+
+        <div class="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <a href="{% url 'core:signup' %}" class="btn btn-on-panel btn-lg"
+             data-auth-swap>
+            Set up my school
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+            </svg>
+          </a>
+          <a href="{% url 'login' %}"
+             class="btn btn-lg border border-white/25 text-white hover:bg-white/10"
+             data-auth-swap>
+            Log in
+          </a>
+        </div>
+
+        <p class="mt-5 text-sm text-brand-200">
+          No card needed. Bring the records you already have — we will help you
+          get set up.
+        </p>
       </div>
-      <p class="mt-3 text-xs text-ink-500">
-        No card needed. We'll help you get started.
-      </p>
+
+      <div class="reveal reveal-right">
+        {% include "core/_hero_cards.html" %}
+      </div>
+
     </div>
   </section>
 
-  {# ===== The problem it solves =========================================== #}
-  <section class="reveal mx-auto max-w-5xl px-4 pb-12 sm:px-6 sm:pb-16">
-    <h2 class="text-xl font-semibold tracking-tight text-brand-900">
-      Still checking three notebooks to answer one parent's question?
-    </h2>
-    <p class="mt-2 max-w-2xl text-sm text-ink-600">
-      {{ product_name }} brings your students and fees together. You don't have
-      to start from scratch — bring your existing student records, and we'll
-      help you get your school set up.
-    </p>
+  {# ===== The problem ===================================================== #}
+  {% comment %}
+  Stated in the words a proprietor would use, not in feature language. The
+  cards are taller than they are wide and hold one sentence each, because the
+  point of this section is recognition -- it should be read at a glance and
+  felt, not studied.
+  {% endcomment %}
+  <section id="problems" class="lazy-section relative isolate overflow-hidden scroll-mt-24"
+           style="background: var(--gradient-brand);"
+           aria-labelledby="problems-heading">
+    <div class="hero-grid"></div>
+    <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+
+      <div class="reveal max-w-2xl">
+        <p class="text-xs font-semibold uppercase tracking-wider text-brand-300">
+          Sound familiar?
+        </p>
+        <h2 id="problems-heading"
+            class="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+          Fees are the hardest part of running a school, and the least
+          organised
+        </h2>
+        <p class="mt-4 text-base text-brand-100">
+          Not because anybody is careless. Because the record lives in four
+          places at once, and none of them agree.
+        </p>
+      </div>
+
+      <div class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4"
+           data-reveal-group>
+
+        <article class="problem-card reveal">
+          <span class="problem-index" aria-hidden="true">01</span>
+          <span class="icon-tile accent-amber">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+            </svg>
+          </span>
+          <div class="mt-6">
+            <h3 class="text-xl font-semibold leading-snug text-white">
+              Chasing fees across three notebooks
+            </h3>
+            <p class="mt-3 text-sm leading-relaxed text-brand-100">
+              One book for receipts, one for the class list, one for who
+              promised to pay on Friday. The totals have never once matched.
+            </p>
+          </div>
+        </article>
+
+        <article class="problem-card reveal">
+          <span class="problem-index" aria-hidden="true">02</span>
+          <span class="icon-tile accent-rose">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 9.41a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+            </svg>
+          </span>
+          <div class="mt-6">
+            <h3 class="text-xl font-semibold leading-snug text-white">
+              Parents who never got the reminder
+            </h3>
+            <p class="mt-3 text-sm leading-relaxed text-brand-100">
+              The letter went home in a school bag. Whether it arrived is
+              anybody&rsquo;s guess, and by then the term is half over.
+            </p>
+          </div>
+        </article>
+
+        <article class="problem-card reveal">
+          <span class="problem-index" aria-hidden="true">03</span>
+          <span class="icon-tile accent-violet">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+            </svg>
+          </span>
+          <div class="mt-6">
+            <h3 class="text-xl font-semibold leading-snug text-white">
+              No idea who&rsquo;s actually paid
+            </h3>
+            <p class="mt-3 text-sm leading-relaxed text-brand-100">
+              A parent asks what is left on the account. Three people check
+              three records and give three different answers.
+            </p>
+          </div>
+        </article>
+
+        <article class="problem-card reveal">
+          <span class="problem-index" aria-hidden="true">04</span>
+          <span class="icon-tile accent-teal">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+          </span>
+          <div class="mt-6">
+            <h3 class="text-xl font-semibold leading-snug text-white">
+              A whole weekend adding up the term
+            </h3>
+            <p class="mt-3 text-sm leading-relaxed text-brand-100">
+              Every class, every child, by hand, with a calculator — and one
+              new admission makes the whole sheet wrong again.
+            </p>
+          </div>
+        </article>
+
+      </div>
+    </div>
   </section>
 
-  {# ===== What it does ==================================================== #}
-  <section data-fan class="border-y border-ink-200 bg-ink-50">
-    <div class="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
-      <h2 class="text-xl font-semibold tracking-tight text-brand-900">
-        We'll help you get your school ready
-      </h2>
-      <p class="mt-2 max-w-2xl text-sm text-ink-600">
-        Each one takes minutes, and you can stop and come back. Nothing is
-        charged and nobody is billed until you say so.
-      </p>
+  {# ===== What you get ==================================================== #}
+  {% comment %}
+  The answer to the four cards above, one by one. Each tile names the problem
+  it settles in its footer line, so the two sections read as a pair rather
+  than as a complaint followed by an unrelated feature list.
+
+  Sizes are deliberately unequal: the fee ledger and the payment picture are
+  the two things this software exists for, so they get the room.
+  {% endcomment %}
+  <section id="features" class="lazy-section scroll-mt-24 bg-ink-50"
+           aria-labelledby="features-heading">
+    <div class="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+
+      <div class="reveal max-w-2xl">
+        <p class="text-xs font-semibold uppercase tracking-wider text-brand-600">
+          What you get
+        </p>
+        <h2 id="features-heading"
+            class="mt-3 text-3xl font-bold tracking-tight text-brand-900 sm:text-4xl">
+          One record of the term that everybody is reading from
+        </h2>
+        <p class="mt-4 text-base text-ink-600">
+          Set the fees once. Every balance, every reminder and every receipt
+          comes off the same figures from then on.
+        </p>
+      </div>
+
+      <div class="bento mt-12" data-reveal-group>
+
+        {# Fee structures: the anchor tile. #}
+        <div class="bento-item bento-wide is-brand reveal accent-blue">
+          <span class="icon-tile accent-blue">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            </svg>
+          </span>
+          <h3 class="bento-title mt-5 text-xl">Fee structures per class, per term</h3>
+          <p class="bento-body max-w-lg text-base">
+            Build each class&rsquo;s fees out of line items — tuition, books,
+            uniform, bus. Change a line and every student in that class is
+            repriced at once. The total is never stored twice, so it can never
+            disagree with itself.
+          </p>
+          <p class="bento-answers">Answers: a whole weekend adding up the term</p>
+        </div>
+
+        {# Payment status: the tall one. #}
+        <div class="bento-item bento-tall reveal accent-emerald">
+          <span class="icon-tile accent-emerald">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+          </span>
+          <h3 class="bento-title mt-5">Paid, part paid, unpaid, overdue</h3>
+          <p class="bento-body">
+            Four states, four colours, the same four everywhere in the app —
+            on the class list, the receipt and the dashboard.
+          </p>
+
+          <div class="mt-5 space-y-2.5">
+            <div class="flex items-center justify-between gap-3">
+              <span class="status-pill status-paid">Paid</span>
+              <span class="numeric text-xs text-ink-500">18</span>
+            </div>
+            <div class="chart-stack">
+              <span class="chart-stack-part"
+                    style="--part: 56%; --part-color: var(--color-paid);"></span>
+              <span class="chart-stack-part"
+                    style="--part: 19%; --part-color: var(--color-partial);"></span>
+              <span class="chart-stack-part"
+                    style="--part: 16%; --part-color: var(--color-unpaid);"></span>
+              <span class="chart-stack-part"
+                    style="--part: 9%; --part-color: var(--color-overdue);"></span>
+            </div>
+            <div class="chart-legend pt-1">
+              <span class="flex items-center gap-1.5">
+                <span class="status-dot status-dot-partial"></span>Part paid
+              </span>
+              <span class="flex items-center gap-1.5">
+                <span class="status-dot status-dot-unpaid"></span>Unpaid
+              </span>
+              <span class="flex items-center gap-1.5">
+                <span class="status-dot status-dot-overdue"></span>Overdue
+              </span>
+            </div>
+          </div>
+
+          <p class="bento-answers">Answers: no idea who&rsquo;s actually paid</p>
+        </div>
+
+        {% comment %}
+        Messaging is `bento-wide` so the six-column grid tiles exactly: row one
+        is 4 + the tall tile's 2, row two is this 4 beside the tall tile's
+        second half, row three is three 2s, row four two 3s. A tile of the
+        wrong span leaves a one-column hole that reads as a mistake rather
+        than as a bento.
+        {% endcomment %}
+        <div class="bento-item bento-wide is-glass reveal accent-rose">
+          <span class="icon-tile accent-rose">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+            </svg>
+          </span>
+          <h3 class="bento-title mt-5">Reminders that reach the parent</h3>
+          <p class="bento-body">
+            Send a fee reminder to everybody with a balance, with each child&rsquo;s
+            own figures filled in. Sent straight to the phone on the record —
+            no school bag involved.
+          </p>
+          <p class="bento-answers">Answers: parents who never got the reminder</p>
+        </div>
+
+        {# Student records. #}
+        <div class="bento-item bento-third reveal accent-violet">
+          <span class="icon-tile accent-violet">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+            </svg>
+          </span>
+          <h3 class="bento-title mt-5">The roster, kept once</h3>
+          <p class="bento-body">
+            Import the list you already keep. Each child sits in a class, and
+            the class is what prices them.
+          </p>
+        </div>
+
+        {# Receipts. #}
+        <div class="bento-item bento-third reveal accent-teal">
+          <span class="icon-tile accent-teal">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+            </svg>
+          </span>
+          <h3 class="bento-title mt-5">A receipt for every payment</h3>
+          <p class="bento-body">
+            Recorded against the term, numbered, and printable with your own
+            school logo on it.
+          </p>
+          <p class="bento-answers">Answers: chasing fees across three notebooks</p>
+        </div>
+
+        {# Roles. #}
+        <div class="bento-item bento-third is-glass reveal accent-indigo">
+          <span class="icon-tile accent-indigo">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+            </svg>
+          </span>
+          <h3 class="bento-title mt-5">The right people only</h3>
+          <p class="bento-body">
+            A bursar collects against the fees without being able to change
+            them. Access follows the role, never the job title.
+          </p>
+        </div>
+
+        {# Multi-campus. #}
+        <div class="bento-item bento-half reveal accent-amber">
+          <span class="icon-tile accent-amber">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+            </svg>
+          </span>
+          <h3 class="bento-title mt-5">More than one campus? Still one login</h3>
+          <p class="bento-body">
+            A proprietor sees every campus and its totals side by side. A
+            principal sees theirs. Nobody has to be told which figures are
+            whose.
+          </p>
+        </div>
+
+        {# Dashboard. #}
+        <div class="bento-item bento-half reveal accent-blue">
+          <span class="icon-tile accent-blue">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+            </svg>
+          </span>
+          <h3 class="bento-title mt-5">Expected, collected, outstanding</h3>
+          <p class="bento-body">
+            The three figures that matter, at the top of the page, for the term
+            you are actually in.
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  {# ===== Getting set up ================================================== #}
+  <section id="setup" class="lazy-section scroll-mt-24 bg-surface"
+           aria-labelledby="setup-heading">
+    <div class="mx-auto max-w-5xl px-4 py-20 sm:px-6 lg:py-28">
+
+      <div class="reveal max-w-2xl">
+        <p class="text-xs font-semibold uppercase tracking-wider text-brand-600">
+          Getting set up
+        </p>
+        <h2 id="setup-heading"
+            class="mt-3 text-3xl font-bold tracking-tight text-brand-900 sm:text-4xl">
+          Four steps, and you can stop after any of them
+        </h2>
+        <p class="mt-4 text-base text-ink-600">
+          Each takes minutes and picks up where you left it. Nothing is charged
+          and nobody is billed until you say so.
+        </p>
+      </div>
+
+      <ol class="timeline mt-12" data-reveal-group>
+
+        <li class="timeline-step reveal">
+          <span class="timeline-marker" aria-hidden="true">1</span>
+          <div class="min-w-0 flex-1 pb-2">
+            <h3 class="text-lg font-semibold text-ink-900">
+              Tell us about your school
+            </h3>
+            <p class="mt-1.5 text-sm text-ink-600">
+              Its name, and the classes it runs. Add the whole ladder —
+              Nursery through SSS 3 — from one screen, in one go.
+            </p>
+          </div>
+        </li>
+
+        <li class="timeline-step reveal">
+          <span class="timeline-marker" aria-hidden="true">2</span>
+          <div class="min-w-0 flex-1 pb-2">
+            <h3 class="text-lg font-semibold text-ink-900">Set up your fees</h3>
+            <p class="mt-1.5 text-sm text-ink-600">
+              What each class pays this term, as line items that add
+              themselves up. Your existing figures, organised — not replaced.
+            </p>
+          </div>
+        </li>
+
+        <li class="timeline-step reveal">
+          <span class="timeline-marker" aria-hidden="true">3</span>
+          <div class="min-w-0 flex-1 pb-2">
+            <h3 class="text-lg font-semibold text-ink-900">Add your students</h3>
+            <p class="mt-1.5 text-sm text-ink-600">
+              Import the list you already keep, or type them in. Each one joins
+              a class and is priced by it from that moment.
+            </p>
+          </div>
+        </li>
+
+        <li class="timeline-step reveal">
+          <span class="timeline-marker" aria-hidden="true">4</span>
+          <div class="min-w-0 flex-1">
+            <h3 class="text-lg font-semibold text-ink-900">Invite your staff</h3>
+            <p class="mt-1.5 text-sm text-ink-600">
+              Each person gets their own login and sees only what their role
+              allows. They set their own password from an emailed link.
+            </p>
+          </div>
+        </li>
+
+      </ol>
+    </div>
+  </section>
+
+  {# ===== Questions ======================================================= #}
+  <section id="faq" class="lazy-section scroll-mt-24 bg-ink-50"
+           aria-labelledby="faq-heading">
+    <div class="mx-auto max-w-3xl px-4 py-20 sm:px-6 lg:py-28">
+
+      <div class="reveal">
+        <p class="text-xs font-semibold uppercase tracking-wider text-brand-600">
+          Questions
+        </p>
+        <h2 id="faq-heading"
+            class="mt-3 text-3xl font-bold tracking-tight text-brand-900 sm:text-4xl">
+          The ones we are asked first
+        </h2>
+      </div>
 
       {% comment %}
-      The four steps arrive as a deck on the grid's centre line and open
-      outwards into the row below. The grid is the real layout in both states
-      -- js/ui.js measures it and transforms the cards into a pile on top of
-      it -- so with JavaScript off, or under prefers-reduced-motion, what
-      renders here is just the four cards.
-
-      Scrolling the section away re-forms the deck, so the effect can be seen
-      again without reloading the page.
-
-      The button is hidden in the markup and revealed by the script, because
-      without the script there is nothing to open.
+      Built on <details>/<summary>: keyboard-operable, announced as expandable
+      and openable before a line of JavaScript runs. Nothing here needs the
+      script at all -- the open/close animation is the grid-row technique in
+      the stylesheet.
       {% endcomment %}
-      <div class="flex justify-center">
-      <button type="button" data-fan-trigger hidden
-              class="fan-trigger btn btn-secondary mt-6 text-sm" aria-expanded="true">
-        <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
-             stroke="currentColor" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round"
-                d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
-        </svg>
-        See the four steps
-      </button>
-      </div>
+      <div class="reveal mt-10">
 
-      <div data-fan-viewport class="fan-viewport mt-6">
-      <div data-fan-grid class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {% comment %}Mirrors the real onboarding sequence, so the promise on the
-        front page and the checklist after signup are the same four things.{% endcomment %}
-        <div data-fan-item class="fan-item card p-5">
-          <span class="grid size-8 place-items-center rounded-md bg-brand-50
-                       text-sm font-semibold text-brand-800">1</span>
-          <h3 class="mt-3 text-sm font-semibold text-ink-900">
-            Tell us about your school
-          </h3>
-          <p class="mt-1 text-sm text-ink-600">
-            Classes and campuses.
-          </p>
-        </div>
-        <div data-fan-item class="fan-item card p-5">
-          <span class="grid size-8 place-items-center rounded-md bg-brand-50
-                       text-sm font-semibold text-brand-800">2</span>
-          <h3 class="mt-3 text-sm font-semibold text-ink-900">
-            Set up your fees
-          </h3>
-          <p class="mt-1 text-sm text-ink-600">
-            We'll help you organize your existing fee structure.
-          </p>
-        </div>
-        <div data-fan-item class="fan-item card p-5">
-          <span class="grid size-8 place-items-center rounded-md bg-brand-50
-                       text-sm font-semibold text-brand-800">3</span>
-          <h3 class="mt-3 text-sm font-semibold text-ink-900">
-            Add your students
-          </h3>
-          <p class="mt-1 text-sm text-ink-600">
-            Bring your existing student list into {{ product_name }}. We'll help
-            you get set up without starting over.
-          </p>
-        </div>
-        <div data-fan-item class="fan-item card p-5">
-          <span class="grid size-8 place-items-center rounded-md bg-brand-50
-                       text-sm font-semibold text-brand-800">4</span>
-          <h3 class="mt-3 text-sm font-semibold text-ink-900">
-            Add your staff
-          </h3>
-          <p class="mt-1 text-sm text-ink-600">
-            Give each person only the access they need.
-          </p>
-        </div>
-      </div>
+        <details class="disclosure faq-item">
+          <summary class="disclosure-summary">
+            Do we have to start our records from scratch?
+            <svg class="disclosure-chevron" fill="none" viewBox="0 0 24 24"
+                 stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+            </svg>
+          </summary>
+          <div class="disclosure-body">
+            <div>
+              <p class="px-1 pb-5 text-sm leading-relaxed text-ink-600">
+                No. Bring the student list you already keep — a spreadsheet is
+                fine — and import it. Your fee figures stay your fee figures;
+                {{ product_name }} organises them rather than deciding them.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <details class="disclosure faq-item">
+          <summary class="disclosure-summary">
+            Can the bursar change what a class costs?
+            <svg class="disclosure-chevron" fill="none" viewBox="0 0 24 24"
+                 stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+            </svg>
+          </summary>
+          <div class="disclosure-body">
+            <div>
+              <p class="px-1 pb-5 text-sm leading-relaxed text-ink-600">
+                Not unless you want them to. A bursar records payments against
+                the fee structure and cannot edit it; a principal runs their
+                own campus; the proprietor sees and sets everything. The role
+                decides, not the job title.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <details class="disclosure faq-item">
+          <summary class="disclosure-summary">
+            What happens when fees change mid-year?
+            <svg class="disclosure-chevron" fill="none" viewBox="0 0 24 24"
+                 stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+            </svg>
+          </summary>
+          <div class="disclosure-body">
+            <div>
+              <p class="px-1 pb-5 text-sm leading-relaxed text-ink-600">
+                Edit the line item and every student in that class is repriced
+                immediately. The total is always the sum of the lines and is
+                never stored separately, so there is no second figure left
+                behind to go stale.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <details class="disclosure faq-item">
+          <summary class="disclosure-summary">
+            We have two campuses. Is that two accounts?
+            <svg class="disclosure-chevron" fill="none" viewBox="0 0 24 24"
+                 stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+            </svg>
+          </summary>
+          <div class="disclosure-body">
+            <div>
+              <p class="px-1 pb-5 text-sm leading-relaxed text-ink-600">
+                One. Add each campus under Branches and the proprietor sees
+                them side by side, with their own classes, terms and totals.
+                Staff at one campus see only that campus.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <details class="disclosure faq-item">
+          <summary class="disclosure-summary">
+            Do parents need to install anything?
+            <svg class="disclosure-chevron" fill="none" viewBox="0 0 24 24"
+                 stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+            </svg>
+          </summary>
+          <div class="disclosure-body">
+            <div>
+              <p class="px-1 pb-5 text-sm leading-relaxed text-ink-600">
+                No. Reminders go to the phone number on the child&rsquo;s
+                record as an ordinary message. There is nothing for a parent to
+                sign up for or remember a password to.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <details class="disclosure faq-item">
+          <summary class="disclosure-summary">
+            How long does setting up actually take?
+            <svg class="disclosure-chevron" fill="none" viewBox="0 0 24 24"
+                 stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+            </svg>
+          </summary>
+          <div class="disclosure-body">
+            <div>
+              <p class="px-1 pb-5 text-sm leading-relaxed text-ink-600">
+                An afternoon for most schools, and you do not have to do it in
+                one sitting. Classes go in as a whole ladder at once, fees are
+                set per class, and the student import does the longest part for
+                you.
+              </p>
+            </div>
+          </div>
+        </details>
+
       </div>
     </div>
   </section>
 
-  {# ===== Why it is built this way ======================================== #}
-  <section class="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
-    <div class="reveal grid gap-8 lg:grid-cols-3">
-      <div>
-        <h3 class="text-sm font-semibold text-ink-900">
-          Growing to more than one campus?
-        </h3>
-        <p class="mt-2 text-sm text-ink-600">
-          {{ product_name }} can grow with you.
-        </p>
-      </div>
-      <div>
-        <h3 class="text-sm font-semibold text-ink-900">
-          Your fees stay up to date.
-        </h3>
-        <p class="mt-2 text-sm text-ink-600">
-          Change a class's fee structure and {{ product_name }} keeps the
-          student's balance accurate.
-        </p>
-      </div>
-      <div>
-        <h3 class="text-sm font-semibold text-ink-900">The right people only</h3>
-        <p class="mt-2 text-sm text-ink-600">
-          A bursar collects against the fee structure without being able to
-          change it. Access follows the role, never the job title.
-        </p>
-      </div>
-    </div>
-  </section>
-
-  {# ===== Closing CTA ===================================================== #}
-  <section class="border-t border-ink-200 bg-panel">
-    <div class="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6">
-      <h2 class="text-xl font-semibold tracking-tight text-panel-fg sm:text-2xl">
-        Ready to get your school organized?
+  {# ===== The ask ========================================================= #}
+  <section id="start" class="lazy-section relative isolate overflow-hidden scroll-mt-24"
+           style="background: var(--gradient-brand);"
+           aria-labelledby="start-heading">
+    <div class="hero-grid"></div>
+    <div class="reveal mx-auto max-w-3xl px-4 py-20 text-center sm:px-6 lg:py-28">
+      <h2 id="start-heading"
+          class="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        Have the roster ready before the first fee is collected
       </h2>
-      <p class="mx-auto mt-2 max-w-lg text-sm text-panel-muted">
-        Set your school up now and have the roster ready before the first fee is
-        collected.
+      <p class="mx-auto mt-5 max-w-xl text-base text-brand-100">
+        Set your school up now. It costs nothing to get everything in place,
+        and the next time a parent asks what is outstanding, you will already
+        know.
       </p>
-      <a href="{% url 'core:signup' %}"
-         class="btn btn-on-panel mt-6">
-        Start setting up my school
-      </a>
+      <div class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <a href="{% url 'core:signup' %}" class="btn btn-on-panel btn-lg"
+           data-auth-swap>
+          Set up my school
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2"
+               stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+          </svg>
+        </a>
+        <a href="{% url 'login' %}"
+           class="text-sm font-semibold text-brand-100 underline-offset-4 hover:text-white
+                  hover:underline"
+           data-auth-swap>
+          Log in to your school
+        </a>
+      </div>
     </div>
   </section>
 
-  <footer class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-    <div class="flex flex-col items-center justify-between gap-3 text-xs text-ink-500
-                sm:flex-row">
-      <p>&copy; {% now "Y" %} {{ product_name }}. {{ product_tagline }}.</p>
-      <p class="flex items-center gap-4">
-        <a href="{% url 'core:privacy' %}" class="font-medium text-brand-700 hover:underline">
-          Privacy
-        </a>
-        <span>
-          Already have an account?
-          <a href="{% url 'login' %}" class="font-medium text-brand-700 hover:underline">
-            Sign in
-          </a>
-        </span>
-      </p>
-    </div>
-  </footer>
+  {% include "partials/_site_footer.html" %}
 
-</div>
+</main>
 {% endblock %}

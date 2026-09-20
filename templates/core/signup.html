@@ -1,24 +1,81 @@
 {% extends "registration/_auth_base.html" %}
 
+{% comment %}
+Sign-up is sign-in with the panels the other way round. The three blocks below
+are the entire reversal: the shell picks up `.auth-reversed`, the visual panel
+takes `order-2` and the form `order-1`. Arriving here from the sign-in page,
+js/ui.js plays that as the panel crossing the screen.
+{% endcomment %}
+{% block auth_reversed %} auth-reversed{% endblock %}
+{% block auth_visual_order %}lg:order-2{% endblock %}
+{% block auth_form_order %}lg:order-1{% endblock %}
+
 {% block auth_width %}max-w-md{% endblock %}
+
+{% block auth_eyebrow %}Start your journey{% endblock %}
 {% block auth_heading %}Create your school account{% endblock %}
 
+{% block auth_visual_title %}
+  Everything your school owes, in one place from day one
+{% endblock %}
+
+{% block auth_visual_body %}
+  This creates your school, its first campus and your owner account — then
+  walks you through classes, fees, students and staff.
+{% endblock %}
+
+{% block auth_visual_extra %}
+  {% comment %}
+  On sign-up the panel shows the road ahead rather than a figure, because the
+  visitor has no figures yet.
+  {% endcomment %}
+  <ul class="mt-10 space-y-4">
+    <li class="flex items-start gap-3.5">
+      <span class="grid size-7 shrink-0 place-items-center rounded-sm bg-white/15
+                   text-xs font-bold text-white">1</span>
+      <span class="text-sm text-brand-100">
+        Tell us about your school — classes and campuses
+      </span>
+    </li>
+    <li class="flex items-start gap-3.5">
+      <span class="grid size-7 shrink-0 place-items-center rounded-sm bg-white/15
+                   text-xs font-bold text-white">2</span>
+      <span class="text-sm text-brand-100">
+        Set up your fees, as line items that add themselves up
+      </span>
+    </li>
+    <li class="flex items-start gap-3.5">
+      <span class="grid size-7 shrink-0 place-items-center rounded-sm bg-white/15
+                   text-xs font-bold text-white">3</span>
+      <span class="text-sm text-brand-100">
+        Bring in the student list you already keep
+      </span>
+    </li>
+    <li class="flex items-start gap-3.5">
+      <span class="grid size-7 shrink-0 place-items-center rounded-sm bg-white/15
+                   text-xs font-bold text-white">4</span>
+      <span class="text-sm text-brand-100">
+        Invite your staff, each with their own access
+      </span>
+    </li>
+  </ul>
+{% endblock %}
+
 {% block auth_intro %}
-  <p class="mt-1 text-sm text-ink-600">
-    Let's get your school started. This creates your school, its first campus,
-    and your owner account — then walks you through the rest.
+  <p class="mt-3 text-sm text-ink-600">
+    Let&rsquo;s get your school started. No card needed.
   </p>
 {% endblock %}
 
 {% block auth_body %}
   {% if form.non_field_errors %}
-    <div class="mt-4 rounded-md border border-overdue/30 bg-overdue-soft px-3 py-2.5
+    <div class="mt-5 rounded-md border border-overdue/30 bg-overdue-soft px-4 py-3
                 text-sm text-overdue-strong" role="alert">
       {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
     </div>
   {% endif %}
 
-  <form method="post" class="mt-5 space-y-5" novalidate>
+  <form method="post" class="mt-7 space-y-5" novalidate>
     {% csrf_token %}
 
     {% include "partials/_field.html" with field=form.school_name %}
@@ -29,10 +86,15 @@
 
     <button type="submit" class="btn btn-primary w-full">
       Create account and continue
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+      </svg>
     </button>
   </form>
 
-  <p class="mt-4 text-xs text-ink-500">
+  <p class="mt-5 text-xs text-ink-500">
     You will be signed in as the school owner, able to see every campus you add.
     Creating an account means you accept our
     <a href="{% url 'core:privacy' %}" class="font-medium text-brand-700 hover:underline">
@@ -41,10 +103,11 @@
 {% endblock %}
 
 {% block auth_footer %}
-  <p class="mt-6 text-center text-sm text-ink-600">
+  <p class="mt-7 text-sm text-ink-600">
     Already have an account?
-    <a href="{% url 'login' %}" class="font-semibold text-brand-700 hover:underline">
-      Sign in
+    <a href="{% url 'login' %}" class="font-semibold text-brand-700 hover:underline"
+       data-auth-swap>
+      Welcome back — log in
     </a>
   </p>
 {% endblock %}

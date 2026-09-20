@@ -1,0 +1,116 @@
+{% comment %}
+The hero's floating product cards.
+
+Not screenshots: real fragments of the interface, built from the same tokens,
+components and payment-status colours the app itself uses. A screenshot goes
+stale the week after it is taken and cannot follow the theme; this follows both
+for free, and is what the product genuinely looks like because it is made of
+the product.
+
+The figures are illustrative and generic on purpose -- no school's name, no
+child's name. They are marked `aria-hidden` and the hero's copy carries the
+message, so a screen reader is not read three tables of invented numbers.
+
+Each card carries its own `--float-delay` and `--float-distance` so the three
+drift out of step with one another; `[data-perf="lite"]` stops the drift
+entirely.
+{% endcomment %}
+<div class="relative mx-auto w-full max-w-md lg:max-w-none" aria-hidden="true">
+
+  {# --- Collected this term ------------------------------------------- #}
+  <div class="float-card glass-dark glass-lit p-5 shadow-float"
+       style="--float-delay: 0s; --float-distance: 11px; --float-tilt: -0.4deg;">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <p class="text-xs font-medium uppercase tracking-wider text-brand-200">
+          Collected this term
+        </p>
+        <p class="numeric mt-1.5 text-3xl font-bold text-white">&#8358;4,820,000</p>
+      </div>
+      <span class="status-pill status-paid shrink-0">
+        <span class="status-dot status-dot-paid"></span>
+        78%
+      </span>
+    </div>
+
+    {# Seven weeks of collection, as bare columns. Heights are the data. #}
+    <div class="chart-columns mt-5 h-16">
+      <div class="chart-column" style="--col: 28%; --col-color: rgb(255 255 255 / .28);"></div>
+      <div class="chart-column" style="--col: 41%; --col-color: rgb(255 255 255 / .28);"></div>
+      <div class="chart-column" style="--col: 36%; --col-color: rgb(255 255 255 / .28);"></div>
+      <div class="chart-column" style="--col: 62%; --col-color: rgb(255 255 255 / .4);"></div>
+      <div class="chart-column" style="--col: 74%; --col-color: rgb(255 255 255 / .4);"></div>
+      <div class="chart-column" style="--col: 88%; --col-color: var(--color-brand-300);"></div>
+      <div class="chart-column" style="--col: 100%; --col-color: var(--color-paid);"></div>
+    </div>
+    <p class="mt-3 text-xs text-brand-200">
+      &#8358;1,360,000 still outstanding across 41 students
+    </p>
+  </div>
+
+  {# --- Who has paid ---------------------------------------------------- #}
+  <div class="float-card glass-dark glass-lit mt-4 overflow-hidden shadow-float
+              lg:-ml-10 lg:mt-5"
+       style="--float-delay: -3s; --float-distance: 14px; --float-tilt: 0.5deg;">
+    <div class="flex items-center justify-between border-b border-white/10 px-5 py-3">
+      <p class="text-sm font-semibold text-white">JSS 1A &middot; First Term</p>
+      <p class="numeric text-xs text-brand-200">32 students</p>
+    </div>
+    <table class="w-full text-sm">
+      <tbody class="divide-y divide-white/10">
+        <tr>
+          <td class="px-5 py-2.5 text-white/90">Adaeze O.</td>
+          <td class="numeric px-2 py-2.5 text-right text-brand-200">&#8358;185,000</td>
+          <td class="px-5 py-2.5 text-right">
+            <span class="status-pill status-paid">Paid</span>
+          </td>
+        </tr>
+        <tr>
+          <td class="px-5 py-2.5 text-white/90">Chinedu A.</td>
+          <td class="numeric px-2 py-2.5 text-right text-brand-200">&#8358;90,000</td>
+          <td class="px-5 py-2.5 text-right">
+            <span class="status-pill status-partial">Part paid</span>
+          </td>
+        </tr>
+        <tr>
+          <td class="px-5 py-2.5 text-white/90">Ibrahim S.</td>
+          <td class="numeric px-2 py-2.5 text-right text-brand-200">&#8358;0</td>
+          <td class="px-5 py-2.5 text-right">
+            <span class="status-pill status-unpaid">Unpaid</span>
+          </td>
+        </tr>
+        <tr>
+          <td class="px-5 py-2.5 text-white/90">Funmi T.</td>
+          <td class="numeric px-2 py-2.5 text-right text-brand-200">&#8358;0</td>
+          <td class="px-5 py-2.5 text-right">
+            <span class="status-pill status-overdue">Overdue</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  {# --- The reminder that goes out --------------------------------------- #}
+  <div class="float-card glass-dark glass-lit mt-4 p-4 shadow-float
+              lg:ml-16 lg:-mt-6 lg:w-[19rem]"
+       style="--float-delay: -6s; --float-distance: 9px; --float-tilt: -0.6deg;">
+    <div class="flex items-center gap-2.5">
+      <span class="icon-tile icon-tile-sm accent-emerald">
+        <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+             stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M8.25 7.5h7.5m-7.5 3.75h4.5m-6 7.5h9a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 15.75 4.5h-9A2.25 2.25 0 0 0 4.5 6.75v9.75A2.25 2.25 0 0 0 6.75 18.75Z" />
+        </svg>
+      </span>
+      <div class="min-w-0">
+        <p class="text-xs font-semibold text-white">Fee reminder</p>
+        <p class="text-[11px] text-brand-200">Sent to 41 parents &middot; just now</p>
+      </div>
+    </div>
+    <div class="mt-3 rounded-md bg-white/10 px-3 py-2.5 text-xs leading-relaxed text-white/90">
+      Good morning. Chinedu&rsquo;s First Term fees are &#8358;90,000 outstanding
+      of &#8358;185,000. Kindly pay before 30 September. Thank you.
+    </div>
+  </div>
+
+</div>

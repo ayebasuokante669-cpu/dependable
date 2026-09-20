@@ -277,6 +277,48 @@ SSS 3, not fifteen near-duplicates.
 Class names are unique per branch, not per school, so every campus can run its
 own "JSS 1".
 
+### Bulk entry: nineteen classes, one submission
+
+A school sets up around nineteen classes, and used to do it nineteen times:
+open the form, fill five fields, save, land back on the list, press New again.
+The screens at `/academics/classes/add-many/`,
+`/academics/subjects/add-many/` and `/staff/invite-many/` are the same records
+entered as a table.
+
+Three things remove the round trips:
+
+- **The campus is asked once**, at the top, instead of on every row.
+- **Presets fill a whole band** from one press. The rungs come from
+  `apps/academics/curriculum.py` — the same list `seed_academics` uses — so the
+  button and the seed can never describe different ladders. "The whole ladder"
+  is exactly the nineteen classes above.
+- **Level and year are read off the name.** `infer_level("JSS 2")` is the junior
+  band, `infer_year` is 2; "Basic 8" is junior secondary, "Basic 3" primary.
+  These are *defaults offered to a visible form field*, never silent writes — a
+  wrong guess costs one correction, and a name that cannot be read asks rather
+  than guessing.
+
+Nothing about what gets saved changes: these are ordinary ModelForms over the
+same models with the same constraints. Each batch is one transaction, because
+nineteen classes half-created with no indication of which nine is a worse state
+to hand back than nothing at all.
+
+`/academics/classes/edit-all/` is the other half — every class editable where it
+sits, for renaming and deactivating without one page load each. Edit-only on
+purpose: no blank rows at the bottom, because a table whose last three rows
+behave differently from the rest is one people stop trusting.
+
+The client-side half is one implementation shared by all four screens, plus the
+fee line items: `data-repeat` in `js/ui.js`. A container declares
+`data-repeat-prefix`, its rows carry `data-repeat-row`, and a `<template>`
+supplies a blank one. Enter moves down the table instead of submitting it.
+Without the script the server still renders its `extra` rows and the form still
+posts — you simply get the rows you were given.
+
+Single-record forms that people fill several of in a row (a class, a subject, a
+term, one staff account) carry **Save and add another**, which returns to a
+blank form instead of the list. The record written is identical either way.
+
 ### Seeding
 
 `seed_academics` builds the ladder and subject list from
@@ -740,6 +782,7 @@ loudly. It silently fails to arrive.
 | --- | --- | --- | --- |
 | Transactional | `dnd` | yes | allowed |
 | Promotional | `generic` | no | refused |
+| *(WhatsApp)* | `whatsapp` | n/a | n/a |
 
 Most Nigerian subscribers have Do-Not-Disturb switched on. A fee reminder put on
 `generic` reaches perhaps a third of the parents it was addressed to, at an hour
@@ -759,6 +802,19 @@ parents get it?".
 
 BulkSMS Nigeria expresses the same split as its numeric `dnd` flag rather than
 as a named route, so a promotional send there drops to `dnd=0`.
+
+**The channel is the first question, the purpose the second.**
+`termii_channel` took a `channel` argument and ignored it, so a message on
+`Channel.WHATSAPP` was handed an SMS route. `dnd` and `generic` are two
+delivery classes of SMS; `whatsapp` is a different destination, and none of
+what separates the SMS pair — the Do-Not-Disturb register, the overnight
+curfew — exists on it. What WhatsApp prices and polices is the template's own
+category, fixed when the template was approved, so a purpose has nothing to
+say about it.
+
+Nothing shipped through that bug: WhatsApp goes out through
+`TermiiWhatsAppProvider`, whose endpoint and payload are different and which
+never calls this method. It was wrong waiting to be reached.
 
 ### BulkSMS Nigeria — kept, not the default
 
@@ -1261,6 +1317,52 @@ Everything above assumed you were already signed in. This is how you get there.
 | `/accounts/password_reset/` | Django's reset flow; the console backend prints the link in dev. |
 | `/dashboard/` | Not a screen — forwards to whichever dashboard the role belongs on. |
 
+### The landing page
+
+`templates/core/landing.html`, in order: hero, the problem, the answer to it,
+how setup goes, questions, the ask, the footer. The sticky bar
+(`partials/_lp_nav.html`) jumps to the middle four, so the page is both a scroll
+and a menu. Smooth scrolling and the offset that keeps a heading clear of the
+bar are declared in CSS (`scroll-behavior` / `scroll-padding-top`), so the links
+work with the keyboard, in a new tab, and with the page's JavaScript blocked;
+`js/ui.js` only adds the bar's scrolled state and the `aria-current` that marks
+the section being read.
+
+The hero's floating cards (`core/_hero_cards.html`) are **not screenshots**:
+they are real fragments of the interface, built from the same tokens,
+components and payment-status colours the app itself uses. A screenshot goes
+stale the week after it is taken and cannot follow the theme; this follows both
+for free.
+
+The classroom background is treated entirely in CSS, so swapping the
+photograph changes one attribute and nothing else. `.hero-photo` throws the
+original colour away (`grayscale`), re-tints it to a single hue and rotates
+that hue to the brand blue (`sepia` + `hue-rotate` — a plain `saturate` cannot
+move a hue, only weaken it), then darkens and blurs. The supplied photograph is
+lit warm gold; none of that survives.
+
+`.hero-wash` adds a left-hand scrim over the result, and that one is load-
+bearing rather than decorative: the headline column sits on the left and the
+classroom's sunlit window wall lands directly under it, so without the scrim
+the brightest part of the picture is exactly where the white type goes.
+
+The blur is **atmosphere, not a privacy mechanism** — a CSS filter is a
+rendering choice and can be switched off. The rule lives on the asset instead,
+documented on `LandingView.HERO_IMAGE`: an empty room, desks or a chalkboard,
+never an identifiable child. Set that constant to `None` and the template omits
+the `<img>` rather than pointing at a placeholder; the gradient underneath is a
+finished hero on its own.
+
+One upside of blurring at that radius: the asset does not need to be large.
+The committed file is 1024×685 and ~123 KB, and upscaling it across a wide
+display is invisible under a 10px blur.
+
+Every section below the hero carries `.lazy-section` (`content-visibility:
+auto`), so the browser skips its layout and paint until it is nearly on screen
+— the cheapest form of lazy-loading a section, with no script and no
+placeholder. Reveals are armed from JS against markup that ships **visible**, so
+the failure mode of the whole effect is "no animation", never "no content".
+
 ### Branches, Staff and Terms are screens, not admin links
 
 These three sat in the sidebar as Django admin URLs, which meant the proprietor
@@ -1385,6 +1487,15 @@ would go stale the moment someone deleted their last class, and the school would
 be told it had finished a step it had not.
 
 ### Signing in, Account settings and temporary passwords
+
+**The split panel.** Sign in, sign up and the four password-reset stages all
+sit in `registration/_auth_base.html`: a branded gradient panel on one side, the
+form on the other. Sign-in keeps the visual panel on the left; sign-up reverses
+it. That reversal *is* the swap — both pages give the same two halves the same
+`view-transition-name`, so navigating between them makes the browser move each
+panel from where it was to where it now is. Below `lg` there is no split at all
+and the form column takes over, so nothing depends on the two-column shape
+existing.
 
 **Email or username.** `apps/accounts/backends.py` signs people in with either.
 The username is tried first, so every existing login keeps working. An email
@@ -1527,7 +1638,8 @@ Served from `static/` rather than inlined: it is a real asset with a filename
 now, so one file gets replaced when the mark is revised, and browsers cache one
 request instead of re-parsing the same markup on every page. It carries its own
 light ground, so unlike the placeholder it replaced it needs no dark/light
-variant — it reads on the brand-900 sidebar and the white auth card alike.
+variant — it reads on the brand-900 sidebar and the auth panel's gradient
+alike.
 
 Format per surface, because the constraint differs:
 
@@ -1673,15 +1785,165 @@ is both a utility and a CSS custom property.
   `overdue` (red), each with `-soft` and `-strong` variants. Use the
   `status-pill status-paid` pattern: colour is always paired with a label, never
   the only signal.
+- **Icon accents** — `acc-blue`, `acc-indigo`, `acc-violet`, `acc-teal`,
+  `acc-emerald`, `acc-amber`, `acc-rose`, each with a `-soft` tile tint. The one
+  place colour is allowed to be loud, and only on an icon's tile
+  (`class="icon-tile accent-violet"`) — never on body text or a control. Every
+  pair is contrast-checked in both themes by `npm run check:contrast`.
 - **Type** — Public Sans for UI, IBM Plex Mono for money and IDs (`.numeric`
   adds tabular figures).
-- **Radii** — 8px (`rounded-md` / `rounded-lg`).
+- **Radii** — soft geometry: 14px is the house corner (`rounded-md`), 18px for
+  cards (`rounded-lg`), up to 32px (`rounded-2xl`). `.squircle` upgrades to a
+  real superellipse where `corner-shape` is supported and stays a generous
+  rounded rectangle everywhere else.
+- **Glass** — `--glass-bg`, `--glass-border`, `--glass-edge`, `--glass-blur`,
+  plus a `--glass-dark-*` set for panes on the navy gradient. Used through
+  `.glass` / `.glass-dark` / `.glass-lit`, and deliberately sparingly: a sticky
+  bar, a hero card, a modal — never behind body copy.
+- **Motion** — two curves (`--ease-out`, `--ease-spring`) and three durations,
+  so every transition is one of a handful of recognisable movements.
 - **Touch targets** — 44px minimum via `--spacing-touch` (`min-h-touch`,
   `size-touch`), applied to every button, input and nav link.
 
-Components (`.btn`, `.card`, `.field-input`, `.nav-link`, `.status-pill`) compose
-in markup — `class="btn btn-primary"` — because Tailwind v4's `@apply` only
-accepts real utilities.
+Components (`.btn`, `.card`, `.field-input`, `.nav-link`, `.status-pill`,
+`.icon-tile`, `.bento-item`, `.chart-stack`) compose in markup —
+`class="btn btn-primary"` — because Tailwind v4's `@apply` only accepts real
+utilities.
+
+### Charts are CSS, not a library
+
+The dashboards draw collection, outstanding balances and the payment-status
+split with `.chart-stack`, `.chart-bar-*` and `.chart-columns` — a width written
+as a custom property, nothing loaded, nothing to keep working. They follow the
+theme for the same reason a status pill does: the colours are tokens.
+
+The four payment-status colours are a **status** palette, not a categorical one,
+and they are never re-pointed to mean something else. Checked with a palette
+validator, the amber/green pair separates by only ΔE 6.4 under protanopia in
+light mode — inside the floor band, which is legal only with secondary encoding.
+So every chart that uses them carries a labelled legend with counts and a 2px
+gap between segments: identity never rests on hue alone.
+`apps/core/templatetags/charts.py` does the proportion arithmetic and nothing
+else — no template is allowed to total a column.
+
+### Toasts
+
+Every action in the app reports itself the same way: a small circle rises from
+the bottom of the screen, opens sideways into a pill carrying an icon and a
+sentence, holds, closes back into the circle and drops away.
+
+**Views do not know toasts exist.** They call ordinary
+`messages.success(...)` / `.error(...)` / `.warning(...)` / `.info(...)` and
+`partials/_toasts.html` turns whatever is on the request into toasts. That is
+the whole integration: the write paths across academics, fees, students, staff,
+payments and admissions were already flashing messages before this existed and
+lit up without being touched.
+
+Four categories, and the colours are not new ones — three reuse the
+payment-status soft/strong pairs that `npm run check:contrast` already checks
+in both themes, and the fourth is glass:
+
+| Level | Colour | Used for |
+| --- | --- | --- |
+| `success` | green | the action completed |
+| `error` | red | it failed, or was refused |
+| `warning` | amber | it needs attention first |
+| `info` | glass | neither good nor bad news |
+
+Mechanics worth knowing:
+
+- The movement is two interpolable properties: `transform`/`opacity` for the
+  rise and drop, and a grid track going `0fr → 1fr` for the open and close —
+  `width: auto` cannot be animated, a grid track can. It also means a long
+  message wraps to two lines instead of being clipped.
+- **The markup ships open.** `js/ui.js` closes each server-rendered toast and
+  replays the entrance, so a blocked script costs the animation and never the
+  message — the same bargain `.reveal` makes.
+- The region lives at the end of `<body>` in `base.html`, *outside* the
+  signed-in branch. Before this, `messages` rendered only inside the shell, so
+  anything flashed on the way to a signed-out screen — a failed sign-in, a
+  sign-out — was consumed by the template engine and shown to nobody.
+- Colour is never the only signal: every toast has an icon and a
+  visually-hidden category word ("Success: …"), inside a polite live region.
+- Errors and warnings hold longer and carry a dismiss button; success and
+  info simply go. Hovering or focusing a toast restarts its clock rather than
+  freezing it, so one can never be parked on screen forever.
+- At most four are visible; older ones retire early rather than stacking off
+  the top of the screen.
+
+Anything on a page can raise one with `window.toast(message, level)` (or
+`toast.success(...)`). Markup can too: `data-toast-on-click="…"` plus
+`data-toast-on-click-level="…"`, which is how the sidebar's not-yet-built rows
+explain themselves instead of silently doing nothing.
+
+A rejected form is announced without any view being involved: `.field-error`
+only exists on a form that has been submitted and refused, so `js/ui.js` counts
+them and raises one amber toast — "2 fields need attention. Nothing was saved."
+
+A redirect nobody asked for says why it happened.
+`RequirePasswordChangeMiddleware` flashes a warning as it sends an account on a
+temporary password to Account settings, because otherwise pressing "Students"
+and arriving at Account settings is a mystery. The persistent notice on that
+page stays: it is something the user must act on, and a toast that disappears
+is the wrong carrier for that.
+
+`admissions/public_base.html` — the school-branded enquiry shell, which
+deliberately does not extend `base.html` — includes the region too. Nothing
+flashes a message on that flow today; the point is that adding one later
+reaches the parent reading the page instead of being swallowed.
+
+### Authorisation is answered, not re-asked
+
+`handler403` is `apps.core.views.permission_denied`. It leaves the refusal
+exactly as it was — the view never ran, the status is still **403**, and every
+test asserting that a bursar cannot reach an academic-setup URL still asserts
+that — and adds the reason as an error toast, so a refusal arrives where every
+other answer in the app arrives.
+
+What it deliberately does not do is ask for credentials. A signed-in principal
+who lacks a capability is already who they are; a password prompt would answer
+a question nobody asked. `templates/403.html` carries no password field and no
+link to the sign-in page, and a test asserts both — the page is the brand
+gradient with a glass panel on it, a plain sentence ("Your role doesn't have
+access to this"), the specific reason underneath, and one button back to
+`core:dashboard`, which forwards each role to its own home.
+
+The signed-out half of that template *does* offer a sign-in link, because
+there the thing standing between the reader and the page really is
+authentication.
+
+That prompt had a real source, now fixed: the owner dashboard and the fee
+structure list linked "Manage branches", "Set a term" and "Add a term" to the
+**Django admin**, and a proprietor's account is deliberately not `is_staff` —
+so those links answered a click with the admin's username-and-password form on
+a site they were already signed in to. They point at the real tenant-scoped
+screens (`schools:branch_list`, `fees:term_list`, `fees:term_create`) instead.
+The only remaining `/admin/` link is on the platform overview, whose role *is*
+a superuser.
+
+### Page transitions and reduced motion
+
+Navigation between screens is a cross-document view transition declared in CSS
+(`@view-transition { navigation: auto }`), so there is no router and nothing to
+go wrong where it is unsupported. `templates/base.html` names the sidebar
+`vt-sidebar` and the content column `vt-page`, which is what makes the shell
+stay put while the page inside it changes. The auth split panel names its two
+halves on **both** the sign-in and the sign-up page, so the browser animates the
+panel physically crossing the screen; `js/ui.js` applies a CSS-animation
+fallback only where view transitions are missing, never both.
+
+`prefers-reduced-motion` is honoured globally in `@layer base`, restated for
+view-transition pseudo-elements (which `*` cannot reach), and checked in JS
+before any observer is armed. Nothing is hidden and no state becomes
+unreachable — motion is removed, content is not.
+
+### The low-end device tier
+
+`js/ui.js` sets `<html data-perf="lite">` when the device reports few cores,
+little memory, or Data Saver. The stylesheet's `[data-perf="lite"]` block then
+turns off every `backdrop-filter`, the hero's blur and the card drift in one
+place, rather than each component guessing. Everything still renders — glass
+becomes a solid tint — so "lite" costs texture, never content or legibility.
 
 ## Layout
 
@@ -1737,11 +1999,14 @@ apps/admissions/     the paid add-on: Applicant (enquiry through enrolment),
                      one capability a school configures), notifications.py
                      (the parent emails), admission_pricing.py, the public
                      enquiry page (public_urls.py) and the staff pipeline
-templates/           base.html, 403.html, partials/, core/ (landing, signup,
+templates/           base.html, 403.html, partials/ (including _toasts.html,
+                     the notification region every Django message renders
+                     into), core/ (landing, signup,
                      onboarding, dashboards), academics/, fees/, students/,
                      messaging/, payments/, accounts/ (Account settings),
-                     registration/ (_auth_base.html plus
-                     login, password reset and password change), admissions/
+                     registration/ (_auth_base.html -- the split panel every
+                     signed-out screen sits in -- plus login, password reset
+                     and password change), admissions/
                      (public_base.html -- the school-branded shell that
                      deliberately does not extend base.html -- the pipeline,
                      and email/ for the three parent emails)

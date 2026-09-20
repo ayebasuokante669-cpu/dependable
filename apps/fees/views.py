@@ -261,6 +261,16 @@ class TermCreateView(ManageFeesMixin, CreateView):
         messages.success(self.request, f"{self.object.name} created.")
         return response
 
+    def get_success_url(self):
+        """Back to a blank form when asked, rather than to the list.
+
+        Terms are set up three at a time, once a year. The record written is
+        identical either way -- this only decides where you land.
+        """
+        if "save_and_add_another" in self.request.POST:
+            return reverse("fees:term_create")
+        return super().get_success_url()
+
 
 class TermUpdateView(ManageFeesMixin, UpdateView):
     model = Term

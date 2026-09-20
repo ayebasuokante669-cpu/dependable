@@ -277,7 +277,11 @@ class PublicPageHeadTests(TestCase):
         # What a crawler that runs no JavaScript receives: the real copy, not a
         # shell waiting for a script to fill it in.
         expected = {
-            "/": ["Know what every child owes, and who has paid.",
+            # The hero headline, without its old full stop -- the rewrite
+            # dropped it. The snippet is here to prove the copy is in the HTML
+            # a crawler receives, so it has to be the copy that is actually on
+            # the page.
+            "/": ["Know what every child owes, and who has paid",
                   "Set up your fees", "Add your students"],
             "/signup/": ["Create your school account", 'name="school_name"'],
             "/accounts/login/": ["Sign in", "Email or username"],

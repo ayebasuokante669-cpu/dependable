@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% comment %}
+Add many classes at once.
+
+The screen that replaces nineteen round trips with one. Three things are doing
+that work:
+
+  * the campus is chosen once, at the top, instead of on every row;
+  * the presets fill a whole band of the ladder from one press -- the rungs
+    come from apps/academics/curriculum.py, the same list the seeding command
+    uses, so the button and the seed can never disagree;
+  * level and year are left blank by default and read off the class name when
+    the row is saved (infer_level / infer_year), so a row is usually one field.
+
+None of it needs JavaScript to be usable: the server renders five blank rows
+and an ordinary Save. The script adds the sixth row, the presets and the live
+count -- which is why the "add another row" button and the preset chips ship
+`hidden` and are revealed by js/ui.js.
+{% endcomment %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    One row per class — level and year are worked out from the name
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'academics:class_create' %}" class="btn btn-secondary text-sm">
+    <span class="hidden sm:inline">Add</span> one at a time
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if formset.non_form_errors %}
+      <div class="card mb-5 border-overdue/30 bg-overdue-soft px-4 py-3 text-sm
+                  text-overdue-strong" role="alert">
+        {% for error in formset.non_form_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    {# ===== Campus, asked once ========================================== #}
+    <div class="card p-5 sm:p-6">
+      {% if branch_form.is_forced %}
+        {% comment %}
+        One campus, so there is nothing to decide. The field still posts --
+        it is a hidden input carrying the same value -- but it is not put on
+        screen as a select with a single option.
+        {% endcomment %}
+        <input type="hidden" name="branch"
+               value="{{ branch_form.fields.branch.initial.pk }}">
+        <div class="flex items-center gap-3">
+          <span class="icon-tile accent-blue">
+            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+            </svg>
+          </span>
+          <div>
+            <p class="text-sm font-semibold text-ink-900">
+              {{ branch_form.fields.branch.initial.name }}
+            </p>
+            <p class="text-xs text-ink-500">
+              Every class below is created at this campus.
+            </p>
+          </div>
+        </div>
+      {% else %}
+        {% include "partials/_field.html" with field=branch_form.branch %}
+      {% endif %}
+    </div>
+
+    {# ===== Presets ===================================================== #}
+    <div class="card mt-5 p-5 sm:p-6">
+      <h2 class="text-sm font-semibold text-ink-900">Start from the usual ladder</h2>
+      <p class="field-hint mt-0.5">
+        Fills the rows below. Everything stays editable — rename, add a
+        stream, or delete any row before saving.
+      </p>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <button type="button" class="chip-button" hidden
+                data-preset-target="#class-rows"
+                data-preset="{{ preset_all.json }}">
+          <svg class="size-4 text-brand-600" fill="none" viewBox="0 0 24 24"
+               stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+          {{ preset_all.label }} ({{ preset_all.count }})
+        </button>
+        {% for preset in presets %}
+          <button type="button" class="chip-button" hidden
+                  data-preset-target="#class-rows"
+                  data-preset="{{ preset.json }}">
+            <svg class="size-4 text-brand-600" fill="none" viewBox="0 0 24 24"
+                 stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            {{ preset.label }} ({{ preset.count }})
+          </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ===== The rows ==================================================== #}
+    <div class="card mt-5 overflow-hidden" id="class-rows"
+         data-repeat data-repeat-prefix="{{ formset.prefix }}">
+      {{ formset.management_form }}
+
+      <div class="hidden border-b border-ink-200 bg-ink-50 px-5 py-2.5
+                  text-xs font-semibold uppercase tracking-wide text-ink-600 sm:flex
+                  sm:items-center sm:gap-3">
+        <span class="w-7 shrink-0"></span>
+        <span class="min-w-0 flex-1">Class name</span>
+        <span class="w-44 shrink-0">Level</span>
+        <span class="w-20 shrink-0">Year</span>
+        <span class="w-32 shrink-0">Stream</span>
+        <span class="w-11 shrink-0"></span>
+      </div>
+
+      <div class="row-stack" data-repeat-rows>
+        {% for row in formset %}
+          <div class="row-item" data-repeat-row data-new="true">
+            {{ row.id }}
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <span class="row-index" data-repeat-index aria-hidden="true">
+                {{ forloop.counter }}
+              </span>
+              <div class="min-w-0 flex-1">
+                <label for="{{ row.name.id_for_label }}" class="field-label sm:sr-only">
+                  Class name
+                </label>
+                {{ row.name }}
+              </div>
+              <div class="w-full shrink-0 sm:w-44">
+                <label for="{{ row.level.id_for_label }}" class="field-label sm:sr-only">
+                  Level
+                </label>
+                {{ row.level }}
+              </div>
+              <div class="w-full shrink-0 sm:w-20">
+                <label for="{{ row.year_in_level.id_for_label }}"
+                       class="field-label sm:sr-only">Year</label>
+                {{ row.year_in_level }}
+              </div>
+              <div class="w-full shrink-0 sm:w-32">
+                <label for="{{ row.stream.id_for_label }}" class="field-label sm:sr-only">
+                  Stream
+                </label>
+                {{ row.stream }}
+              </div>
+              <button type="button" data-repeat-remove=""
+                      class="btn btn-ghost size-touch shrink-0 self-end px-0
+                             text-overdue-strong hover:bg-overdue-soft sm:self-auto"
+                      aria-label="Remove this row">
+                <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                     stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                        d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.2v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                </svg>
+              </button>
+            </div>
+            {% for error in row.name.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+            {% for error in row.level.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+            {% for error in row.year_in_level.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+            {% for error in row.stream.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="row-actions">
+        <button type="button" data-repeat-add class="btn btn-secondary text-sm" hidden>
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+               stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Add another row
+        </button>
+        <p class="text-xs text-ink-500">
+          <span class="numeric font-semibold text-ink-800" data-repeat-count>
+            {{ formset|length }}
+          </span>
+          row{{ formset|length|pluralize }} — blank ones are ignored.
+          Enter moves to the next row, and adds one at the end.
+        </p>
+      </div>
+
+    {% comment %}
+    Blueprint for rows added on the client. __prefix__ is rewritten to the
+    row's index when it is cloned, which keeps each label tied to its own
+    input.
+    {% endcomment %}
+    <template data-repeat-template>
+      <div class="row-item" data-repeat-row data-new="true">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <span class="row-index" data-repeat-index aria-hidden="true"></span>
+        {{ formset.empty_form.id }}
+          <div class="min-w-0 flex-1">
+            <label for="id_{{ formset.prefix }}-__prefix__-name"
+                   class="field-label sm:sr-only">Class name</label>
+            {{ formset.empty_form.name }}
+          </div>
+          <div class="w-full shrink-0 sm:w-44">
+            <label for="id_{{ formset.prefix }}-__prefix__-level"
+                   class="field-label sm:sr-only">Level</label>
+            {{ formset.empty_form.level }}
+          </div>
+          <div class="w-full shrink-0 sm:w-20">
+            <label for="id_{{ formset.prefix }}-__prefix__-year_in_level"
+                   class="field-label sm:sr-only">Year</label>
+            {{ formset.empty_form.year_in_level }}
+          </div>
+          <div class="w-full shrink-0 sm:w-32">
+            <label for="id_{{ formset.prefix }}-__prefix__-stream"
+                   class="field-label sm:sr-only">Stream</label>
+            {{ formset.empty_form.stream }}
+          </div>
+          <button type="button" data-repeat-remove=""
+                  class="btn btn-ghost size-touch shrink-0 self-end px-0
+                         text-overdue-strong hover:bg-overdue-soft sm:self-auto"
+                  aria-label="Remove this row">
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.2v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </template>
+    </div>
+
+    {# ===== Save ======================================================== #}
+    <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <a href="{{ list_url }}" class="btn btn-secondary text-sm">Cancel</a>
+      <button type="submit" name="save_and_add_another" value="1"
+              class="btn btn-secondary text-sm">
+        Save and add more
+      </button>
+      <button type="submit" class="btn btn-primary text-sm">
+        Save all classes
+      </button>
+    </div>
+
+  </form>
+
+
+</div>
+{% endblock %}
