@@ -204,6 +204,49 @@
   }
 
   /* ====================================================================== *
+   * Lazy images
+   *
+   * `loading="lazy"` is on every uploaded image already and does most of this
+   * job. IntersectionObserver adds the part the attribute cannot: a margin of
+   * our choosing, so a receipt starts fetching a screen and a half before it
+   * is needed rather than when the browser decides, and a fade as it lands
+   * instead of a pop.
+   *
+   * Opt-in via `data-src`. The markup carries a `<noscript>` twin with a plain
+   * `src`, so a blocked script costs nothing -- see payments/pending_queue.html.
+   * ====================================================================== */
+  function initLazyImages() {
+    var images = document.querySelectorAll('img[data-src]');
+    if (!images.length) return;
+
+    function load(img) {
+      var src = img.getAttribute('data-src');
+      if (!src) return;
+      img.addEventListener('load', function () {
+        img.classList.add('is-loaded');
+      }, { once: true });
+      img.src = src;
+      img.removeAttribute('data-src');
+    }
+
+    if (!('IntersectionObserver' in window)) {
+      // No observer: fetch them all rather than leave blanks on the page.
+      Array.prototype.forEach.call(images, load);
+      return;
+    }
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        load(entry.target);
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: '150% 0px' });
+
+    Array.prototype.forEach.call(images, function (img) { observer.observe(img); });
+  }
+
+  /* ====================================================================== *
    * Landing navigation
    *
    * Two jobs: tell the bar when it has left the top of the hero, and mark
@@ -243,6 +286,10 @@
 
     if (!sections.length || !('IntersectionObserver' in window)) return;
 
+    // While this is in the future the scroll-spy stands down: a click has
+    // claimed the marker and the scroll it triggered must not argue with it.
+    var claimedUntil = 0;
+
     function mark(id) {
       links.forEach(function (link) {
         var mine = (link.getAttribute('href') || '') === '#' + id;
@@ -256,6 +303,11 @@
     // the wrong answer whenever one section is much taller than another.
     var visible = {};
     var spy = new IntersectionObserver(function (entries) {
+      // While a click-scroll is in flight the observer is reporting every
+      // section the page flies past. Honouring that would drag the underline
+      // across the whole bar on the way to the one that was actually asked
+      // for, so the spy is muted until the scroll settles.
+      if (claimedUntil > Date.now()) return;
       entries.forEach(function (entry) {
         visible[entry.target.id] = entry.isIntersecting;
       });
@@ -265,6 +317,108 @@
     }, { rootMargin: '-25% 0px -60% 0px', threshold: 0 });
 
     sections.forEach(function (section) { spy.observe(section); });
+
+    // A click moves the underline *now*. Waiting for the smooth scroll to
+    // carry the section into the spy's band means pressing a nav item and
+    // watching nothing happen for most of a second -- the control looks
+    // broken even though it is working.
+    nav.addEventListener('click', function (event) {
+      var link = event.target.closest('[data-lp-link]');
+      if (!link) return;
+      var id = (link.getAttribute('href') || '').replace(/^#/, '');
+      if (!id || !document.getElementById(id)) return;
+
+      mark(id);
+      // Long enough for a smooth scroll across the page to land, short enough
+      // that a user who starts scrolling by hand straight afterwards is not
+      // left with a stale marker. Reduced motion jumps, so it needs no grace.
+      claimedUntil = Date.now() + (reduceMotion.matches ? 0 : 700);
+    });
+  }
+
+  /* ====================================================================== *
+   * Sidebar
+   *
+   * Two jobs, both about not losing the user's place.
+   *
+   * **Collapsing** narrows the rail to its icons. The state lives on <html>
+   * as `data-sidebar`, which is what lets one attribute drive both the rail's
+   * width and the content column's padding -- they have to move together or
+   * the page tears down the middle. It is written to localStorage and read
+   * back by a tiny inline script in <head>, the same trick the theme uses, so
+   * a collapsed rail is already collapsed at first paint instead of snapping
+   * shut a moment after the page appears.
+   *
+   * **Scroll position** is remembered per page load. A long menu scrolled to
+   * Payments jumped back to the top on every navigation, which on a rail this
+   * tall means hunting for where you were on every single click.
+   * ====================================================================== */
+  var SIDEBAR_KEY = 'schoolcord-sidebar';
+  var SIDEBAR_SCROLL_KEY = 'schoolcord-sidebar-scroll';
+
+  function initSidebar() {
+    var root = document.documentElement;
+    var toggles = document.querySelectorAll('[data-sidebar-toggle]');
+
+    for (var t = 0; t < toggles.length; t++) toggles[t].hidden = false;
+
+    function syncToggles() {
+      var collapsed = root.getAttribute('data-sidebar') === 'collapsed';
+      var buttons = document.querySelectorAll('[data-sidebar-toggle]');
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        var label = collapsed ? 'Expand the sidebar' : 'Collapse the sidebar';
+        buttons[i].setAttribute('title', label);
+        var sr = buttons[i].querySelector('.sr-only');
+        if (sr) sr.textContent = label;
+      }
+    }
+
+    syncToggles();
+
+    document.addEventListener('click', function (event) {
+      var button = event.target.closest && event.target.closest('[data-sidebar-toggle]');
+      if (!button) return;
+      var collapsed = root.getAttribute('data-sidebar') === 'collapsed';
+      if (collapsed) root.removeAttribute('data-sidebar');
+      else root.setAttribute('data-sidebar', 'collapsed');
+      try {
+        window.localStorage.setItem(SIDEBAR_KEY, collapsed ? 'expanded' : 'collapsed');
+      } catch (e) { /* private mode: the choice stops persisting, nothing more */ }
+      syncToggles();
+    });
+
+    initSidebarScroll();
+  }
+
+  function initSidebarScroll() {
+    var panes = document.querySelectorAll('[data-sidebar-scroll]');
+    if (!panes.length) return;
+
+    // Restored before paint would be better still, but the rail's height is
+    // not known until layout -- so this runs as early as the script does and
+    // the jump is imperceptible.
+    var saved = 0;
+    try {
+      saved = parseInt(window.sessionStorage.getItem(SIDEBAR_SCROLL_KEY) || '0', 10);
+    } catch (e) { /* see below */ }
+
+    Array.prototype.forEach.call(panes, function (pane) {
+      if (saved > 0 && pane.scrollHeight > pane.clientHeight) pane.scrollTop = saved;
+
+      // Written on scroll rather than on unload: a `beforeunload` handler is
+      // unreliable on mobile, where a page is often frozen rather than
+      // unloaded, and it blocks the back-forward cache.
+      var pending;
+      pane.addEventListener('scroll', function () {
+        window.clearTimeout(pending);
+        pending = window.setTimeout(function () {
+          try {
+            window.sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(pane.scrollTop));
+          } catch (e) { /* private mode, storage disabled by policy */ }
+        }, 150);
+      }, { passive: true });
+    });
   }
 
   /* ====================================================================== *
@@ -280,6 +434,87 @@
    * from the first, so the crossing is played at full travel when the two
    * screens genuinely traded places, and kept to a short settle otherwise.
    * ====================================================================== */
+  /* The in-place switch.
+   *
+   * Both panels are in the DOM (registration/_auth_switch.html), so moving
+   * between sign-in and sign-up is a class change and an animation -- no
+   * fetch, no navigation, nothing to wait for. The URL is rewritten with
+   * `pushState` so the address bar, the back button and a bookmark all still
+   * agree with what is on screen, and `popstate` puts it back.
+   *
+   * The links stay real hrefs to real URLs. With this script blocked they
+   * navigate, the other page loads, and the only thing lost is the transition.
+   */
+  function initAuthSwitch() {
+    var shell = document.querySelector('[data-auth-shell][data-auth-panel]');
+    if (!shell) return;
+
+    var URLS = { login: '/accounts/login/', signup: '/signup/' };
+    var TITLES = { login: 'Sign in', signup: 'Create your school account' };
+
+    function show(panel, push) {
+      if (shell.getAttribute('data-auth-panel') === panel) return;
+
+      // Which way each half travels. The visual panel is moving to the side
+      // the form is leaving, so they cross rather than chase each other.
+      var goingRight = panel === 'signup';
+      shell.style.setProperty('--auth-cross-from', goingRight ? '100%' : '-100%');
+      shell.style.setProperty('--auth-cross-to', goingRight ? '-100%' : '100%');
+
+      shell.setAttribute('data-auth-panel', panel);
+      togglePanels('data-auth-form-for', panel);
+      togglePanels('data-auth-visual-for', panel);
+
+      if (!reduceMotion.matches) {
+        // Removed and re-added with a reflow between, so pressing the link
+        // twice replays the movement rather than doing nothing the second time.
+        shell.classList.remove('is-switching');
+        void shell.offsetWidth;
+        shell.classList.add('is-switching');
+      }
+
+      if (push) {
+        try {
+          window.history.pushState({ authPanel: panel }, '', URLS[panel]);
+        } catch (e) { /* file:// and the like -- the panel still switches */ }
+      }
+      document.title = TITLES[panel] + ' · SCHOOLCORD';
+
+      // The first field of whatever just arrived, so the keyboard follows the
+      // eye instead of staying on a form that is no longer on screen.
+      var first = document.querySelector(
+        '[data-auth-form-for="' + panel + '"] input:not([type="hidden"])'
+      );
+      if (first) first.focus({ preventScroll: true });
+    }
+
+    /* `hidden` rather than a class: the inactive panel holds a whole second
+       form, and it must be out of the accessibility tree and out of the tab
+       order, not merely invisible. */
+    function togglePanels(attribute, panel) {
+      var nodes = document.querySelectorAll('[' + attribute + ']');
+      for (var i = 0; i < nodes.length; i++) {
+        nodes[i].hidden = nodes[i].getAttribute(attribute) !== panel;
+      }
+    }
+
+    document.addEventListener('click', function (event) {
+      var link = event.target.closest && event.target.closest('[data-auth-switch]');
+      if (!link) return;
+      // Anything but a plain left click is the user asking for a real
+      // navigation -- a new tab, a new window, a saved link.
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+      event.preventDefault();
+      show(link.getAttribute('data-auth-switch'), true);
+    });
+
+    window.addEventListener('popstate', function (event) {
+      var panel = (event.state && event.state.authPanel) ||
+        (window.location.pathname.indexOf('signup') > -1 ? 'signup' : 'login');
+      show(panel, false);
+    });
+  }
+
   var SWAP_KEY = 'schoolcord-auth-swap';
 
   function initAuthSwap() {
@@ -933,9 +1168,12 @@
     initPerfTier();
     initToasts();
     initTheme();
+    initSidebar();
     initReveals();
+    initLazyImages();
     initLandingNav();
     initAuthSwap();
+    initAuthSwitch();
 
     var repeats = document.querySelectorAll('[data-repeat]');
     for (var i = 0; i < repeats.length; i++) initRepeat(repeats[i]);

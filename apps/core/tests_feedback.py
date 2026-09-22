@@ -173,6 +173,62 @@ class RefusalTests(FeedbackTestCase):
         self.assertNotIn(reverse("login"), html)
 
 
+class AuthPanelSwitchTests(FeedbackTestCase):
+    """Sign-in and sign-up render both panels so switching costs no round trip.
+
+    The hazard that creates: "is the form on the page?" stops being the same
+    question as "is the form *showing*?". Both forms are always present, so an
+    assertion that merely finds one passes on the wrong page -- which is
+    exactly how /signup/ came to render the sign-in panel.
+    """
+
+    def panels(self, url):
+        """(visible, hidden) panel names for a rendered auth page."""
+        html = self.client.get(url).content.decode()
+        visible, hidden = set(), set()
+        for kind in ("form", "visual"):
+            for side in ("login", "signup"):
+                match = re.search(
+                    rf'<div data-auth-{kind}-for="{side}"( hidden)?>', html
+                )
+                self.assertIsNotNone(match, f"{kind}/{side} missing from {url}")
+                (hidden if match.group(1) else visible).add(f"{kind}/{side}")
+        return visible, hidden
+
+    def test_the_sign_in_url_shows_the_sign_in_panel(self):
+        visible, hidden = self.panels(reverse("login"))
+        self.assertEqual(visible, {"form/login", "visual/login"})
+        self.assertEqual(hidden, {"form/signup", "visual/signup"})
+
+    def test_the_sign_up_url_shows_the_sign_up_panel(self):
+        visible, hidden = self.panels(reverse("core:signup"))
+        self.assertEqual(visible, {"form/signup", "visual/signup"})
+        self.assertEqual(hidden, {"form/login", "visual/login"})
+
+    def test_both_forms_are_present_on_both_urls(self):
+        """That presence is the whole point -- it is what makes the switch
+        instant. It is also what makes the two tests above necessary."""
+        for url in (reverse("login"), reverse("core:signup")):
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode()
+                self.assertIn('name="username"', html)
+                self.assertIn('name="school_name"', html)
+
+    def test_each_form_posts_to_its_own_view(self):
+        """A sign-in submitted while the URL says /signup/ must still reach the
+        login view, so the action cannot be left to default to the page."""
+        html = self.client.get(reverse("core:signup")).content.decode()
+        self.assertIn(f'action="{reverse("login")}"', html)
+        self.assertIn(f'action="{reverse("core:signup")}"', html)
+
+    def test_the_switch_links_stay_real_urls(self):
+        """js/ui.js intercepts them; with the script blocked they must still
+        navigate."""
+        html = self.client.get(reverse("login")).content.decode()
+        self.assertIn(f'href="{reverse("core:signup")}"', html)
+        self.assertIn('data-auth-switch="signup"', html)
+
+
 class RedirectsThatExplainThemselvesTests(FeedbackTestCase):
     """A redirect the user did not ask for has to say why it happened."""
 

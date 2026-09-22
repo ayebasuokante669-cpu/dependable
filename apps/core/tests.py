@@ -257,6 +257,53 @@ class NavigationTests(TestCase):
     def test_anonymous_gets_no_navigation(self):
         self.assertEqual(nav_for(None), [])
 
+    def test_exactly_one_row_is_ever_highlighted(self):
+        """Reported as "the previous item stays highlighted".
+
+        It was not a stale highlight: `_resolve` marks an item active when the
+        path *starts with* its href, and four entries in this menu are prefixes
+        of another -- /fees/ of /fees/terms/, /payments/ of
+        /payments/outstanding/, and so on. Opening Terms lit up Fee Structures
+        as well, which reads exactly like a row that failed to clear.
+        """
+        from apps.core.permissions import capabilities_for
+
+        capabilities = {c.value for c in capabilities_for(Role.SCHOOL_OWNER)}
+        nested = [
+            "/fees/terms/",
+            "/payments/outstanding/",
+            "/admissions/new/",
+            "/messaging/identity/",
+        ]
+        for path in nested:
+            with self.subTest(path=path):
+                active = [
+                    item.label
+                    for section in nav_for(Role.SCHOOL_OWNER, path, capabilities)
+                    for item in section.items
+                    if item.active
+                ]
+                self.assertEqual(len(active), 1, active)
+
+    def test_a_deep_page_still_lights_its_section(self):
+        """The prefix match is what makes /students/41/ light Students, so
+        narrowing it must not cost that."""
+        from apps.core.permissions import capabilities_for
+
+        capabilities = {c.value for c in capabilities_for(Role.SCHOOL_OWNER)}
+        for path, expected in (
+            ("/students/41/", "Students"),
+            ("/academics/classes/add-many/", "Classes"),
+        ):
+            with self.subTest(path=path):
+                active = [
+                    item.label
+                    for section in nav_for(Role.SCHOOL_OWNER, path, capabilities)
+                    for item in section.items
+                    if item.active
+                ]
+                self.assertEqual(active, [expected])
+
 
 class StatusBreakdownTests(TestCase):
     """The payment-status chart on the dashboards.

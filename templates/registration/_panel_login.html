@@ -1,0 +1,90 @@
+{% comment %}
+The sign-in panel: everything on the form side of the split, as one unit.
+
+Extracted from login.html so it can be rendered on *both* auth URLs. Having
+both panels in the DOM is what lets switching between them be an instant
+client-side animation instead of a page load -- see `initAuthSwitch` in
+js/ui.js.
+
+Takes `form`. On /signup/ that is the signup form, so the field values are
+read defensively: `login_form` is passed there instead and this partial is
+included with `form=login_form`.
+
+The form posts to its own URL explicitly rather than to whatever page it
+happens to be rendered on. Without that, signing in from the sign-up URL would
+POST the credentials at the signup view.
+{% endcomment %}
+<p class="text-sm font-semibold uppercase tracking-wider text-brand-600">
+  Welcome back
+</p>
+<h1 class="mt-2 text-2xl font-bold tracking-tight text-ink-900 sm:text-3xl">
+  Sign in to your school
+</h1>
+<p class="mt-3 text-sm text-ink-600">
+  Use the credentials issued by your school.
+</p>
+
+{% comment %} Django puts a bad username/password on the form as a non-field error, and
+   a disabled account as its own message. Rendering them rather than a fixed
+   sentence means the user is told which of the two actually happened. {% endcomment %}
+{% if form.non_field_errors %}
+  <div class="mt-5 rounded-md border border-overdue/30 bg-overdue-soft px-4 py-3
+              text-sm text-overdue-strong" role="alert">
+    {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+  </div>
+{% endif %}
+
+<form method="post" action="{% url 'login' %}" class="mt-7 space-y-5" novalidate>
+  {% csrf_token %}
+
+  <div>
+    <label for="{{ form.username.id_for_label }}" class="field-label">Email or username</label>
+    <input type="text" name="username" id="{{ form.username.id_for_label }}"
+           class="field-input" value="{{ form.username.value|default:'' }}"
+           autocomplete="username" required>
+    {% for error in form.username.errors %}
+      <p class="field-error">{{ error }}</p>
+    {% endfor %}
+  </div>
+
+  <div>
+    <div class="flex items-baseline justify-between">
+      <label for="{{ form.password.id_for_label }}" class="field-label">Password</label>
+      <a href="{% url 'password_reset' %}"
+         class="mb-1.5 text-xs font-medium text-brand-700 hover:underline">
+        Forgot it?
+      </a>
+    </div>
+    <input type="password" name="password" id="{{ form.password.id_for_label }}"
+           class="field-input" autocomplete="current-password" required>
+    {% for error in form.password.errors %}
+      <p class="field-error">{{ error }}</p>
+    {% endfor %}
+  </div>
+
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+  <button type="submit" class="btn btn-primary w-full">
+    Sign in
+    <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+         stroke="currentColor" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round"
+            d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+    </svg>
+  </button>
+</form>
+
+<p class="mt-7 text-sm text-ink-600">
+  New school?
+  {% comment %}
+  A real link to a real URL. js/ui.js intercepts the click and swaps the
+  panels in place; with the script blocked it is an ordinary navigation and
+  the sign-up page loads as it always did.
+  {% endcomment %}
+  <a href="{% url 'core:signup' %}" class="font-semibold text-brand-700 hover:underline"
+     data-auth-switch="signup">
+    Start your journey
+  </a>
+</p>
+<p class="mt-2 text-xs text-ink-500">
+  Staff accounts are issued by your school — ask your principal or proprietor.
+</p>

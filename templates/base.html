@@ -46,6 +46,14 @@
       } catch (e) {
         document.documentElement.setAttribute('data-theme', 'light');
       }
+      // Same reasoning for the sidebar: a rail that is collapsed must be
+      // collapsed in the first frame, or the page visibly snaps narrower a
+      // moment after it appears and the content column jumps with it.
+      try {
+        if (localStorage.getItem('schoolcord-sidebar') === 'collapsed') {
+          document.documentElement.setAttribute('data-sidebar', 'collapsed');
+        }
+      } catch (e) { /* storage disabled: the rail simply starts expanded */ }
     })();
   </script>
   <script src="{% static 'js/ui.js' %}" defer></script>
@@ -72,9 +80,10 @@
   navigation and leaves it alone while the content column changes, instead of
   cross-fading the whole window and flickering the sidebar on every click.
   {% endcomment %}
-  <aside class="vt-sidebar hidden lg:flex lg:w-sidebar lg:shrink-0 lg:flex-col
+  <aside id="app-sidebar"
+         class="app-sidebar vt-sidebar hidden lg:flex lg:shrink-0 lg:flex-col
                 bg-panel lg:fixed lg:inset-y-0 lg:left-0">
-    {% include "partials/_sidebar_header.html" %}
+    {% include "partials/_sidebar_header.html" with collapsible=True %}
     {% include "partials/_nav.html" with nav_label="Main" %}
     {% include "partials/_sidebar_footer.html" %}
   </aside>
@@ -106,7 +115,7 @@
   </div>
 
   {# ===== Content column =================================================== #}
-  <div class="flex min-w-0 flex-1 flex-col lg:pl-sidebar">
+  <div class="app-content flex min-w-0 flex-1 flex-col">
 
     {% comment %}
     The page header is the one frosted surface in the app shell: it sits over

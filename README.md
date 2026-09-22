@@ -1921,6 +1921,36 @@ screens (`schools:branch_list`, `fees:term_list`, `fees:term_create`) instead.
 The only remaining `/admin/` link is on the platform overview, whose role *is*
 a superuser.
 
+### Dark mode is a second design, not a filter
+
+The ramps invert for dark mode: `brand-50` is the palest blue in light mode and
+a deep navy in dark, `ink-900` is near-black then near-white. That is what lets
+`text-ink-900` mean "primary text" in both themes without a single `dark:`
+variant in a template — and it is a trap on any surface that does **not**
+invert.
+
+The navy plane is exactly that surface. The sidebar, the hero, the problem
+cards, the closing CTA, the auth visual panel and the 403 band are navy in
+*both* themes, so a brand-ramp colour on them moves while the ground stays
+still. `text-brand-100` on the hero measured **1.01:1** in dark mode —
+invisible, not merely dim.
+
+Four tokens exist for that plane and nothing else should be used there:
+
+| Token | For |
+| --- | --- |
+| `panel-fg` | headings, white |
+| `panel-copy` | body copy |
+| `panel-muted` | secondary text, figures |
+| `panel-subtle` | small uppercase labels |
+
+All four are checked against the panel in both themes by
+`npm run check:contrast`, so the regression cannot come back quietly.
+
+The hero photograph's dim is a token too (`--hero-photo-dim`): the dark-mode
+gradient beneath it is darker, so the same multiplier composites the classroom
+down to nearly nothing. It is lifted in dark rather than shared.
+
 ### Page transitions and reduced motion
 
 Navigation between screens is a cross-document view transition declared in CSS
@@ -1937,6 +1967,22 @@ view-transition pseudo-elements (which `*` cannot reach), and checked in JS
 before any observer is armed. Nothing is hidden and no state becomes
 unreachable — motion is removed, content is not.
 
+### Scrollbars, and a prefix that was doing harm
+
+Scrollbars are themed from `--scrollbar-thumb` / `--scrollbar-track` — both
+`scrollbar-color` (the standard property) and the `::-webkit-scrollbar`
+pseudo-elements, driven by the same tokens. The navy panes take
+`.scroll-on-panel` instead, for the same reason their text takes panel tokens.
+12px, not 6px: shrinking a scrollbar because it looks tidier is a real cost to
+anyone who drags one.
+
+One thing worth knowing if you add another frosted surface: **write
+`backdrop-filter` only, never the `-webkit-` alias.** Lightning CSS prefixes
+from its own browser targets, and seeing both spellings made it treat the
+unprefixed declaration as redundant and drop it — leaving ten of fourteen glass
+rules `-webkit-` only, which is the one spelling Firefox does not support. The
+blur was silently missing there.
+
 ### The low-end device tier
 
 `js/ui.js` sets `<html data-perf="lite">` when the device reports few cores,
@@ -1947,9 +1993,29 @@ becomes a solid tint — so "lite" costs texture, never content or legibility.
 
 ## Layout
 
-`templates/base.html` is the shell every role dashboard extends: permanent
-sidebar from `lg` up, off-canvas drawer below it, sticky header, skip link,
-dependency-free JS. Signed-out pages fill `{% block anonymous_content %}` and
+`templates/base.html` is the shell every role dashboard extends: a
+**collapsible** sidebar from `lg` up, off-canvas drawer below it, sticky
+header, skip link, dependency-free JS.
+
+Collapsing is one attribute — `<html data-sidebar="collapsed">` — which drives
+both the rail's width and the content column's padding through
+`--sidebar-w`. They have to move together or the page tears down the middle,
+and one variable is what guarantees it. The choice is stored in localStorage
+and re-applied by the inline script in `<head>`, the same no-flash trick the
+theme uses, so a collapsed rail is already collapsed in the first frame.
+
+The rail's scroll position is remembered in sessionStorage per navigation. A
+long menu scrolled to Payments used to jump back to the top on every click,
+which on a rail this tall means hunting for your place every time. It is
+written on scroll rather than on `beforeunload`, which is unreliable on mobile
+and blocks the back-forward cache.
+
+**Which row is highlighted** is the *most specific* match, not every match.
+`_resolve` marks an item active when the path starts with its href — right for
+`/students/41/` lighting up Students, wrong when one entry's href is a prefix
+of another's. Four pairs here are (`/fees/` and `/fees/terms/`, `/payments/`
+and `/payments/outstanding/`, …), so opening Terms lit Fee Structures too and
+read exactly like a row that had failed to clear. Signed-out pages fill `{% block anonymous_content %}` and
 skip the shell entirely.
 
 ```

@@ -136,12 +136,35 @@
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
 
-  /* The deep navy plane: sidebar, mobile drawer, closing CTA. Stays dark in
-     both themes -- it is the constant the rest of the UI is measured against
-     -- so its foreground tokens live here rather than borrowing brand-100/200,
-     which invert. */
+  /* The deep navy plane: sidebar, mobile drawer, closing CTA, the hero, the
+     auth visual panel, the problem cards. Stays dark in *both* themes -- it is
+     the constant the rest of the UI is measured against -- so its foreground
+     tokens live here rather than borrowing brand-100/200, which invert.
+
+     That last sentence was a warning this file gave and the landing page then
+     ignored: `text-brand-100` on the hero is a pale blue in light mode and
+     #1c3050 in dark, which is 1.01:1 against the gradient behind it. Invisible,
+     not merely dim. Four tokens, in descending prominence -- fg, copy, muted,
+     subtle -- so there is one for every job and no reason to reach into a ramp
+     that moves. */
+  /* --- Scrollbars -------------------------------------------------------
+     Page chrome, themed like everything else. The thumb is a neutral one step
+     stronger than a card border, so it reads as an object without competing
+     with content; the track stays the page ground so the bar does not draw a
+     stripe down the side of every screen. */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #c3cbd9;
+  --scrollbar-thumb-hover: #8290a8;
+
+  /* How far the hero photograph is knocked back. A token because dark mode
+     needs a different answer: the gradient underneath it is darker there, so
+     the same multiplier composites the picture down to near-black and the
+     classroom stops being visible at all. */
+  --hero-photo-dim: 0.38;
+
   --color-panel: #0f2547;
   --color-panel-fg: #ffffff;
+  --color-panel-copy: #dbe6f7;
   --color-panel-muted: #b8cdec;
   --color-panel-subtle: #8badde;
   --color-scrim: rgb(9 23 50 / 0.6);
@@ -273,10 +296,17 @@
 
   /* The panel stays dark, but lifts away from the darker page ground so the
      sidebar still reads as a separate plane rather than merging with it. */
+  --scrollbar-thumb: #3a4657;
+  --scrollbar-thumb-hover: #5b6b83;
+
+  /* Lifted, against a darker gradient -- see the light-mode note. */
+  --hero-photo-dim: 0.56;
+
   --color-panel: #0b1524;
   --color-panel-fg: #ffffff;
+  --color-panel-copy: #cfdcf0;
   --color-panel-muted: #a8bdda;
-  --color-panel-subtle: #7d96ba;
+  --color-panel-subtle: #8aa3c6;
   --color-scrim: rgb(3 8 16 / 0.72);
 
   /* A mid blue, not a pale one: the label on top stays white in both themes. */
@@ -295,9 +325,12 @@
   --glass-edge: rgb(255 255 255 / 0.16);
   --glass-shadow: 0 16px 40px -20px rgb(0 0 0 / 0.7);
 
-  --glass-dark-bg: rgb(255 255 255 / 0.07);
-  --glass-dark-border: rgb(255 255 255 / 0.14);
-  --glass-dark-edge: rgb(255 255 255 / 0.22);
+  /* Lifted from 7%. On the darker dark-mode gradient a 7% white pane is not a
+     surface, it is a rumour -- the card's own edges disappear and its contents
+     look like they are floating on the page rather than sitting on something. */
+  --glass-dark-bg: rgb(255 255 255 / 0.11);
+  --glass-dark-border: rgb(255 255 255 / 0.2);
+  --glass-dark-edge: rgb(255 255 255 / 0.32);
 
   --gradient-brand: linear-gradient(135deg, #060f21 0%, #0b1524 36%,
                                     #16305c 72%, #1d3f79 100%);
@@ -370,6 +403,69 @@
 
   code, kbd, pre, samp {
     font-family: var(--font-mono);
+  }
+
+  /* --- Scrollbars --------------------------------------------------------
+     The one piece of chrome that was still the operating system's. A pale
+     grey Windows scrollbar down the side of a dark-mode page is the single
+     loudest thing on the screen, and it followed the theme nowhere.
+
+     Two declarations cover everything shipping today: `scrollbar-color` is
+     the standard property (Firefox, and Chromium 121+), and the `::-webkit-`
+     pseudo-elements are the older WebKit/Blink way. Both are driven by the
+     same two tokens, so there is one answer per theme rather than two that
+     drift.
+
+     Deliberately *not* thin: 12px keeps the thumb an easy pointer target.
+     Shrinking a scrollbar to 6px because it looks tidier is a real cost to
+     anyone who drags one. */
+  html {
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background-color: var(--scrollbar-track);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 9999px;
+    /* A transparent border with background-clip is what insets the thumb
+       inside its track -- there is no padding property on a scrollbar. */
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background-color: var(--scrollbar-track);
+  }
+
+  /* The navy panes -- sidebar, mobile drawer -- are dark in both themes, so
+     their scrollbar takes panel tokens rather than page ones for the same
+     reason their text does. */
+  .scroll-on-panel {
+    scrollbar-color: rgb(255 255 255 / 0.28) transparent;
+  }
+
+  .scroll-on-panel::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  .scroll-on-panel::-webkit-scrollbar-thumb {
+    background-color: rgb(255 255 255 / 0.28);
+  }
+
+  .scroll-on-panel::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(255 255 255 / 0.45);
   }
 }
 
@@ -509,7 +605,6 @@
     border-radius: var(--radius-xl);
     box-shadow: var(--glass-shadow);
     backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
   }
 
   /* The top lip catches light the way a real pane of frosted glass does. It
@@ -541,7 +636,6 @@
     border-radius: var(--radius-xl);
     color: var(--color-panel-fg);
     backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
   }
 
   .glass-dark .glass-lit::before,
@@ -558,6 +652,39 @@
     .glass-dark {
       background-color: rgb(15 37 71 / 0.86);
     }
+  }
+
+  /* A card that is glass instead of a solid surface. Composed on top of
+     `.card` -- `class="card card-glass"` -- so everything a card already is
+     (radius, border, shadow, both themes) still holds and only the fill
+     changes.
+
+     Used where a panel sits over something worth seeing through: a section
+     with a tinted ground, a summary floating above a table. Not on a form. A
+     form is read for minutes at a time and deserves an opaque surface.
+
+     Legibility is not left to chance: the fill is `--glass-bg`, which in dark
+     mode is a lightening pane over the page rather than a whitening one, and
+     text on it keeps the same ink tokens a solid card uses. */
+  .card-glass {
+    background-color: var(--glass-bg);
+    border-color: var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  }
+
+  /* A tinted ground for a glass card to actually be glass against. Without
+     something behind it a frosted pane over flat white is just a white box
+     with a slower paint. */
+  .glass-ground {
+    position: relative;
+    isolation: isolate;
+    background-image:
+      radial-gradient(40rem 20rem at 12% 0%,
+                      color-mix(in srgb, var(--color-brand-500) 12%, transparent),
+                      transparent 65%),
+      radial-gradient(34rem 18rem at 88% 100%,
+                      color-mix(in srgb, var(--color-acc-violet) 10%, transparent),
+                      transparent 60%);
   }
 
   /* Composed in markup -- `class="btn btn-primary"`. Tailwind v4's @apply only
@@ -815,7 +942,9 @@
     width: 3px;
     transform: translateY(-50%);
     border-radius: 0 3px 3px 0;
-    background-color: var(--color-brand-300);
+    /* A panel token, not a brand one: this rail is on navy in both themes and
+       the brand ramp inverts underneath it. */
+    background-color: var(--color-panel-muted);
   }
 
   .nav-link-disabled {
@@ -830,6 +959,102 @@
   .nav-section-label {
     @apply px-3 pt-5 pb-1.5 text-[11px] font-semibold uppercase
            tracking-wider text-panel-subtle;
+  }
+
+  /* --- Collapsed sidebar -------------------------------------------------
+     `<html data-sidebar="collapsed">` narrows the rail to its icons and gives
+     the content column the width back. Driven from the root element rather
+     than from the aside so the content column's left padding can follow in the
+     same rule -- the two have to move together or the page tears.
+
+     Width is a token so the transition has one number to interpolate and the
+     shell has one number to read. */
+  :root {
+    --sidebar-w: 16.5rem;
+  }
+
+  :root[data-sidebar="collapsed"] {
+    --sidebar-w: 4.75rem;
+  }
+
+  .app-sidebar {
+    width: var(--sidebar-w);
+    transition: width var(--duration-settle) var(--ease-out);
+  }
+
+  .app-content {
+    transition: padding-left var(--duration-settle) var(--ease-out);
+  }
+
+  @media (min-width: 1024px) {
+    .app-content {
+      padding-left: var(--sidebar-w);
+    }
+  }
+
+  /* Everything that is words rather than an icon folds away. Width and
+     opacity, not `display`, so it animates -- and the row keeps its height so
+     the rail does not jump as it narrows. */
+  :root[data-sidebar="collapsed"] .sidebar-label {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .sidebar-label {
+    opacity: 1;
+    transition: opacity var(--duration-quick) var(--ease-out);
+  }
+
+  /* Section headings have nothing to shrink to -- an uppercase label is not
+     an icon -- so they go entirely, leaving the groups separated by spacing. */
+  :root[data-sidebar="collapsed"] .nav-section-label {
+    height: 0;
+    padding: 0.5rem 0 0;
+    overflow: hidden;
+    opacity: 0;
+  }
+
+  :root[data-sidebar="collapsed"] .nav-link,
+  :root[data-sidebar="collapsed"] .sidebar-row {
+    @apply justify-center px-0;
+  }
+
+  /* The active rail is drawn relative to the row's padding, which just went
+     away. */
+  :root[data-sidebar="collapsed"] .nav-link-active::before {
+    left: -0.5rem;
+  }
+
+  /* A collapsed rail has no room for a label, so the title attribute becomes
+     the only affordance. Nothing is hidden from a screen reader: the link
+     text is still in the accessibility tree, merely clipped. */
+  .sidebar-toggle {
+    @apply grid size-9 shrink-0 place-items-center rounded-sm text-panel-muted
+           hover:bg-white/10 hover:text-panel-fg;
+    transition: background-color var(--duration-quick) var(--ease-out),
+                color var(--duration-quick) var(--ease-out),
+                transform var(--duration-settle) var(--ease-out);
+  }
+
+  :root[data-sidebar="collapsed"] .sidebar-toggle svg {
+    transform: rotate(180deg);
+  }
+
+  .sidebar-toggle svg {
+    transition: transform var(--duration-settle) var(--ease-spring);
+  }
+
+  /* Shown only while the rail is narrow. The expand control cannot live beside
+     the wordmark, because the wordmark is one of the things that folded away. */
+  .sidebar-collapsed-only {
+    display: none;
+  }
+
+  :root[data-sidebar="collapsed"] .sidebar-collapsed-only {
+    display: flex;
   }
 
   /* The sidebar's own glyphs sit in a small tinted tile rather than floating
@@ -1158,7 +1383,6 @@
     border-color: var(--glass-border);
     color: var(--color-ink-900);
     backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
   }
 
   .toast-info .toast-icon {
@@ -1169,6 +1393,19 @@
     .toast-info {
       background-color: var(--color-surface);
     }
+  }
+
+  /* An image waiting for the observer. Dimmed rather than absent, so the row
+     keeps its height and the list does not reflow as each one arrives. */
+  img[data-src] {
+    opacity: 0;
+    background-color: var(--color-ink-100);
+  }
+
+  img[data-src].is-loaded,
+  img.is-loaded {
+    opacity: 1;
+    transition: opacity var(--duration-settle) var(--ease-out);
   }
 
   /* --- Deferred sections -------------------------------------------------
@@ -1217,7 +1454,6 @@
     border-bottom-color: var(--color-ink-200);
     box-shadow: 0 8px 30px -20px rgb(9 23 50 / 0.4);
     backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
   }
 
   /* Over the hero the bar's links are on the dark gradient; once scrolled
@@ -1234,8 +1470,13 @@
 
   /* The scroll-spy marker. Driven by ui.js, which sets `aria-current` on the
      link whose section is in view -- so the indicator and the accessible
-     state are the same fact, not two that can disagree. */
-  .lp-nav-link[aria-current="true"]::after {
+     state are the same fact, not two that can disagree.
+
+     The underline is present on every link and simply scaled to nothing, so
+     becoming current is a transition on one compositor-friendly property
+     rather than an element appearing. `transform-origin: left` is what makes
+     it draw itself left to right instead of growing from the middle. */
+  .lp-nav-link::after {
     content: "";
     position: absolute;
     left: 0.75rem;
@@ -1244,6 +1485,30 @@
     height: 2px;
     border-radius: 2px;
     background-color: currentColor;
+    opacity: 0.85;
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform var(--duration-settle) var(--ease-out);
+  }
+
+  .lp-nav-link[aria-current="true"]::after {
+    transform: scaleX(1);
+  }
+
+  /* Leaving retracts to the right, so the line withdraws the way it came
+     rather than snapping back through its own start. */
+  .lp-nav-link:not([aria-current="true"])::after {
+    transform-origin: right center;
+  }
+
+  /* A hint of the same line on hover, so the affordance and the state are
+     visibly the same mechanism. */
+  .lp-nav-link:hover::after {
+    transform: scaleX(1);
+    opacity: 0.35;
+  }
+
+  .lp-nav-link[aria-current="true"]:hover::after {
     opacity: 0.85;
   }
 
@@ -1342,7 +1607,7 @@
        property of the asset, and `LandingView.HERO_IMAGE` carries the rule:
        an empty room, desks or a chalkboard, never an identifiable child. */
     filter: grayscale(1) sepia(0.6) hue-rotate(175deg) saturate(1.6)
-            brightness(0.38) contrast(1.05) blur(10px);
+            brightness(var(--hero-photo-dim)) contrast(1.05) blur(10px);
     /* Scaled up so the blur's soft edge falls outside the viewport instead of
        showing as a pale rim. */
     transform: scale(1.12);
@@ -1391,7 +1656,6 @@
     background-color: var(--glass-dark-bg);
     border: 1px solid var(--glass-dark-border);
     backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
   }
 
   /* --- Floating product cards -------------------------------------------
@@ -1427,7 +1691,6 @@
     border-radius: var(--radius-2xl);
     color: var(--color-panel-fg);
     backdrop-filter: blur(var(--glass-blur)) saturate(130%);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%);
     transition: transform var(--duration-settle) var(--ease-out),
                 background-color var(--duration-settle) var(--ease-out),
                 border-color var(--duration-settle) var(--ease-out);
@@ -1479,7 +1742,6 @@
     background-color: var(--glass-bg);
     border-color: var(--glass-border);
     backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
   }
 
   /* The one tile drawn on the brand gradient, as the grid's anchor. */
@@ -1508,7 +1770,7 @@
     color: var(--accent-solid, var(--color-brand-700));
   }
 
-  .bento-item.is-brand .bento-answers { color: var(--color-brand-200); }
+  .bento-item.is-brand .bento-answers { color: var(--color-panel-muted); }
 
   .bento-wide { @apply lg:col-span-4; }
   .bento-half { @apply lg:col-span-3; }
@@ -1654,6 +1916,34 @@
      you came from; absent, the entry is the short version. */
   .auth-shell.is-swapping {
     --auth-shift: 62%;
+  }
+
+  /* --- The in-place switch -----------------------------------------------
+     Both panels live in the DOM, so which side the visual panel sits on is a
+     grid `order`, and moving it is a class change rather than a navigation.
+
+     `order` is not animatable, so the movement is a transform played over the
+     top: the two halves slide the width of one column while the order flips
+     under them. That is what makes it read as the panel crossing the screen
+     rather than teleporting. */
+  .auth-shell[data-auth-panel="login"] .auth-visual    { @apply lg:order-1; }
+  .auth-shell[data-auth-panel="login"] .auth-form-side { @apply lg:order-2; }
+  .auth-shell[data-auth-panel="signup"] .auth-visual    { @apply lg:order-2; }
+  .auth-shell[data-auth-panel="signup"] .auth-form-side { @apply lg:order-1; }
+
+  .auth-shell.is-switching .auth-visual {
+    animation: auth-cross var(--duration-slow) var(--ease-spring);
+  }
+
+  .auth-shell.is-switching .auth-form-side {
+    animation: auth-cross-back var(--duration-slow) var(--ease-spring);
+  }
+
+  /* The panel contents cross-fade while the halves move, so the copy does not
+     appear to snap from one sentence to another mid-slide. */
+  .auth-shell.is-switching [data-auth-form-for],
+  .auth-shell.is-switching [data-auth-visual-for] {
+    animation: auth-fade-in var(--duration-slow) var(--ease-out);
   }
 
   /* The decorative orbs on the visual panel. Two soft radial blooms, which is
@@ -1811,7 +2101,6 @@
            gap-3 border-t border-ink-200 px-4 py-3 sm:px-5;
     background-color: var(--glass-bg-strong);
     backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
   }
 }
 
@@ -1842,7 +2131,6 @@
 :root[data-perf="lite"] .toast-info,
 :root[data-perf="lite"] .hero-badge {
   backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 /* A toast is the one glass surface that moves, so on a weak device it is also
@@ -1867,7 +2155,7 @@
    contributing. */
 :root[data-perf="lite"] .hero-photo {
   filter: grayscale(1) sepia(0.6) hue-rotate(175deg) saturate(1.6)
-          brightness(0.32);
+          brightness(calc(var(--hero-photo-dim) - 0.06));
   transform: none;
 }
 
@@ -1915,6 +2203,25 @@
 @keyframes auth-slide-in-right {
   from { opacity: 0; transform: translateX(var(--auth-shift, 6%)); }
   to   { opacity: 1; transform: none; }
+}
+
+/* The in-place switch. The halves travel one column's width in opposite
+   directions while the grid `order` flips underneath, which is what sells it
+   as one panel crossing the other rather than two panels blinking. */
+@keyframes auth-cross {
+  from { transform: translateX(var(--auth-cross-from, -100%)); }
+  to   { transform: none; }
+}
+
+@keyframes auth-cross-back {
+  from { transform: translateX(var(--auth-cross-to, 100%)); }
+  to   { transform: none; }
+}
+
+@keyframes auth-fade-in {
+  from { opacity: 0; }
+  40%  { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @keyframes page-enter {

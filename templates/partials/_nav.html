@@ -9,7 +9,8 @@ to brighten. The active row also carries a rail on the left edge -- so which
 page you are on survives being glanced at, instead of resting on a five-percent
 background difference.
 {% endcomment %}
-<nav class="flex-1 overflow-y-auto px-3 pb-6" aria-label="{{ nav_label|default:'Main' }}">
+<nav class="scroll-on-panel flex-1 overflow-y-auto px-3 pb-6"
+     aria-label="{{ nav_label|default:'Main' }}" data-sidebar-scroll>
   {% for section in nav_sections %}
     <div class="nav-section-label">{{ section.label }}</div>
     <ul class="space-y-1">
@@ -18,6 +19,7 @@ background difference.
           {% if item.available %}
             <a href="{{ item.href }}"
                class="nav-link {% if item.active %}nav-link-active{% endif %}"
+               title="{{ item.label }}"
                {% if item.active %}aria-current="page"{% endif %}>
               <span class="nav-icon">
                 <svg class="size-[18px]" fill="none" viewBox="0 0 24 24"
@@ -27,7 +29,7 @@ background difference.
                   {% endfor %}
                 </svg>
               </span>
-              <span class="truncate">{{ item.label }}</span>
+              <span class="sidebar-label truncate">{{ item.label }}</span>
             </a>
           {% else %}
             {% comment %}
@@ -49,9 +51,10 @@ background difference.
                   {% endfor %}
                 </svg>
               </span>
-              <span class="truncate">{{ item.label }}</span>
-              <span class="ml-auto rounded-xs bg-white/10 px-1.5 py-0.5 text-[10px]
-                           font-semibold uppercase tracking-wide text-panel-subtle/80">
+              <span class="sidebar-label truncate">{{ item.label }}</span>
+              <span class="sidebar-label ml-auto rounded-xs bg-white/10 px-1.5 py-0.5
+                           text-[10px] font-semibold uppercase tracking-wide
+                           text-panel-subtle/80">
                 soon
               </span>
             </span>

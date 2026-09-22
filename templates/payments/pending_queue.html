@@ -131,10 +131,24 @@
                   </a>
                 {% else %}
                   <a href="{{ payment.receipt.url }}" target="_blank" rel="noopener">
-                    <img src="{{ payment.receipt.url }}" loading="lazy" decoding="async"
-                         alt="Receipt for {{ payment.amount }}"
+                    {% comment %}
+                    The one screen with a real lazy-loading case: a queue of
+                    uploaded receipts, one per pending payment. `data-src` is
+                    picked up by the IntersectionObserver in js/ui.js, which
+                    starts the fetch a screen and a half early and fades each
+                    in. The <noscript> twin means a blocked script costs
+                    nothing at all.
+                    {% endcomment %}
+                    <img data-src="{{ payment.receipt.url }}" loading="lazy"
+                         decoding="async" alt="Receipt for {{ payment.amount }}"
                          class="mt-2 max-h-56 w-full rounded-md border border-ink-200
                                 object-contain">
+                    <noscript>
+                      <img src="{{ payment.receipt.url }}"
+                           alt="Receipt for {{ payment.amount }}"
+                           class="mt-2 max-h-56 w-full rounded-md border border-ink-200
+                                  object-contain">
+                    </noscript>
                   </a>
                 {% endif %}
               {% else %}

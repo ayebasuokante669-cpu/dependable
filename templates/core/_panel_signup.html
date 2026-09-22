@@ -1,0 +1,57 @@
+{% comment %}
+The sign-up panel. The sibling of registration/_panel_login.html -- see that
+file for why both live on both auth URLs.
+
+Takes `form`. On /accounts/login/ the page's `form` is the sign-in form, so
+this is included with `form=signup_form` instead.
+{% endcomment %}
+<p class="text-sm font-semibold uppercase tracking-wider text-brand-600">
+  Start your journey
+</p>
+<h1 class="mt-2 text-2xl font-bold tracking-tight text-ink-900 sm:text-3xl">
+  Create your school account
+</h1>
+<p class="mt-3 text-sm text-ink-600">
+  Let&rsquo;s get your school started. No card needed.
+</p>
+
+{% if form.non_field_errors %}
+  <div class="mt-5 rounded-md border border-overdue/30 bg-overdue-soft px-4 py-3
+              text-sm text-overdue-strong" role="alert">
+    {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+  </div>
+{% endif %}
+
+<form method="post" action="{% url 'core:signup' %}" class="mt-7 space-y-5" novalidate>
+  {% csrf_token %}
+
+  {% include "partials/_field.html" with field=form.school_name %}
+  {% include "partials/_field.html" with field=form.full_name %}
+  {% include "partials/_field.html" with field=form.email %}
+  {% include "partials/_field.html" with field=form.password %}
+  {% include "partials/_field.html" with field=form.password_confirm %}
+
+  <button type="submit" class="btn btn-primary w-full">
+    Create account and continue
+    <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+         stroke="currentColor" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round"
+            d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+    </svg>
+  </button>
+</form>
+
+<p class="mt-5 text-xs text-ink-500">
+  You will be signed in as the school owner, able to see every campus you add.
+  Creating an account means you accept our
+  <a href="{% url 'core:privacy' %}" class="font-medium text-brand-700 hover:underline">
+    privacy policy</a>, which sets out how your school's data is handled.
+</p>
+
+<p class="mt-7 text-sm text-ink-600">
+  Already have an account?
+  <a href="{% url 'login' %}" class="font-semibold text-brand-700 hover:underline"
+     data-auth-switch="login">
+    Welcome back — log in
+  </a>
+</p>

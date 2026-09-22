@@ -127,6 +127,17 @@ class RoleAwareLoginView(LoginView):
     def get_default_redirect_url(self) -> str:
         return home_url_for(self.request.user)
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Sign in"
+        # Both panels are rendered so switching between them costs no round
+        # trip -- see registration/_auth_switch.html. The counterpart form is
+        # unbound: nothing was submitted to it.
+        context["auth_panel"] = "login"
+        context["login_form"] = context["form"]
+        context["signup_form"] = SchoolSignupForm()
+        return context
+
     def form_valid(self, form):
         response = super().form_valid(form)
         # Greeting the person by name is the confirmation: it says the sign-in
@@ -144,11 +155,6 @@ class RoleAwareLoginView(LoginView):
             self.request, "Sign-in failed. Check the email and password."
         )
         return super().form_invalid(form)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["page_title"] = "Sign in"
-        return context
 
 
 class BrandedLogoutView(LogoutView):
@@ -226,6 +232,18 @@ class SignupView(FormView):
     template_name = "core/signup.html"
     form_class = SchoolSignupForm
     extra_context = {"page_title": "Create your school account"}
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["auth_panel"] = "signup"
+        context["signup_form"] = context["form"]
+        # Imported here rather than at module scope: core importing the auth
+        # form at load time would have core and django.contrib.auth reaching
+        # into each other before either app registry is ready.
+        from django.contrib.auth.forms import AuthenticationForm
+
+        context["login_form"] = AuthenticationForm()
+        return context
 
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:

@@ -9,6 +9,7 @@ built.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 
 from django.urls import NoReverseMatch, reverse
@@ -353,4 +354,35 @@ def nav_for(
         ]
         if items:
             sections.append(ResolvedSection(label=section.label, items=items))
+    _keep_only_the_closest_match(sections)
     return sections
+
+
+def _keep_only_the_closest_match(sections: list[ResolvedSection]) -> None:
+    """Leave exactly one row highlighted: the most specific one.
+
+    ``_resolve`` marks an item active when the current path *starts with* its
+    href, which is right for "/students/41/" lighting up Students, and wrong
+    whenever one entry's href is a prefix of another's. Four pairs in this menu
+    are exactly that -- ``/fees/`` and ``/fees/terms/``, ``/payments/`` and
+    ``/payments/outstanding/``, ``/admissions/`` and ``/admissions/new/``,
+    ``/messaging/`` and ``/messaging/identity/`` -- so opening Terms lit up
+    Fee Structures as well and read as the previous row having failed to clear.
+
+    Resolved here rather than in ``_resolve`` because it is not a question one
+    item can answer: which match is closest is only knowable once every
+    candidate has been seen. The longest href wins, since a longer prefix of
+    the same path is by definition the deeper page.
+    """
+    active = [item for s in sections for item in s.items if item.active]
+    if len(active) < 2:
+        return
+    deepest = max(len(item.href) for item in active)
+
+    # ResolvedItem is frozen, so the losers are replaced rather than edited.
+    # The section's list is mutable even though its items are not, which is
+    # what lets this happen in place.
+    for section in sections:
+        for index, item in enumerate(section.items):
+            if item.active and len(item.href) < deepest:
+                section.items[index] = dataclasses.replace(item, active=False)

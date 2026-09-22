@@ -1,11 +1,57 @@
-{% comment %}Brand mark plus the tenant the current user is acting for.{% endcomment %}
+{% comment %}
+Brand mark, the collapse control, and the tenant the current user is acting for.
+
+`collapsible` is passed only by the desktop rail. The mobile drawer includes
+this same partial and must not offer the control: it is already an overlay that
+closes, and a "make me narrower" button inside it would collapse a rail nobody
+can see.
+{% endcomment %}
 <div class="px-4 pt-5 pb-4">
-  <div class="flex items-center gap-2.5 px-1">
+  <div class="sidebar-row flex items-center gap-2.5 px-1">
     {% include "partials/_brand_mark.html" with tone="light" %}
-    <span class="text-base font-semibold tracking-tight text-panel-fg">
+    <span class="sidebar-label text-base font-semibold tracking-tight text-panel-fg">
       {{ product_name }}
     </span>
+
+    {% if collapsible %}
+      {% comment %}
+      Ships hidden and is revealed by js/ui.js: collapsing is entirely a
+      client-side affair, so without the script this would be a control that
+      visibly does nothing. `aria-expanded` carries the state, and the label
+      says what pressing it will do rather than what it currently is.
+      {% endcomment %}
+      <button type="button" class="sidebar-toggle sidebar-label ml-auto"
+              data-sidebar-toggle aria-expanded="true"
+              aria-controls="app-sidebar" title="Collapse the sidebar" hidden>
+        <span class="sr-only">Collapse the sidebar</span>
+        <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+             stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M15.75 19.5 8.25 12l7.5-7.5" />
+        </svg>
+      </button>
+    {% endif %}
   </div>
+
+  {% if collapsible %}
+    {% comment %}
+    The same control again, on its own row, for the collapsed state -- where the
+    one above has folded away with the wordmark it sits beside. Only one of the
+    two is ever on screen.
+    {% endcomment %}
+    <div class="sidebar-collapsed-only mt-3 justify-center">
+      <button type="button" class="sidebar-toggle" data-sidebar-toggle
+              aria-expanded="false" aria-controls="app-sidebar"
+              title="Expand the sidebar">
+        <span class="sr-only">Expand the sidebar</span>
+        <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+             stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M15.75 19.5 8.25 12l7.5-7.5" />
+        </svg>
+      </button>
+    </div>
+  {% endif %}
 
   {% if current_school %}
     {% comment %}
@@ -13,10 +59,10 @@
     logo when it has uploaded one -- this is the school's software while they
     are inside it, and SCHOOLCORD's mark above already says whose software.
     {% endcomment %}
-    <div class="mt-5 flex items-center gap-3 rounded-md border border-white/10
-                bg-white/10 px-3 py-3">
+    <div class="sidebar-row mt-5 flex items-center gap-3 rounded-md border
+                border-white/10 bg-white/10 px-3 py-3">
       {% include "partials/_school_logo.html" with school=current_school size="size-9" tone="light" %}
-      <div class="min-w-0">
+      <div class="sidebar-label min-w-0">
         <div class="truncate text-sm font-semibold text-panel-fg">{{ current_school.name }}</div>
         <div class="mt-0.5 truncate text-xs text-panel-muted">
           {% if current_branch %}{{ current_branch.name }}{% else %}All branches{% endif %}
@@ -25,7 +71,7 @@
       </div>
     </div>
   {% elif current_role_label %}
-    <div class="mt-5 rounded-md border border-white/10 bg-white/10 px-3 py-3">
+    <div class="sidebar-label mt-5 rounded-md border border-white/10 bg-white/10 px-3 py-3">
       <div class="text-sm font-semibold text-panel-fg">Platform</div>
       <div class="mt-0.5 text-xs text-panel-muted">All schools</div>
     </div>

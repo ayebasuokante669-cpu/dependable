@@ -119,7 +119,7 @@ text beside the bar, so the page is readable without reading a picture.
   </div>
 
   {# ===== The two pictures =============================================== #}
-  <div class="grid gap-4 lg:grid-cols-2">
+  <div class="glass-ground grid gap-4 rounded-2xl lg:grid-cols-2">
 
     {% comment %}
     Collection against the term. One measure against its own whole, so it is a
@@ -128,7 +128,7 @@ text beside the bar, so the page is readable without reading a picture.
     because money handed in but not yet confirmed is genuinely a third state,
     and a bursar reading this needs to see it separately from both.
     {% endcomment %}
-    <div class="card p-5 sm:p-6">
+    <div class="card card-glass p-5 sm:p-6">
       <div class="flex items-baseline justify-between gap-3">
         <h2 class="text-sm font-semibold text-ink-900">Collected against the term</h2>
         <p class="numeric text-2xl font-bold text-brand-900">
@@ -181,7 +181,7 @@ text beside the bar, so the page is readable without reading a picture.
     </div>
 
     {# The roster split across the four payment states. #}
-    <div class="card p-5 sm:p-6">
+    <div class="card card-glass p-5 sm:p-6">
       {% include "partials/_status_breakdown.html" with breakdown=status.buckets breakdown_total=status.total %}
       {% if status.total %}
         <a href="{% url 'payments:outstanding' %}"

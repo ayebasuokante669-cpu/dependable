@@ -101,6 +101,10 @@ const PAIRS = [
 
   // The navy panel, which stays dark in both themes.
   ['panel-fg', 'panel', 4.5, 'sidebar product name'],
+  // Body copy on any navy surface -- the hero subheadline, the problem cards,
+  // the auth visual panel. This pair is what `text-brand-100` used to be, and
+  // that was 1.01:1 in dark mode.
+  ['panel-copy', 'panel', 4.5, 'body copy on the navy plane'],
   ['panel-muted', 'panel', 4.5, 'sidebar nav link'],
   ['panel-subtle', 'panel', 3.0, 'sidebar section label (uppercase, small)'],
 

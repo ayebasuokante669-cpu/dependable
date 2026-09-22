@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% comment %}
+The sign-in / sign-up split panel, with **both** panels in the DOM.
+
+Used by /accounts/login/ and /signup/ alike. Each renders the same markup and
+differs only in `auth_panel`, which says which side starts showing. Because
+both forms are already present, switching between them is a class change and
+an animation -- no fetch, no navigation, nothing to wait for. js/ui.js
+(`initAuthSwitch`) also rewrites the URL with `history.pushState`, so the
+address bar, the back button and a bookmark all still agree with what is on
+screen.
+
+Without JavaScript the switch links are ordinary hrefs to the other URL and the
+page loads as it always did, showing that page's panel. The only thing lost is
+the instant transition.
+
+Each form posts to its own action, so a sign-in submitted while the URL says
+/signup/ still reaches the login view.
+
+The password-reset screens keep using _auth_base.html: they are one panel with
+nothing to switch to.
+{% endcomment %}
+
+{% block anonymous_content %}
+<div class="auth-shell" data-auth-shell data-auth-panel="{{ auth_panel|default:'login' }}">
+
+  {% comment %}
+  The visual panel. Its *contents* differ per side, so both are rendered and
+  the inactive one is hidden -- the panel itself never moves in the DOM, which
+  is what lets the side swap be a CSS `order` change the browser can animate.
+  {% endcomment %}
+  <aside class="auth-visual" data-auth-visual aria-label="About {{ product_name }}">
+    <span class="auth-orb -left-20 -top-24 size-[26rem]" aria-hidden="true"
+          style="background: radial-gradient(circle, #3566b3, transparent 65%);"></span>
+    <span class="auth-orb -bottom-32 -right-24 size-[30rem]" aria-hidden="true"
+          style="background: radial-gradient(circle, #245096, transparent 68%);"></span>
+
+    <a href="{% url 'core:landing' %}" class="flex items-center gap-2.5">
+      {% include "partials/_brand_mark.html" with size="size-10" %}
+      <span class="text-lg font-semibold tracking-tight text-white">
+        {{ product_name }}
+      </span>
+    </a>
+
+    <div class="max-w-md">
+      {# --- the sign-in side --- #}
+      <div data-auth-visual-for="login"{% if auth_panel == "signup" %} hidden{% endif %}>
+        <h2 class="text-3xl font-bold leading-tight tracking-tight text-white">
+          Know what every child owes, and who has paid
+        </h2>
+        <p class="mt-5 text-base leading-relaxed text-panel-copy">
+          Fees, students and parent messages in one place — for schools that
+          are tired of three notebooks disagreeing with each other.
+        </p>
+        <div class="glass-dark glass-lit mt-10 p-5">
+          <p class="text-xs font-medium uppercase tracking-wider text-panel-muted">
+            Collected this term
+          </p>
+          <p class="numeric mt-1.5 text-2xl font-bold text-white">&#8358;4,820,000</p>
+          <div class="chart-stack mt-4">
+            <span class="chart-stack-part"
+                  style="--part: 56%; --part-color: var(--color-paid);"></span>
+            <span class="chart-stack-part"
+                  style="--part: 19%; --part-color: var(--color-partial);"></span>
+            <span class="chart-stack-part"
+                  style="--part: 16%; --part-color: var(--color-unpaid);"></span>
+            <span class="chart-stack-part"
+                  style="--part: 9%; --part-color: var(--color-overdue);"></span>
+          </div>
+          <p class="mt-3 text-xs text-panel-muted">
+            Paid &middot; Part paid &middot; Unpaid &middot; Overdue
+          </p>
+        </div>
+      </div>
+
+      {# --- the sign-up side: the road ahead, since there are no figures yet --- #}
+      <div data-auth-visual-for="signup"{% if auth_panel != "signup" %} hidden{% endif %}>
+        <h2 class="text-3xl font-bold leading-tight tracking-tight text-white">
+          Everything your school owes, in one place from day one
+        </h2>
+        <p class="mt-5 text-base leading-relaxed text-panel-copy">
+          This creates your school, its first campus and your owner account —
+          then walks you through classes, fees, students and staff.
+        </p>
+        <ul class="mt-10 space-y-4">
+          <li class="flex items-start gap-3.5">
+            <span class="grid size-7 shrink-0 place-items-center rounded-sm bg-white/15
+                         text-xs font-bold text-white">1</span>
+            <span class="text-sm text-panel-copy">
+              Tell us about your school — classes and campuses
+            </span>
+          </li>
+          <li class="flex items-start gap-3.5">
+            <span class="grid size-7 shrink-0 place-items-center rounded-sm bg-white/15
+                         text-xs font-bold text-white">2</span>
+            <span class="text-sm text-panel-copy">
+              Set up your fees, as line items that add themselves up
+            </span>
+          </li>
+          <li class="flex items-start gap-3.5">
+            <span class="grid size-7 shrink-0 place-items-center rounded-sm bg-white/15
+                         text-xs font-bold text-white">3</span>
+            <span class="text-sm text-panel-copy">
+              Bring in the student list you already keep
+            </span>
+          </li>
+          <li class="flex items-start gap-3.5">
+            <span class="grid size-7 shrink-0 place-items-center rounded-sm bg-white/15
+                         text-xs font-bold text-white">4</span>
+            <span class="text-sm text-panel-copy">
+              Invite your staff, each with their own access
+            </span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="text-xs text-panel-subtle">{{ product_tagline }}.</p>
+  </aside>
+
+  {# ===== The form side =================================================== #}
+  <div class="auth-form-side" data-auth-form>
+    <div class="w-full max-w-md">
+
+      {# The banner the visual panel collapses into on a phone. #}
+      <a href="{% url 'core:landing' %}"
+         class="mb-8 flex items-center justify-center gap-2.5 lg:hidden">
+        {% include "partials/_brand_mark.html" with size="size-10" %}
+        <span class="text-xl font-semibold tracking-tight text-brand-900">
+          {{ product_name }}
+        </span>
+      </a>
+
+      <div data-auth-form-for="login"{% if auth_panel == "signup" %} hidden{% endif %}>
+        {% include "registration/_panel_login.html" with form=login_form %}
+      </div>
+
+      <div data-auth-form-for="signup"{% if auth_panel != "signup" %} hidden{% endif %}>
+        {% include "core/_panel_signup.html" with form=signup_form %}
+      </div>
+
+      <div class="mt-10 flex justify-center">
+        {% include "partials/_theme_toggle.html" %}
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}
