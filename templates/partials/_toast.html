@@ -2,14 +2,18 @@
 One toast. Takes `level` (success / error / warning / info), `label` (the
 category as a word) and `body` (the message).
 
-Ships with `is-in is-open` — fully risen and open — so the message is readable
-with no JavaScript at all. js/ui.js strips both classes on load and plays the
-entrance properly.
+Ships with `is-in is-open is-lit` — risen, open and with its words showing — so
+the message is readable with no JavaScript at all. js/ui.js strips all three on
+load and plays the entrance properly.
+
+`is-lit` is the third state, and it is what fixes the crushed-text close: the
+words fade on their own, after the panel has opened and before it closes again.
+See the `.toast-panel > div` rule in assets/app.css.
 
 The icons are the same four glyphs js/ui.js draws for toasts it creates, so a
 message from the server and one raised in the browser are indistinguishable.
 {% endcomment %}
-<div class="toast toast-{{ level }} is-in is-open" data-toast
+<div class="toast toast-{{ level }} is-in is-open is-lit" data-toast
      data-toast-level="{{ level }}">
 
   <span class="toast-icon">

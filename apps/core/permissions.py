@@ -34,6 +34,12 @@ class Capability(str, Enum):
     VIEW_MESSAGING_IDENTITY = "view_messaging_identity"
     MANAGE_MESSAGING_IDENTITY = "manage_messaging_identity"
     MANAGE_SCHOOL_PROFILE = "manage_school_profile"
+    # The school's logo, separately from the rest of its profile. A principal
+    # corrects a misspelled school name or a wrong office number; what the
+    # school *looks like* to parents on a receipt is the proprietor's call, and
+    # they were explicit about that. Held by the school owner and the platform,
+    # never by a principal.
+    MANAGE_SCHOOL_LOGO = "manage_school_logo"
     # The school's campuses and the people who work at it. Separate from
     # MANAGE_SCHOOL_PROFILE because opening a second campus, or changing who
     # may sign in, is the proprietor's decision rather than the principal's.
@@ -60,6 +66,11 @@ class Capability(str, Enum):
     # their own invoice. Granted only in _PLATFORM below, and it is the one
     # capability deliberately absent from a school owner's set.
     MANAGE_SCHOOL_MODULES = "manage_school_modules"
+    # Switching an account off without deleting it. The platform's, for the same
+    # reason the modules are: it is how a school's access is suspended, and a
+    # proprietor who could do it could also lock out the platform's own support
+    # account at their school.
+    DEACTIVATE_ACCOUNTS = "deactivate_accounts"
 
 
 #: Owner- and principal-level roles: set up the school, who attends it, and what
@@ -100,11 +111,16 @@ _LEADERSHIP = frozenset(
 #: Opening a campus and changing who may sign in. The proprietor's decisions,
 #: and the platform's on their behalf -- not the principal's, who runs one
 #: campus rather than deciding how many there are.
+#:
+#: The logo sits here rather than in _LEADERSHIP for the same reason: a principal
+#: may correct the school's name or its office number, and does not choose the
+#: mark that goes on every receipt a parent is handed.
 _SCHOOL_ADMIN = frozenset(
     {
         Capability.MANAGE_BRANCHES,
         Capability.MANAGE_STAFF,
         Capability.MANAGE_ADMISSION_REQUIREMENTS,
+        Capability.MANAGE_SCHOOL_LOGO,
     }
 )
 
@@ -121,7 +137,11 @@ _SCHOOL_ADMIN = frozenset(
 _PLATFORM = (
     _LEADERSHIP
     | _SCHOOL_ADMIN
-    | {Capability.MANAGE_MESSAGING_IDENTITY, Capability.MANAGE_SCHOOL_MODULES}
+    | {
+        Capability.MANAGE_MESSAGING_IDENTITY,
+        Capability.MANAGE_SCHOOL_MODULES,
+        Capability.DEACTIVATE_ACCOUNTS,
+    }
 )
 
 #: A bursar collects against the fee structure but does not decide it, and

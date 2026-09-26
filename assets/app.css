@@ -971,10 +971,39 @@
      shell has one number to read. */
   :root {
     --sidebar-w: 16.5rem;
+    --sidebar-pad: 0.75rem;
   }
 
   :root[data-sidebar="collapsed"] {
     --sidebar-w: 4.75rem;
+    /* The rail's own horizontal padding goes to zero when it narrows, so every
+       glyph -- the brand mark, the hamburger, each nav icon, the avatar -- sits
+       centred on one vertical axis. With the expanded paddings left in place the
+       header (1rem), the nav (0.75rem) and the footer (0.75rem) each centred
+       their contents on a slightly different line, which is what read as
+       "cramped and misaligned". */
+    --sidebar-pad: 0rem;
+  }
+
+  /* The one place the rail's horizontal padding is declared. Applied in markup
+     as `sidebar-pad` instead of a `px-*` utility, because a utility sits in a
+     later layer and cannot be overridden from here. */
+  .sidebar-pad {
+    padding-left: var(--sidebar-pad);
+    padding-right: var(--sidebar-pad);
+    transition: padding var(--duration-settle) var(--ease-out);
+  }
+
+  /* The school / platform card in the header. Expanded it is a tinted box with
+     the school's name in it; collapsed there is no name, so it becomes a square
+     around the logo rather than a box stretched across an empty rail. */
+  .sidebar-card {
+    @apply rounded-md border border-white/10 bg-white/10 px-3 py-3;
+    transition: padding var(--duration-settle) var(--ease-out);
+  }
+
+  :root[data-sidebar="collapsed"] .sidebar-card {
+    @apply mx-auto w-fit p-2;
   }
 
   .app-sidebar {
@@ -1008,13 +1037,26 @@
     transition: opacity var(--duration-quick) var(--ease-out);
   }
 
-  /* Section headings have nothing to shrink to -- an uppercase label is not
-     an icon -- so they go entirely, leaving the groups separated by spacing. */
+  /* Section headings have nothing to shrink to -- an uppercase label is not an
+     icon -- so the words go. A hairline goes in their place: without it the
+     groups run together into one undifferentiated column of glyphs, and the
+     sections are the only thing telling a bursar that Payments and Messaging are
+     different parts of the app. Drawn as a border on a zero-height box, so it
+     costs no layout. */
   :root[data-sidebar="collapsed"] .nav-section-label {
     height: 0;
-    padding: 0.5rem 0 0;
+    padding: 0;
+    margin: 0.75rem 0.85rem 0.6rem;
     overflow: hidden;
     opacity: 0;
+    border-top: 1px solid rgb(255 255 255 / 0.12);
+  }
+
+  /* The first group needs no rule above it -- there is nothing to separate it
+     from but the school card, which has its own edge. */
+  :root[data-sidebar="collapsed"] .nav-section-label:first-child {
+    border-top: 0;
+    margin-top: 0.25rem;
   }
 
   :root[data-sidebar="collapsed"] .nav-link,
@@ -1022,30 +1064,49 @@
     @apply justify-center px-0;
   }
 
+  /* Comfortable targets once the label is gone: the row shrinks to its glyph,
+     and a 2.25rem glyph in a 2.75rem row is the smallest thing that still reads
+     as a button rather than a dot. */
+  :root[data-sidebar="collapsed"] .nav-link {
+    @apply h-11 gap-0;
+  }
+
+  :root[data-sidebar="collapsed"] .nav-icon {
+    @apply size-9;
+  }
+
+  :root[data-sidebar="collapsed"] .nav-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
   /* The active rail is drawn relative to the row's padding, which just went
-     away. */
+     away. Flush to the rail's own edge, which is now the row's edge. */
   :root[data-sidebar="collapsed"] .nav-link-active::before {
-    left: -0.5rem;
+    left: 0;
+  }
+
+  /* The "soon" tag on an unbuilt destination is a `sidebar-label` and folds with
+     the rest of the words, but its `ml-auto` survives and pushes the glyph off
+     centre. */
+  :root[data-sidebar="collapsed"] .nav-link .sidebar-label {
+    margin-left: 0;
   }
 
   /* A collapsed rail has no room for a label, so the title attribute becomes
      the only affordance. Nothing is hidden from a screen reader: the link
      text is still in the accessibility tree, merely clipped. */
   .sidebar-toggle {
-    @apply grid size-9 shrink-0 place-items-center rounded-sm text-panel-muted
+    @apply grid size-10 shrink-0 place-items-center rounded-sm text-panel-muted
            hover:bg-white/10 hover:text-panel-fg;
     transition: background-color var(--duration-quick) var(--ease-out),
                 color var(--duration-quick) var(--ease-out),
                 transform var(--duration-settle) var(--ease-out);
   }
 
-  :root[data-sidebar="collapsed"] .sidebar-toggle svg {
-    transform: rotate(180deg);
-  }
-
-  .sidebar-toggle svg {
-    transition: transform var(--duration-settle) var(--ease-spring);
-  }
+  /* No rotation. The control used to be a chevron, which had to flip to keep
+     pointing the right way -- a spinning arrow on every press. A hamburger means
+     "the menu" in both states, so the button is still. */
 
   /* Shown only while the rail is narrow. The expand control cannot live beside
      the wordmark, because the wordmark is one of the things that folded away. */
@@ -1070,6 +1131,35 @@
     @apply bg-white/20;
   }
 
+  /* --- The school logo's file input --------------------------------------
+     Out of sight, in the tab order, and focus visible on the label beside it.
+
+     `sr-only`'s clip rather than `display: none` or `visibility: hidden`, either
+     of which would take the input out of the tab order and leave the control
+     keyboard-unreachable. The `<label for>` next to it is the visible button, so
+     a pointer and a keyboard both land on the same real input -- no click
+     handler, and the accessible name comes from the label for free. */
+  .logo-file {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* The focus ring has to appear on something visible, so it is drawn on the
+     button the input is hidden behind. */
+  .logo-file:focus-visible + span,
+  .logo-file:focus-visible ~ label,
+  label:has(+ .logo-file:focus-visible) {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+
   /* Payment status pills -------------------------------------------------
      Composed in markup -- `class="status-pill status-paid"`.
      Colour plus text, so the state survives greyscale printing and
@@ -1085,15 +1175,50 @@
   .status-overdue { @apply bg-overdue-soft text-overdue-strong; }
 
   /* A dot in the matching colour, for legends and table keys where the word
-     is already next to it. */
+     is already next to it.
+
+     `--dot` carries the colour so the pulse below can reach it: the dot itself is
+     a background, and a ring drawn from `currentColor` would come out the colour
+     of the text beside it. The default is what a dot tinted by a utility --
+     `class="status-dot bg-ink-300"` -- should pulse in. */
   .status-dot {
-    @apply inline-block size-2.5 shrink-0 rounded-full;
+    @apply relative inline-block size-2.5 shrink-0 rounded-full;
+    --dot: var(--color-ink-300);
+    background-color: var(--dot);
   }
 
-  .status-dot-paid    { background-color: var(--color-paid); }
-  .status-dot-partial { background-color: var(--color-partial); }
-  .status-dot-unpaid  { background-color: var(--color-unpaid); }
-  .status-dot-overdue { background-color: var(--color-overdue); }
+  .status-dot-paid    { --dot: var(--color-paid); }
+  .status-dot-partial { --dot: var(--color-partial); }
+  .status-dot-unpaid  { --dot: var(--color-unpaid); }
+  .status-dot-overdue { --dot: var(--color-overdue); }
+
+  /* The pulse: one ring, expanding and fading, every two and a half seconds.
+
+     A pseudo-element scaled and faded rather than an animated `box-shadow`. Both
+     look the same; only this one runs on the compositor, which matters because a
+     legend or a long table can have a couple of dozen dots on screen at once and
+     the animation never stops.
+
+     Absolutely positioned, so it adds no layout and cannot push a legend around.
+     The dot itself does not move -- a status indicator that jumped would be
+     harder to read, not livelier. */
+  .status-dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background-color: var(--dot);
+    animation: status-pulse 2.5s var(--ease-out) infinite;
+    pointer-events: none;
+  }
+
+  /* Low-core devices get the dot and no ring, the same bargain the glass
+     surfaces make. `prefers-reduced-motion` is handled globally -- see the
+     opt-out near the top of this file -- and lands the ring on its last
+     keyframe, which is fully transparent. */
+  :root[data-perf="lite"] .status-dot::after {
+    animation: none;
+  }
 
   /* Figures read as money/IDs -- tabular mono keeps columns aligned. */
   .numeric {
@@ -1298,6 +1423,20 @@
 
   /* `column-reverse` stacks the newest at the bottom, nearest where it came
      from, and pushes older ones up rather than covering them. */
+  /* --- Toast timing ------------------------------------------------------
+     Its own set, not the global durations, because a toast is the one thing on
+     screen whose whole job is to be read before it goes -- and the global
+     `--duration-settle` was too brisk for a sentence.
+
+     The four stages are sequenced by js/ui.js and each of these is the duration
+     of one of them. The two files have to agree; the constants in ui.js name
+     these tokens in their comments. */
+  :root {
+    --toast-rise: 460ms;      /* the circle arriving, and leaving */
+    --toast-open: 560ms;      /* the panel widening, and closing */
+    --toast-fade: 260ms;      /* the words appearing, and going */
+  }
+
   .toast {
     @apply pointer-events-auto flex max-w-full items-center overflow-hidden
            rounded-full border text-sm font-medium;
@@ -1307,8 +1446,8 @@
     box-shadow: var(--shadow-float);
     transform: translateY(140%);
     opacity: 0;
-    transition: transform var(--duration-settle) var(--ease-out),
-                opacity var(--duration-quick) var(--ease-out);
+    transition: transform var(--toast-rise) var(--ease-out),
+                opacity var(--toast-fade) var(--ease-out);
     will-change: transform;
   }
 
@@ -1328,11 +1467,35 @@
     display: grid;
     grid-template-columns: 0fr;
     min-width: 0;
-    transition: grid-template-columns var(--duration-settle) var(--ease-spring);
+    /* `ease-out`, not `ease-spring`. A spring overshoots, and overshooting a
+       *width* means the track springs past its content and snaps back -- which
+       was half of what read as a janky close. */
+    transition: grid-template-columns var(--toast-open) var(--ease-out);
   }
 
   .toast.is-open .toast-panel {
     grid-template-columns: 1fr;
+  }
+
+  /* The words, faded separately from the track that holds them.
+
+     This is the fix for the reported bug. The message used to be fully opaque
+     while the track collapsed, so the text reflowed into an ever-narrower column
+     -- visibly crushed -- on the way out. Now the sequence is: fade the words
+     out, *then* collapse the track, then drop. The reflow still happens; nobody
+     sees it. The entrance is the same three beats in reverse, so the words do
+     not wrap and unwrap while the panel widens either.
+
+     Driven by `is-lit`, which js/ui.js adds last and removes first. The
+     server-rendered toast ships with it, so the message is readable with the
+     script blocked. */
+  .toast-panel > div {
+    opacity: 0;
+    transition: opacity var(--toast-fade) var(--ease-out);
+  }
+
+  .toast.is-lit .toast-panel > div {
+    opacity: 1;
   }
 
   /* Everything that is not the icon lives in here, the dismiss button
@@ -2185,6 +2348,24 @@
   100% { transform: translateY(0) rotate(0deg); }
   50%  { transform: translateY(calc(-1 * var(--float-distance, 10px)))
                     rotate(var(--float-tilt, 0deg)); }
+}
+
+/* The status-dot ring. Ends transparent, so a reduced-motion reader -- for whom
+   the global opt-out cuts the animation to a single 0.01ms pass -- is left with
+   the dot and nothing else. */
+@keyframes status-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
 }
 
 @keyframes row-land {

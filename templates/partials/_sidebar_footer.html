@@ -2,11 +2,19 @@
 Who you are signed in as. Shows the permission role and the job title side by
 side, because they answer different questions and are frequently different.
 {% endcomment %}
-<div class="border-t border-white/10 px-3 py-3">
-  <div class="sidebar-row flex items-center gap-3 rounded-md px-2.5 py-2.5">
+<div class="sidebar-pad border-t border-white/10 py-3">
+  <div class="sidebar-row flex items-center gap-3 rounded-md py-2.5">
+    {% comment %}
+    Initials, or the username's first letter when the account has no name set
+    yet -- an empty square read as a rendering fault rather than as missing data.
+    Names are editable under Account settings now, so this is a gap somebody can
+    actually close.
+    {% endcomment %}
     <span class="grid size-9 shrink-0 place-items-center rounded-sm bg-white/15
                  text-sm font-semibold text-panel-fg">
-      {{ user.first_name|first|upper }}{{ user.last_name|first|upper|default:'' }}
+      {% if user.first_name or user.last_name %}
+        {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}
+      {% else %}{{ user.username|first|upper }}{% endif %}
     </span>
     <div class="sidebar-label min-w-0 flex-1">
       <div class="truncate text-sm font-medium text-panel-fg">{{ user.get_full_name|default:user.username }}</div>

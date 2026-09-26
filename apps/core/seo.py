@@ -69,6 +69,15 @@ PUBLIC_PAGES: tuple[PublicPage, ...] = (
         ),
     ),
     PublicPage(
+        url_name="core:about",
+        label="About",
+        title=f"About {PRODUCT_NAME}",
+        description=(
+            f"Who builds {PRODUCT_NAME}, why it starts with the fees, and how to "
+            "reach us. School management software for Nigerian schools."
+        ),
+    ),
+    PublicPage(
         url_name="core:privacy",
         label="Privacy policy",
         title=f"Privacy policy · {PRODUCT_NAME}",

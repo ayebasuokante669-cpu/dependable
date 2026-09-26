@@ -1,10 +1,16 @@
 {% comment %}
 The public footer: what this is, who makes it, and where to find them.
 
-Every social href is "#" for now -- placeholders the school's own accounts will
-replace. They are still real links with real labels rather than dead <span>s,
-so swapping the href in later changes one attribute and nothing about the
-markup, the styling or the accessible name.
+Every social href is "#" for now -- placeholders the product's own accounts will
+replace. They are still real links with real labels rather than dead <span>s, so
+swapping the href in later changes one attribute and nothing about the markup,
+the styling or the accessible name.
+
+There is deliberately no link here that goes nowhere. "Careers" used to, and was
+removed rather than pointed at a placeholder page: a footer link that lands on
+nothing costs more trust than the link was worth. "Contact" is the one exception
+to the href rule and is not an exception at all -- it points at the "Get in touch"
+block a few lines below, in this same footer.
 {% endcomment %}
 <footer class="border-t border-ink-200 bg-surface">
   <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
@@ -24,7 +30,26 @@ markup, the styling or the accessible name.
           and parent messages in one place.
         </p>
 
-        <ul class="mt-6 flex items-center gap-2.5" aria-label="Social accounts">
+        {% comment %}
+        `id="contact"` is what the Contact link in the Company column points at.
+        A bare fragment rather than an absolute URL on purpose: this footer is on
+        every public page, so "Contact" should scroll to the socials on the page
+        you are already reading rather than send you to the home page to find
+        them.
+        {% endcomment %}
+        <div id="contact" class="mt-8 scroll-mt-24">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-ink-500">
+            Get in touch
+          </h2>
+          <p class="mt-2 text-sm text-ink-600">
+            Questions about setting your school up, or about your account?
+            <a href="mailto:{{ privacy_email|default:'hello@theschoolcord.com' }}"
+               class="font-medium text-brand-700 hover:underline">Email us</a>,
+            or reach us on any of these.
+          </p>
+        </div>
+
+        <ul class="mt-4 flex items-center gap-2.5" aria-label="Social accounts">
           <li>
             <a href="#" class="footer-social" aria-label="{{ product_name }} on X">
               <svg class="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -87,9 +112,14 @@ markup, the styling or the accessible name.
           Company
         </h2>
         <ul class="mt-4 space-y-2.5">
-          <li><a href="#" class="footer-link">About us</a></li>
-          <li><a href="#" class="footer-link">Contact</a></li>
-          <li><a href="#" class="footer-link">Careers</a></li>
+          <li><a href="{% url 'core:about' %}" class="footer-link">About us</a></li>
+          {% comment %}
+          Points at the "Get in touch" block in this same footer -- see the
+          comment on it. Careers used to sit here and went nowhere; a dead link
+          in a footer is worse than one fewer link, so it is gone rather than
+          waiting for a page that does not exist.
+          {% endcomment %}
+          <li><a href="#contact" class="footer-link">Contact</a></li>
           <li>
             <a href="{% url 'login' %}" class="footer-link" data-auth-swap>Log in</a>
           </li>

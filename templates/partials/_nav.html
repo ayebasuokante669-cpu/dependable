@@ -9,9 +9,14 @@ to brighten. The active row also carries a rail on the left edge -- so which
 page you are on survives being glanced at, instead of resting on a five-percent
 background difference.
 {% endcomment %}
-<nav class="scroll-on-panel flex-1 overflow-y-auto px-3 pb-6"
+<nav class="scroll-on-panel sidebar-pad flex-1 overflow-y-auto pb-6"
      aria-label="{{ nav_label|default:'Main' }}" data-sidebar-scroll>
   {% for section in nav_sections %}
+    {% comment %}
+    A rule rather than a heading when the rail is collapsed: the words fold away,
+    and without something in their place the groups run together into one column
+    of anonymous icons. See `.nav-section-label` in assets/app.css.
+    {% endcomment %}
     <div class="nav-section-label">{{ section.label }}</div>
     <ul class="space-y-1">
       {% for item in section.items %}

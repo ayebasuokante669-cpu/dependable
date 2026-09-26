@@ -391,11 +391,56 @@ class SchoolLogoTests(TestCase):
         self.assertContains(response, "Demo School")
         self.assertNotContains(response, "Sunrise Academy")
 
-    def test_platform_staff_have_no_school_of_their_own_to_configure(self):
+    def test_platform_staff_are_sent_to_the_screen_that_has_schools_on_it(self):
+        """They have no school of their own, so this page has nothing to show
+        them. It used to answer 404 -- for exactly the account whose sidebar was
+        offering the link. The entry is gone from their nav now, and a bookmark or
+        a typed URL lands on Platform > Schools instead of on a wall."""
         platform = User.objects.create_user(
             "platform", password="pw", role=Role.PLATFORM_OWNER
         )
         self.client.force_login(platform)
+        response = self.client.get(reverse("core:school_settings"))
+        self.assertRedirects(response, reverse("core:platform_overview"))
+
+    def test_their_sidebar_does_not_offer_school_settings(self):
+        from apps.core.modules import ALL_KEYS
+        from apps.core.navigation import nav_for
+        from apps.core.permissions import capabilities_for
+
+        labels = {
+            item.label
+            for section in nav_for(
+                Role.PLATFORM_OWNER,
+                "/",
+                {c.value for c in capabilities_for(Role.PLATFORM_OWNER)},
+                ALL_KEYS,
+            )
+            for item in section.items
+        }
+        self.assertNotIn("School settings", labels)
+        # A school-side role still gets it: for them the page works and is the
+        # only route to their own logo.
+        for role in (Role.SCHOOL_OWNER, Role.PRINCIPAL):
+            with self.subTest(role=role):
+                theirs = {
+                    item.label
+                    for section in nav_for(
+                        role,
+                        "/",
+                        {c.value for c in capabilities_for(role)},
+                        ALL_KEYS,
+                    )
+                    for item in section.items
+                }
+                self.assertIn("School settings", theirs)
+
+    def test_a_school_account_with_no_school_is_still_a_404(self):
+        """A broken row rather than a screen anybody can be sent to usefully."""
+        stray = User.objects.create_user(
+            "stray", password="pw", role=Role.SCHOOL_OWNER
+        )
+        self.client.force_login(stray)
         self.assertEqual(
             self.client.get(reverse("core:school_settings")).status_code, 404
         )

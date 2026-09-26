@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 
 {% block page_subtitle %}
-  <p class="truncate text-sm text-ink-600">Your own sign-in details</p>
+  <p class="truncate text-sm text-ink-600">
+    How you are named here, and how you sign in
+  </p>
 {% endblock %}
 
 {% block content %}
@@ -16,6 +18,55 @@
       </p>
     </div>
   {% endif %}
+
+  {% comment %}
+  Your name and job title. First, because it is the only card here that is about
+  who you are rather than how you get in -- and because it was the missing one:
+  both fields used to be editable only in the Django admin, which a proprietor
+  cannot reach, so an account invited as "Owner" with no surname stayed that way
+  in the sidebar, the staff list and every report footer.
+
+  Deliberately not on this form: role, school and campus. Those decide what the
+  account can see, so they belong to whoever manages staff -- a profile form you
+  could promote yourself from would not be a profile form.
+  {% endcomment %}
+  <form method="post" class="card overflow-hidden" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="form" value="profile">
+
+    <div class="border-b border-ink-200 px-5 py-4">
+      <h2 class="text-sm font-semibold text-ink-900">You</h2>
+      <p class="field-hint mt-0.5">
+        Your name appears in the sidebar, on the staff list, and on any report
+        you generate. Your role is
+        <span class="font-medium text-ink-900">{{ current_role_label }}</span>,
+        which only whoever manages staff can change.
+      </p>
+    </div>
+
+    {% if profile_form.non_field_errors %}
+      <div class="border-b border-ink-200 bg-overdue-soft px-5 py-3 text-sm
+                  text-overdue-strong" role="alert">
+        {% for error in profile_form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="space-y-5 p-5 sm:p-6">
+      <div class="grid gap-5 sm:grid-cols-2">
+        {% include "partials/_field.html" with field=profile_form.first_name %}
+        {% include "partials/_field.html" with field=profile_form.last_name %}
+      </div>
+      {% include "partials/_field.html" with field=profile_form.job_title %}
+    </div>
+
+    <div class="flex items-center justify-between gap-3 border-t border-ink-200
+                px-5 py-4">
+      <p class="text-xs text-ink-500">
+        Signed in as <span class="numeric">{{ user.username }}</span>
+      </p>
+      <button type="submit" class="btn btn-primary text-sm">Save name</button>
+    </div>
+  </form>
 
   <form method="post" class="card overflow-hidden" novalidate>
     {% csrf_token %}

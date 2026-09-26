@@ -9,6 +9,7 @@ urlpatterns = [
     path("", views.LandingView.as_view(), name="landing"),
     path("signup/", views.SignupView.as_view(), name="signup"),
     path("privacy/", views.PrivacyView.as_view(), name="privacy"),
+    path("about/", views.AboutView.as_view(), name="about"),
 
     # "The dashboard", for anything that should not have to know the role.
     path("dashboard/", views.dashboard, name="dashboard"),
@@ -27,6 +28,11 @@ urlpatterns = [
         "platform/schools/<int:pk>/modules/",
         views.SchoolModuleToggleView.as_view(),
         name="school_module_toggle",
+    ),
+    path(
+        "platform/schools/<int:pk>/profile/",
+        views.PlatformSchoolProfileView.as_view(),
+        name="platform_school_profile",
     ),
     path("school/", views.SchoolDashboardView.as_view(), name="school_dashboard"),
     path("branch/", views.BranchDashboardView.as_view(), name="branch_dashboard"),

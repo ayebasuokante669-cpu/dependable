@@ -1,0 +1,162 @@
+{% comment %}
+The About page's content, in a partial so the page can render both ways --
+inside the shell for a signed-in reader, and standalone for a visitor. Same
+arrangement as the privacy policy, for the same reason.
+
+WHERE YOUR OWN CONTENT GOES. Everything below is drawn from what the codebase
+already states about the product, so nothing here is invented and nothing
+contradicts the landing page, the structured data or llms.txt:
+
+  * the opening paragraph is `PRODUCT_DESCRIPTION` from apps/core/branding.py;
+  * "What it does" is `FEATURES` from apps/core/seo.py -- add a feature there and
+    it appears here, on the home page and in llms.txt at once;
+  * the product name, tagline and support address are the branding constants.
+
+Three blocks are marked `data-placeholder` below: **Who we are**, **Where we
+are** and the founding year in the timeline. They carry honest, minimal copy
+rather than lorem so the page is publishable as it stands -- replace the text
+inside them with yours. The social links in partials/_site_footer.html are the
+other thing to fill in: each is a real anchor with a real label and an href of
+"#".
+{% endcomment %}
+
+<div class="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:py-16">
+
+  <p class="text-xs font-semibold uppercase tracking-wider text-brand-700">
+    About
+  </p>
+  <h1 class="mt-2 text-3xl font-semibold tracking-tight text-brand-900 sm:text-4xl">
+    {{ product_tagline }}
+  </h1>
+  <p class="mt-5 text-lg leading-relaxed text-ink-700">
+    {{ product_description }}
+  </p>
+
+  {# ===== Why fees first ================================================= #}
+  <section class="mt-12">
+    <h2 class="text-xl font-semibold tracking-tight text-brand-900">
+      Why we start with the fees
+    </h2>
+    <p class="mt-3 text-sm leading-relaxed text-ink-700">
+      Most school software starts with timetables and report cards, and asks the
+      bursary to wait. We went the other way round, because the question a school
+      actually cannot answer on a Monday morning is <em>who has paid</em>. A
+      term's fees are set per class, payments are recorded against a child, and
+      every balance on every screen is worked out from those two facts.
+    </p>
+    <p class="mt-3 text-sm leading-relaxed text-ink-700">
+      Nothing is stored twice. A balance is never typed in and never cached, so
+      re-pricing a class or reversing a payment moves the child's record, the
+      bursar's chase list, the collections report and the reminder a parent
+      receives — all of them, at once, with no recalculation step for anybody to
+      forget.
+    </p>
+  </section>
+
+  {# ===== What it does ================================================== #}
+  <section class="mt-12">
+    <h2 class="text-xl font-semibold tracking-tight text-brand-900">
+      What it does
+    </h2>
+    <dl class="mt-5 grid gap-5 sm:grid-cols-2">
+      {% for title, description in features %}
+        <div class="card p-5">
+          <dt class="text-sm font-semibold text-ink-900">{{ title }}</dt>
+          <dd class="mt-1.5 text-sm leading-relaxed text-ink-600">
+            {{ description }}
+          </dd>
+        </div>
+      {% endfor %}
+    </dl>
+  </section>
+
+  {# ===== Who we are — YOUR CONTENT ===================================== #}
+  <section class="mt-12" data-placeholder="who-we-are">
+    <h2 class="text-xl font-semibold tracking-tight text-brand-900">
+      Who we are
+    </h2>
+    <p class="mt-3 text-sm leading-relaxed text-ink-700">
+      {{ product_name }} is built by a small team in Nigeria, for Nigerian
+      schools. We work directly with the schools running it: the fee labels, the
+      payment methods, the "no current term set" warning and the parent-reminder
+      wording are all things a bursar or a proprietor asked us for.
+    </p>
+    <p class="mt-3 text-sm leading-relaxed text-ink-700">
+      If your school is on {{ product_name }} and something is wrong, we would
+      rather hear it than not. There is one inbox and a person reads it.
+    </p>
+  </section>
+
+  {# ===== How we handle school data ===================================== #}
+  <section class="mt-12">
+    <h2 class="text-xl font-semibold tracking-tight text-brand-900">
+      How we handle school data
+    </h2>
+    <p class="mt-3 text-sm leading-relaxed text-ink-700">
+      A school's records belong to that school. Every row on the platform is
+      owned by one school and one campus, and the separation is enforced in the
+      data layer rather than left to each screen to remember — so one school
+      cannot see another's students, fees, payments or messages, whatever anyone
+      types into a URL.
+    </p>
+    <p class="mt-3 text-sm leading-relaxed text-ink-700">
+      What we hold, who it is shared with, how long it is kept, and how to ask to
+      see, correct or delete it — including under Nigeria's NDPA — is set out in
+      full in the
+      <a href="{% url 'core:privacy' %}"
+         class="font-medium text-brand-700 hover:underline">privacy policy</a>.
+    </p>
+  </section>
+
+  {# ===== Where we are — YOUR CONTENT =================================== #}
+  <section class="mt-12" data-placeholder="contact">
+    <h2 class="text-xl font-semibold tracking-tight text-brand-900">
+      Talk to us
+    </h2>
+    <div class="mt-5 grid gap-4 sm:grid-cols-2">
+      <div class="card p-5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          About your school's account
+        </p>
+        <a href="mailto:{{ privacy_email }}"
+           class="mt-1.5 block break-all text-sm font-medium text-brand-700
+                  hover:underline">
+          {{ privacy_email }}
+        </a>
+      </div>
+      <div class="card p-5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          Privacy and data requests
+        </p>
+        <a href="mailto:{{ privacy_email }}"
+           class="mt-1.5 block break-all text-sm font-medium text-brand-700
+                  hover:underline">
+          {{ privacy_email }}
+        </a>
+      </div>
+    </div>
+    <p class="mt-4 text-sm text-ink-600">
+      Our social accounts are linked at the bottom of every page.
+    </p>
+  </section>
+
+  {# ===== The two doors ================================================= #}
+  <section class="mt-12 card overflow-hidden">
+    <div class="px-5 py-6 text-center sm:px-8 sm:py-8">
+      <h2 class="text-lg font-semibold tracking-tight text-brand-900">
+        Run your school's fees on {{ product_name }}
+      </h2>
+      <p class="mx-auto mt-2 max-w-md text-sm text-ink-600">
+        Set the school up, add your classes and their fees, bring your roster
+        over from a spreadsheet, and start recording payments. No card needed.
+      </p>
+      <div class="mt-5 flex flex-wrap items-center justify-center gap-3">
+        <a href="{% url 'core:signup' %}" class="btn btn-primary text-sm"
+           data-auth-swap>Create a school account</a>
+        <a href="{% url 'core:landing' %}#features"
+           class="btn btn-secondary text-sm">See what you get</a>
+      </div>
+    </div>
+  </section>
+
+</div>

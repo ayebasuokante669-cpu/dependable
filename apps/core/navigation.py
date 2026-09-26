@@ -246,7 +246,15 @@ NAVIGATION: tuple[NavSection, ...] = (
             # tenant-scoped, so letting them in would have been worse.
             NavItem("Branches", "schools:branch_list", "branches", _LEADERSHIP,
                     capability="view_branches"),
-            NavItem("Staff", "staff:list", "users", _LEADERSHIP,
+            # Two entries, one screen. A school sees "Staff" -- the people who
+            # work there. The platform sees "Users", because the same list at
+            # platform scope is every account on the product, across every
+            # school, and calling that a school's staff would be wrong. The
+            # screen itself reads the caller's scope and shows a School column
+            # and the deactivate control only where they apply.
+            NavItem("Staff", "staff:list", "users",
+                    (Role.SCHOOL_OWNER, Role.PRINCIPAL), capability="view_staff"),
+            NavItem("Users", "staff:list", "users", (Role.PLATFORM_OWNER,),
                     capability="view_staff"),
             # A bursar reads the roster to record payments against it;
             # owner/principal level enrols and edits (Capability.MANAGE_STUDENTS),
@@ -313,7 +321,13 @@ NAVIGATION: tuple[NavSection, ...] = (
     NavSection(
         label="Settings",
         items=(
-            NavItem("School settings", "core:school_settings", "cog", _LEADERSHIP),
+            # School-side roles only. A platform owner has no school of their
+            # own, so /settings/ raised a 404 for exactly the account whose
+            # sidebar offered it -- they reach each school's profile from
+            # Platform > Schools, where it belongs alongside that school's plan
+            # and modules.
+            NavItem("School settings", "core:school_settings", "cog",
+                    (Role.SCHOOL_OWNER, Role.PRINCIPAL)),
             # Everyone's own email and password. Every role, because every
             # account has both.
             NavItem("Account settings", "accounts:settings", "identity", ALL_ROLES),

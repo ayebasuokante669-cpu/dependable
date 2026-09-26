@@ -43,23 +43,23 @@
       </div>
     </section>
 
-    <section class="card overflow-hidden">
+    {% comment %}
+    The logo, given a section of its own with the image in it rather than a bare
+    file input. This was the reported gap: people could not find where to add
+    one, because the control looked like a form field rather than like a place to
+    put a picture.
+
+    `id="logo"` so the prompt on the school dashboard can link straight to it.
+    {% endcomment %}
+    <section class="card overflow-hidden" id="logo">
       <div class="border-b border-ink-200 px-5 py-3">
-        <h2 class="text-sm font-semibold text-ink-900">Logo</h2>
+        <h2 class="text-sm font-semibold text-ink-900">School logo</h2>
         <p class="mt-0.5 text-xs text-ink-500">
-          Optional. Appears in your sidebar and on every payment receipt you
-          print. PNG, JPEG, WebP or SVG, under 2&nbsp;MB.
+          Optional, and it is what parents see on the receipts you print.
         </p>
       </div>
       <div class="px-5 py-5">
-        {{ form.logo }}
-        {% for error in form.logo.errors %}
-          <p class="field-error">{{ error }}</p>
-        {% endfor %}
-        <p class="field-hint">
-          A square or wide image both work — it is scaled to fit, never cropped.
-          Without one, your school's initial is shown instead.
-        </p>
+        {% include "core/_logo_field.html" with school=object field=form.logo remove_field=form.remove_logo %}
       </div>
     </section>
   </div>
@@ -113,6 +113,10 @@
         <button type="submit" class="btn btn-primary w-full text-sm">
           Save changes
         </button>
+        <p class="mt-2 text-center text-xs text-ink-500">
+          Saves the details{% if can_manage_logo %} and the logo{% endif %}
+          on the left.
+        </p>
       </div>
     </section>
 

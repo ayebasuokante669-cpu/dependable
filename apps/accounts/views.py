@@ -31,12 +31,13 @@ from django.views.generic import FormView, ListView, TemplateView, View
 from django.urls import reverse, reverse_lazy
 
 from apps.core.navigation import home_url_for
-from apps.core.permissions import Capability, CapabilityRequiredMixin
-from apps.core.roles import Role
+from apps.core.permissions import Capability, CapabilityRequiredMixin, capabilities_of
+from apps.core.roles import Role, is_platform_role
 
 from .forms import (
     AccountPasswordForm,
     EmailChangeForm,
+    ProfileForm,
     StaffAccountForm,
     StaffRowFormSet,
 )
@@ -52,11 +53,11 @@ RATE_WINDOW_SECONDS = 60
 
 
 class AccountSettingsView(LoginRequiredMixin, TemplateView):
-    """Anyone's own sign-in details: their email address and their password.
+    """Anyone's own account: how they are named, their email, their password.
 
-    Every role has one, because every account has both. Two forms on one page,
-    told apart by a hidden ``form`` field, so a failed password change does not
-    wipe a half-typed email and vice versa.
+    Every role has one, because every account has all three. Three forms on one
+    page, told apart by a hidden ``form`` field, so a failed password change does
+    not wipe a half-typed email or a half-corrected surname.
 
     Also where an account on a temporary password is held (see
     RequirePasswordChangeMiddleware); choosing a new one sends them on to their
@@ -68,6 +69,7 @@ class AccountSettingsView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
+        context.setdefault("profile_form", ProfileForm(instance=user))
         context.setdefault("email_form", EmailChangeForm(user))
         context.setdefault("password_form", AccountPasswordForm(user))
         context["temporary_password"] = user.must_change_password
@@ -76,7 +78,20 @@ class AccountSettingsView(LoginRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         user = request.user
-        if request.POST.get("form") == "email":
+        submitted = request.POST.get("form")
+
+        if submitted == "profile":
+            form = ProfileForm(request.POST, instance=user)
+            if form.is_valid():
+                form.save()
+                messages.success(
+                    request,
+                    f"Saved. You appear as {user.get_full_name()} across the app.",
+                )
+                return redirect("accounts:settings")
+            return self.render_to_response(self.get_context_data(profile_form=form))
+
+        if submitted == "email":
             form = EmailChangeForm(user, request.POST)
             if form.is_valid():
                 form.save()
@@ -155,7 +170,13 @@ def generate_password_view(request):
 
 
 class StaffListView(CapabilityRequiredMixin, ListView):
-    """Who can sign in at this school, and as what.
+    """Who can sign in -- at this school, or across the platform.
+
+    One screen answering two questions, because they are the same list at two
+    scopes. A school sees its own staff. The platform sees every account on the
+    product, which is why it gets a School column and the deactivate control and
+    why its nav entry says "Users" rather than "Staff" -- see
+    apps/core/navigation.py.
 
     Like Branches, this used to be a link to the Django admin -- unreachable
     for the proprietor, whose account is not ``is_staff``, and not tenant-scoped
@@ -169,6 +190,17 @@ class StaffListView(CapabilityRequiredMixin, ListView):
     template_name = "accounts/staff_list.html"
     context_object_name = "staff"
 
+    def is_platform(self) -> bool:
+        """Whether this caller is looking at the whole platform.
+
+        Read from the effective role rather than from ``user.role``, so a Django
+        superuser -- promoted to platform scope everywhere else -- is treated the
+        same here.
+        """
+        context = getattr(self.request, "tenant", None)
+        role = context.role if context is not None else self.request.user.role
+        return is_platform_role(role)
+
     def get_queryset(self):
         user = self.request.user
         people = get_user_model().objects.select_related("school", "branch")
@@ -176,15 +208,79 @@ class StaffListView(CapabilityRequiredMixin, ListView):
         # anyone else sees exactly their own school's accounts.
         if user.school_id is not None:
             people = people.filter(school_id=user.school_id)
-        elif not user.is_superuser and user.role != Role.PLATFORM_OWNER:
+        elif not self.is_platform():
             people = people.none()
+        if self.is_platform():
+            # Grouped by school first: at platform scope the list is read one
+            # school at a time, and role order across thirty schools is noise.
+            return people.order_by("school__name", "role", "username")
         return people.order_by("role", "username")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["page_title"] = "Staff"
+        platform = self.is_platform()
+        context["is_platform"] = platform
+        context["page_title"] = "Users" if platform else "Staff"
+        context["noun"] = "account" if platform else "staff account"
+        context["can_deactivate"] = "deactivate_accounts" in {
+            c.value for c in capabilities_of(self.request.user)
+        }
         context["role_labels"] = dict(Role.choices)
         return context
+
+
+class DeactivateAccountsMixin(CapabilityRequiredMixin):
+    """The platform, and nobody at a school. See Capability.DEACTIVATE_ACCOUNTS."""
+
+    capability = Capability.DEACTIVATE_ACCOUNTS
+
+
+class StaffActivationView(DeactivateAccountsMixin, View):
+    """Switch an account off, or back on. Never deletes it.
+
+    The same shape as the module switches: POST only, and it names the state it
+    wants rather than flipping whatever it finds -- a stale tab must not be able
+    to reactivate somebody by pressing what it thinks is "deactivate".
+
+    A deactivated account keeps every row it is attached to. ``is_active=False``
+    is Django's own "may not sign in", so the person is locked out at the
+    authentication backend rather than by anything this codebase has to remember
+    to check, and the payments they recorded still name them.
+    """
+
+    def post(self, request, pk, *args, **kwargs):
+        person = get_object_or_404(get_user_model().objects.all(), pk=pk)
+        active = request.POST.get("active") == "on"
+
+        if person.pk == request.user.pk:
+            # Not a permission question, a footgun one: the platform owner
+            # switching off their own account would be locked out of the screen
+            # that could switch it back on.
+            messages.error(request, "You cannot deactivate your own account.")
+            return HttpResponseRedirect(reverse("staff:list"))
+
+        if person.is_active == active:
+            messages.info(
+                request,
+                f"{person.get_full_name() or person.username} was already "
+                f"{'active' if active else 'deactivated'}.",
+            )
+            return HttpResponseRedirect(reverse("staff:list"))
+
+        person.is_active = active
+        person.save(update_fields=["is_active"])
+        who = person.get_full_name() or person.username
+        if active:
+            messages.success(
+                request, f"{who} can sign in again. Their password is unchanged."
+            )
+        else:
+            messages.warning(
+                request,
+                f"{who} can no longer sign in. Nothing of theirs has been "
+                f"deleted, and switching them back on restores their access.",
+            )
+        return HttpResponseRedirect(reverse("staff:list"))
 
 class ManageStaffMixin(CapabilityRequiredMixin):
     """The proprietor, and the platform on their behalf. Not a bursar."""

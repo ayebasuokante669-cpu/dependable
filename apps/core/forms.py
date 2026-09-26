@@ -222,18 +222,48 @@ class SchoolSignupForm(StyledFormMixin, forms.Form):
 class SchoolProfileForm(StyledFormMixin, forms.ModelForm):
     """A school's own identity: what it is called, and what it looks like.
 
-    The logo is the only genuinely new field here, and it is optional on
-    purpose -- most schools will never upload one, and the initial-in-a-square
-    fallback is a real answer rather than a gap. Clearing the checkbox removes
-    the file, which is the only way a school can undo a bad upload without
-    asking us.
+    The logo is optional on purpose -- most schools will never upload one, and
+    the initial-in-a-square fallback is a real answer rather than a gap. Clearing
+    the checkbox removes the file, which is the only way a school can undo a bad
+    upload without asking us.
+
+    ``can_manage_logo`` removes the logo field entirely rather than disabling it.
+    A disabled input still posts nothing and still looks like a control, so a
+    principal would see a file picker that silently did not work; removing the
+    field means the form cannot accept a logo from them even if one is posted by
+    hand. Who holds that capability is
+    :attr:`~apps.core.permissions.Capability.MANAGE_SCHOOL_LOGO` -- the
+    proprietor and the platform, never a principal.
     """
+
+    #: Removing the logo, as a field of our own rather than
+    #: ``ClearableFileInput``'s built-in checkbox.
+    #:
+    #: The stock widget renders "Currently: logos/x/y.png [ ] Clear  Change: […]"
+    #: as loose text and inputs with nothing wrappable around them, so it cannot
+    #: be styled into the control on screen -- and showing a school a file path
+    #: where it expects to see its own logo was most of why nobody could find
+    #: this. A plain ``FileInput`` plus this gives markup we own end to end.
+    remove_logo = forms.BooleanField(
+        required=False,
+        label="Remove the current logo",
+        help_text="Your school's initial is shown instead.",
+    )
 
     class Meta:
         model = School
         fields = ["name", "logo", "contact_email", "contact_phone"]
         widgets = {
             "name": forms.TextInput(attrs={"placeholder": "Bright Future Academy"}),
+            "logo": forms.FileInput(
+                attrs={
+                    # The label beside it is the visible button -- see
+                    # core/_logo_field.html -- so the input is hidden from sight
+                    # and left in the tab order.
+                    "class": "logo-file",
+                    "accept": "image/png,image/jpeg,image/webp,image/svg+xml",
+                }
+            ),
             "contact_email": forms.EmailInput(
                 attrs={"placeholder": "office@school.com", "autocomplete": "email"}
             ),
@@ -242,12 +272,37 @@ class SchoolProfileForm(StyledFormMixin, forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, can_manage_logo: bool = True, **kwargs):
         super().__init__(*args, **kwargs)
+        self.can_manage_logo = can_manage_logo
+        if not can_manage_logo:
+            # Removed, not disabled. A disabled input still looks like a control
+            # and still posts nothing, so a principal would meet a file picker
+            # that silently did not work; removing the fields means the form
+            # cannot accept a logo from them even if one is posted by hand.
+            del self.fields["logo"]
+            del self.fields["remove_logo"]
+        else:
+            self.fields["logo"].label = "School logo"
         self.fields["name"].label = "School name"
-        self.fields["logo"].label = "School logo"
         self.fields["contact_email"].label = "Office email"
         self.fields["contact_phone"].label = "Office phone"
 
     def clean_name(self):
         return " ".join(self.cleaned_data["name"].split())
+
+    def save(self, commit=True):
+        school = super().save(commit=False)
+        # A new file wins over the tick. Somebody who chose a replacement *and*
+        # left "remove" checked meant to replace it -- and the other reading
+        # throws away the upload they just waited for.
+        if (
+            self.can_manage_logo
+            and self.cleaned_data.get("remove_logo")
+            and not self.files.get(self.add_prefix("logo"))
+        ):
+            school.logo.delete(save=False)
+            school.logo = None
+        if commit:
+            school.save()
+        return school

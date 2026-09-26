@@ -1,4 +1,4 @@
-"""The forms behind Account settings: a person's own email address and password."""
+"""The forms behind Account settings: a person's own name, email and password."""
 
 from __future__ import annotations
 
@@ -13,6 +13,70 @@ from apps.core.roles import Role
 from apps.schools.models import Branch
 
 from .invites import set_random_password, unique_username
+
+
+class ProfileForm(StyledFormMixin, forms.ModelForm):
+    """How a person is named on screen, and what they do at the school.
+
+    Both were previously only editable in the Django admin, which a proprietor
+    cannot reach -- so a school whose owner was invited as "Owner" with no
+    surname had no way to correct it, and the sidebar, the staff list and every
+    "prepared for" line on a report carried the wrong name indefinitely.
+
+    Deliberately *not* on this form: the role, the school and the campus. Those
+    decide what the account can see, so they are somebody else's to set -- see
+    ``StaffAccountForm``, which is the screen that does. A form where you could
+    promote yourself would not be a profile form.
+
+    ``job_title`` is free text and stays that way: it is the job the person
+    does, which is a school's own vocabulary, and it is never read to decide
+    access. The permission role answers that, and the two are kept apart on
+    purpose -- see apps/core/roles.py.
+    """
+
+    class Meta:
+        model = get_user_model()
+        fields = ["first_name", "last_name", "job_title"]
+        widgets = {
+            "first_name": forms.TextInput(
+                attrs={"autocomplete": "given-name", "placeholder": "Ada"}
+            ),
+            "last_name": forms.TextInput(
+                attrs={"autocomplete": "family-name", "placeholder": "Okonkwo"}
+            ),
+            "job_title": forms.TextInput(
+                attrs={
+                    "autocomplete": "organization-title",
+                    "placeholder": "Head of Mathematics",
+                }
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["first_name"].label = "First name"
+        self.fields["last_name"].label = "Surname"
+        self.fields["job_title"].label = "Job title"
+        self.fields["job_title"].help_text = (
+            "What you do here, in your school's own words. It appears beside "
+            "your name and never affects what you can see."
+        )
+        # A blank display name leaves the shell falling back to the username,
+        # which is derived from an email address and reads like one.
+        self.fields["first_name"].required = True
+        self.fields["last_name"].required = True
+
+    def _tidy(self, name: str) -> str:
+        return " ".join(self.cleaned_data.get(name, "").split())
+
+    def clean_first_name(self):
+        return self._tidy("first_name")
+
+    def clean_last_name(self):
+        return self._tidy("last_name")
+
+    def clean_job_title(self):
+        return self._tidy("job_title")
 
 
 class EmailChangeForm(StyledFormMixin, forms.Form):

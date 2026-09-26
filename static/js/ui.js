@@ -391,6 +391,47 @@
     initSidebarScroll();
   }
 
+  /* ======================================================================
+   * The school logo's file input
+   *
+   * A file input hidden behind a styled label says nothing about what was
+   * chosen, so the page would sit there looking unchanged after somebody picked
+   * a file -- the exact confusion this control was rebuilt to remove. This
+   * echoes the filename beside the button.
+   *
+   * Progressive: with the script blocked the span keeps its server-rendered "No
+   * file chosen", the input still works, and the form still saves.
+   * ====================================================================== */
+  function initLogoInput() {
+    var inputs = document.querySelectorAll('.logo-file');
+    for (var i = 0; i < inputs.length; i++) {
+      bindLogoInput(inputs[i]);
+    }
+  }
+
+  function bindLogoInput(input) {
+    // The echo lives after the input in the same row -- see
+    // templates/core/_logo_field.html.
+    var echo = input.parentNode
+      ? input.parentNode.querySelector('[data-logo-filename]')
+      : null;
+    if (!echo) return;
+
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      if (!file) {
+        echo.textContent = 'No file chosen';
+        echo.classList.remove('font-medium', 'text-ink-900');
+        return;
+      }
+      // Kilobytes, because the limit people meet is stated in megabytes and a
+      // raw byte count is not something anyone checks against it.
+      var kb = Math.max(1, Math.round(file.size / 1024));
+      echo.textContent = file.name + ' (' + kb.toLocaleString() + ' KB)';
+      echo.classList.add('font-medium', 'text-ink-900');
+    });
+  }
+
   function initSidebarScroll() {
     var panes = document.querySelectorAll('[data-sidebar-scroll]');
     if (!panes.length) return;
@@ -897,10 +938,25 @@
   //: the fold on a phone before the stack starts covering the page.
   var TOAST_MAX = 4;
 
-  //: How long the close-then-drop tail takes. Kept in step with
-  //: --duration-settle; a little generous so a toast is never removed from
-  //: the DOM while it is still visibly moving.
-  var TOAST_CLOSE_MS = 420;
+  //: The three stage durations, each in step with a token in assets/app.css.
+  //: They have to agree: the stylesheet animates, this file decides when the
+  //: next stage starts, and a mismatch shows up as a stage cut short.
+  //:
+  //:   TOAST_FADE_MS  <-> --toast-fade   the words appearing / going
+  //:   TOAST_OPEN_MS  <-> --toast-open   the panel widening / closing
+  //:   TOAST_RISE_MS  <-> --toast-rise   the circle arriving / leaving
+  //:
+  //: Each is a little longer than its token so a stage is never interrupted by
+  //: the next one, and a toast is never removed from the DOM while it is still
+  //: visibly moving.
+  var TOAST_FADE_MS = 280;
+  var TOAST_OPEN_MS = 580;
+  var TOAST_RISE_MS = 480;
+
+  //: A beat between the circle landing and the panel opening. Without it the two
+  //: overlap into one indistinct movement; with it the toast reads as a thing
+  //: that arrives and then speaks.
+  var TOAST_BEAT_MS = 120;
 
   var ICON_PATHS = {
     success: ['M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'],
@@ -995,39 +1051,73 @@
     return button;
   }
 
-  /* Drive one toast through rise -> open -> hold -> close -> drop. */
+  /* Drive one toast through its six beats.
+   *
+   *   in    rise the circle  ->  open the panel  ->  fade the words in
+   *   out   fade the words out  ->  close the panel  ->  drop the circle
+   *
+   * The order on the way out is the whole point, and it is what the reported
+   * bug was about. Closing the panel while the message is still opaque makes the
+   * text reflow into an ever-narrower column -- visibly crushed -- because the
+   * track it sits in is a grid column shrinking to zero. Fading the words first
+   * means the reflow still happens and nobody sees it.
+   *
+   * Scripted rather than declared because there is a hold in the middle that has
+   * to be interruptible: a CSS animation cannot be paused halfway because a
+   * cursor arrived. The stylesheet still owns every duration and curve; this
+   * decides only when each stage begins.
+   *
+   * Two timer lists, not one. Hovering clears the *hold* so the toast waits for
+   * you -- it must not also cancel a stage of the entrance that has not run yet,
+   * which is what a single list did: hover a toast mid-arrival and it froze
+   * half-open.
+   */
   function runToast(el, level) {
     var meta = TOAST_LEVELS[level] || TOAST_LEVELS.info;
-    var timers = [];
+    var holdTimers = [];
+    var stageTimers = [];
     var finished = false;
+    var still = reduceMotion.matches;
 
-    function later(fn, ms) {
-      timers.push(window.setTimeout(fn, ms));
+    function stage(fn, ms) {
+      stageTimers.push(window.setTimeout(fn, still ? 0 : ms));
     }
 
-    function clearTimers() {
-      timers.forEach(window.clearTimeout);
-      timers = [];
+    function later(fn, ms) {
+      holdTimers.push(window.setTimeout(fn, ms));
+    }
+
+    function clearHold() {
+      holdTimers.forEach(window.clearTimeout);
+      holdTimers = [];
+    }
+
+    function clearStages() {
+      stageTimers.forEach(window.clearTimeout);
+      stageTimers = [];
     }
 
     function dismiss() {
       if (finished) return;
       finished = true;
-      clearTimers();
-      // Close back into the circle first, then let it drop -- the entrance
-      // played backwards, which is what makes the two read as one object
-      // rather than two effects.
-      el.classList.remove('is-open');
-      later(function () {
-        el.classList.remove('is-in');
-        later(function () {
-          if (el.parentNode) el.parentNode.removeChild(el);
-        }, TOAST_CLOSE_MS);
-      }, reduceMotion.matches ? 0 : 220);
+      clearHold();
+      clearStages();
+      // The entrance played backwards, which is what makes arriving and leaving
+      // read as one object rather than two effects.
+      el.classList.remove('is-lit');
+      stage(function () {
+        el.classList.remove('is-open');
+        stage(function () {
+          el.classList.remove('is-in');
+          stage(function () {
+            if (el.parentNode) el.parentNode.removeChild(el);
+          }, TOAST_RISE_MS);
+        }, TOAST_OPEN_MS);
+      }, TOAST_FADE_MS);
     }
 
     function hold() {
-      clearTimers();
+      clearHold();
       later(dismiss, meta.hold);
     }
 
@@ -1036,22 +1126,30 @@
     // Reading takes longer than the timer allows sometimes. Hovering or
     // focusing anything inside restarts the clock rather than freezing it,
     // so a toast never sits on screen forever because a cursor was parked.
-    el.addEventListener('mouseenter', clearTimers);
+    el.addEventListener('mouseenter', clearHold);
     el.addEventListener('mouseleave', hold);
-    el.addEventListener('focusin', clearTimers);
+    el.addEventListener('focusin', clearHold);
     el.addEventListener('focusout', hold);
     el.addEventListener('click', function (event) {
       if (event.target.closest('[data-toast-close]')) dismiss();
     });
 
-    // Two frames: one to commit the closed start state the stylesheet
-    // declares, one to move off it. Without the gap the browser collapses
+    // Two frames before the first move: one to commit the closed start state the
+    // stylesheet declares, one to leave it. Without the gap the browser collapses
     // both into a single style recalculation and nothing transitions.
     requestAnimationFrame(function () {
-      el.classList.add('is-in');
       requestAnimationFrame(function () {
-        el.classList.add('is-open');
-        hold();
+        el.classList.add('is-in');
+        stage(function () {
+          el.classList.add('is-open');
+          stage(function () {
+            el.classList.add('is-lit');
+            // The clock starts when there is something to read, not when the
+            // toast began arriving -- otherwise a good second of the hold is
+            // spent on an empty circle.
+            hold();
+          }, TOAST_OPEN_MS);
+        }, TOAST_RISE_MS - TOAST_BEAT_MS);
       });
     });
   }
@@ -1092,12 +1190,12 @@
       var existing = Array.prototype.slice.call(region.querySelectorAll('[data-toast]'));
       existing.forEach(function (el, index) {
         var level = levelOf(el.getAttribute('data-toast-level'));
-        el.classList.remove('is-in', 'is-open');
+        el.classList.remove('is-in', 'is-open', 'is-lit');
         el.parentNode.removeChild(el);
         window.setTimeout(function () {
           region.appendChild(el);
           runToast(el, level);
-        }, index * 140);
+        }, index * 220);
       });
     }
 
@@ -1178,6 +1276,7 @@
     var repeats = document.querySelectorAll('[data-repeat]');
     for (var i = 0; i < repeats.length; i++) initRepeat(repeats[i]);
 
+    initLogoInput();
     initPresets();
     initTotals();
   }

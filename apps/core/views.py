@@ -41,7 +41,7 @@ from apps.fees.models import FeeComponent, FeeStructure, Term
 from apps.schools.models import Branch, School, SchoolModule
 from apps.students.models import Student, StudentStatus
 
-from .branding import PRIVACY_EMAIL, branding
+from .branding import PRIVACY_EMAIL, PRODUCT_DESCRIPTION, branding
 # The money and payment-state derivations the dashboards and Reports share.
 # Re-exported by name so `from apps.core.views import status_breakdown` -- which
 # is how the dashboard tests reach it -- keeps working after the move.
@@ -49,9 +49,9 @@ from .finance import collection_summary, status_breakdown, with_outstanding
 from .forms import SchoolProfileForm, SchoolSignupForm
 from .modules import BY_KEY, MODULES, state_for_school
 from .navigation import home_url_for, home_url_name
-from .permissions import Capability, CapabilityRequiredMixin
-from .roles import Role, scope_for
-from .seo import structured_data
+from .permissions import Capability, CapabilityRequiredMixin, has_capability
+from .roles import Role, is_platform_role, scope_for
+from .seo import FEATURES, structured_data
 
 ZERO = Decimal("0")
 
@@ -115,6 +115,26 @@ class PrivacyView(TemplateView):
         context["policy_updated"] = self.POLICY_UPDATED
         context["privacy_email"] = PRIVACY_EMAIL
         context["page_title"] = "Privacy"
+        return context
+
+
+class AboutView(TemplateView):
+    """Who builds this, why, and how to reach them. Public.
+
+    The feature list and the product description come from
+    ``apps.core.seo.FEATURES`` and ``apps.core.branding`` rather than being
+    retyped here, so the page, the structured data, ``llms.txt`` and the landing
+    page cannot drift into describing different products.
+    """
+
+    template_name = "core/about.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["features"] = FEATURES
+        context["product_description"] = PRODUCT_DESCRIPTION
+        context["privacy_email"] = PRIVACY_EMAIL
+        context["page_title"] = "About"
         return context
 
 
@@ -405,55 +425,134 @@ class PlatformSchoolView(CapabilityRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        school = self.object
-        User = get_user_model()
-
-        context["modules"] = state_for_school(school.pk)
-        context["always_on"] = [m for m in MODULES if m.always_on]
-
-        branches = list(
-            Branch.objects.filter(school=school)
-            .annotate(
-                students_count=Count(
-                    "students",
-                    filter=Q(students__status=StudentStatus.ACTIVE),
-                    distinct=True,
-                ),
-                classes_count=Count(
-                    "classes", filter=Q(classes__is_active=True), distinct=True
-                ),
-            )
-            .select_related("head")
-            .order_by("name")
+        context.update(platform_school_context(self.object))
+        context.setdefault(
+            # The same form a proprietor edits their own school with. This is
+            # where the platform owner reaches it -- they have no school of
+            # their own, so /settings/ has nothing to show them and no longer
+            # offers itself in their sidebar.
+            "profile_form",
+            SchoolProfileForm(instance=self.object, can_manage_logo=True),
         )
-        # One query for every campus's current term, paired up here rather than
-        # handed to the template as a dict: a Django template cannot look a dict
-        # up by a variable key without a filter invented for the purpose.
-        current_terms = {
-            term.branch_id: term
-            for term in Term.objects.filter(is_current=True, branch__school=school)
-        }
-        context["branches"] = branches
-        context["rows"] = [
+        return context
+
+
+def platform_school_context(school) -> dict:
+    """Everything the platform's school screen shows, for one school.
+
+    A function rather than a method because two views render that screen: the
+    detail view, and the profile form's POST when it comes back rejected. A
+    rejected logo should return to the page it was chosen from with the campuses
+    and the switches still around it, and the alternative -- one view
+    instantiating the other to borrow its context -- is a constructor call that
+    will break the first time either gains a dispatch-time attribute.
+
+    Every queryset goes through a scoped manager and is then narrowed to
+    ``school`` by hand. At platform scope the scoping is a no-op, which is the
+    point: if the capability check above it ever regressed, a school-scoped
+    caller would see their own school rather than somebody else's.
+    """
+    User = get_user_model()
+
+    branches = list(
+        Branch.objects.filter(school=school)
+        .annotate(
+            students_count=Count(
+                "students",
+                filter=Q(students__status=StudentStatus.ACTIVE),
+                distinct=True,
+            ),
+            classes_count=Count(
+                "classes", filter=Q(classes__is_active=True), distinct=True
+            ),
+        )
+        .select_related("head")
+        .order_by("name")
+    )
+    # One query for every campus's current term, paired up here rather than
+    # handed to the template as a dict: a Django template cannot look a dict up
+    # by a variable key without a filter invented for the purpose.
+    current_terms = {
+        term.branch_id: term
+        for term in Term.objects.filter(is_current=True, branch__school=school)
+    }
+
+    return {
+        "school": school,
+        "modules": state_for_school(school.pk),
+        "always_on": [m for m in MODULES if m.always_on],
+        "branches": branches,
+        "rows": [
             {"branch": branch, "term": current_terms.get(branch.pk)}
             for branch in branches
-        ]
-        context["staff"] = (
+        ],
+        "staff": (
             User.objects.filter(school=school)
             .select_related("branch")
             .order_by("role", "username")
-        )
-        context["student_count"] = Student.objects.filter(
+        ),
+        "student_count": Student.objects.filter(
             school=school, status=StudentStatus.ACTIVE
-        ).count()
-        context["class_count"] = Class.objects.filter(
-            school=school, is_active=True
-        ).count()
+        ).count(),
+        "class_count": Class.objects.filter(school=school, is_active=True).count(),
         # A pointer rather than a copy: the collections figures for this school
         # are a report, and the report already knows how to scope itself to one.
-        context["report_url"] = f"{reverse('reports:index')}?school={school.pk}"
-        context["page_title"] = school.name
+        "report_url": f"{reverse('reports:index')}?school={school.pk}",
+        "page_title": school.name,
+    }
+
+
+class PlatformSchoolProfileView(CapabilityRequiredMixin, UpdateView):
+    """The platform owner editing one school's name, logo and office contacts.
+
+    A POST target rather than a screen of its own: it renders
+    :class:`PlatformSchoolView`'s template on a rejected form, so an invalid logo
+    comes back on the page it was chosen from with the rest of that school's
+    detail still around it.
+
+    Gated on ``MANAGE_SCHOOL_MODULES`` -- the same capability as the switches
+    beside it, because both are the platform acting on a school it does not
+    belong to. A proprietor editing *their own* school goes through
+    :class:`SchoolSettingsView` and ``MANAGE_SCHOOL_PROFILE`` instead.
+    """
+
+    capability = Capability.MANAGE_SCHOOL_MODULES
+    form_class = SchoolProfileForm
+    template_name = "core/platform_school.html"
+    context_object_name = "school"
+
+    def get_queryset(self):
+        return School.objects.all()
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        # The platform holds MANAGE_SCHOOL_LOGO, so the field is always present
+        # here. Passed explicitly rather than left to the default, so the form's
+        # shape is stated at every call site rather than inferred at one.
+        kwargs["can_manage_logo"] = True
+        return kwargs
+
+    def get(self, request, *args, **kwargs):
+        # Nothing to GET: the form lives on the detail screen.
+        return HttpResponseRedirect(
+            reverse("core:platform_school", args=[self.kwargs["pk"]])
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(platform_school_context(self.object))
+        # The bound, rejected form -- not a fresh one -- so the values the
+        # platform owner typed are still in the boxes beside the errors.
+        context["profile_form"] = context["form"]
         return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f"{self.object.name} updated.")
+        return response
+
+    def get_success_url(self):
+        return reverse("core:platform_school", args=[self.object.pk])
 
 
 class SchoolModuleToggleView(CapabilityRequiredMixin, View):
@@ -763,21 +862,44 @@ class SchoolSettingsView(CapabilityRequiredMixin, UpdateView):
     capability = Capability.MANAGE_SCHOOL_PROFILE
     success_url = reverse_lazy("core:school_settings")
 
+    def dispatch(self, request, *args, **kwargs):
+        """Platform staff are sent to the screen that does have a school on it.
+
+        They have none of their own, so this page had nothing to show them and
+        used to answer 404 -- for exactly the account whose sidebar was offering
+        it. The entry is gone from their nav now; this catches the bookmark and
+        the typed URL, and lands them on Platform > Schools, where each school's
+        profile sits beside its plan and its modules.
+        """
+        if request.user.is_authenticated and getattr(request, "tenant", None):
+            if is_platform_role(request.tenant.role):
+                return HttpResponseRedirect(reverse("core:platform_overview"))
+        return super().dispatch(request, *args, **kwargs)
+
     def get_object(self, queryset=None):
         from django.http import Http404
 
         school = getattr(self.request.user, "school", None)
         if school is None:
-            # Platform staff have no school of their own to configure. They
-            # edit any school through the admin, which is where cross-tenant
-            # work belongs.
+            # Not platform staff -- dispatch has already redirected those -- so
+            # this is a school account with no school, which is a broken row
+            # rather than a screen anybody can be sent to usefully.
             raise Http404("This account is not attached to a school.")
         return school
+
+    def can_manage_logo(self) -> bool:
+        return has_capability(self.request.user, Capability.MANAGE_SCHOOL_LOGO)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["can_manage_logo"] = self.can_manage_logo()
+        return kwargs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["page_title"] = "School settings"
         context["setup"] = setup_progress(self.request)
+        context["can_manage_logo"] = self.can_manage_logo()
         return context
 
     def form_valid(self, form):

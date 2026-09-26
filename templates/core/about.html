@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% comment %}
+Public, and readable signed in as well as signed out -- base.html renders
+`anonymous_content` for a visitor and `content` inside the shell for a signed-in
+user, so the page fills both from one partial rather than existing twice. Same
+arrangement as the privacy policy.
+
+The title and meta description are in apps/core/seo.py with the other public
+pages', which is also what puts this page in sitemap.xml and llms.txt.
+
+The content, and the three blocks waiting for your own copy, are in
+core/_about_body.html.
+{% endcomment %}
+
+{% block page_title %}About{% endblock %}
+
+{% block content %}{% include "core/_about_body.html" %}{% endblock %}
+
+{% block anonymous_content %}
+<div class="min-h-full bg-surface">
+  {% comment %}
+  The same short navy band the privacy page uses: there is no hero here for a
+  transparent header to sit over, and the band gives the page the same opening
+  note as everything else public.
+  {% endcomment %}
+  <header class="relative isolate overflow-hidden"
+          style="background: var(--gradient-brand);">
+    <div class="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+      <a href="{% url 'core:landing' %}" class="flex items-center gap-2.5">
+        {% include "partials/_brand_mark.html" %}
+        <span class="text-base font-semibold tracking-tight text-white">
+          {{ product_name }}
+        </span>
+      </a>
+      <div class="flex items-center gap-2">
+        {% include "partials/_theme_toggle.html" with on_panel=True %}
+        <a href="{% url 'core:signup' %}" class="btn btn-on-panel text-sm"
+           data-auth-swap>
+          Get started
+        </a>
+      </div>
+    </div>
+  </header>
+
+  {% include "core/_about_body.html" %}
+
+  {% include "partials/_site_footer.html" %}
+</div>
+{% endblock %}

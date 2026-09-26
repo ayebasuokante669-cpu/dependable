@@ -31,6 +31,35 @@ campuses themselves is a different job and lives at /branches/.
   {% include "core/_setup_banner.html" %}
 
   {% comment %}
+  The reported gap: people could not find where to add a school logo. The place
+  itself is now obvious (core/_logo_field.html); this is the signpost to it, shown
+  only while there is no logo and only to an account that may change one -- the
+  proprietor, per Capability.MANAGE_SCHOOL_LOGO. It disappears the moment one is
+  uploaded, so it is a prompt rather than a permanent strip of chrome.
+  {% endcomment %}
+  {% if not current_school.logo and "manage_school_logo" in capabilities %}
+    <a href="{% url 'core:school_settings' %}#logo"
+       class="card card-interactive group flex flex-wrap items-center gap-4 p-5">
+      <span class="grid size-12 shrink-0 place-items-center rounded-md border
+                   border-dashed border-ink-300 bg-ink-50 text-lg font-semibold
+                   text-brand-800" aria-hidden="true">
+        {{ current_school.initial }}
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="flex items-center gap-1.5 text-sm font-semibold text-ink-900">
+          Add your school logo
+          {% include "partials/_tile_arrow.html" %}
+        </p>
+        <p class="mt-0.5 text-sm text-ink-600">
+          It appears in the sidebar and on every payment receipt a parent is
+          handed. Until then, {{ current_school.name }} shows as
+          &ldquo;{{ current_school.initial }}&rdquo;.
+        </p>
+      </div>
+    </a>
+  {% endif %}
+
+  {% comment %}
   Each figure already answers "how many"; the next question is always "which
   ones". These were dead tiles sitting directly above the list that answers it,
   so the whole tile is the link -- a 44px+ target with the count as its label,

@@ -21,4 +21,11 @@ urlpatterns = [
         views.ResendStaffInviteView.as_view(),
         name="resend_invite",
     ),
+    # Switching an account off, and back on. Platform only -- see
+    # Capability.DEACTIVATE_ACCOUNTS.
+    path(
+        "<int:pk>/activation/",
+        views.StaffActivationView.as_view(),
+        name="activation",
+    ),
 ]

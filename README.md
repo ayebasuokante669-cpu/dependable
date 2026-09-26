@@ -121,6 +121,15 @@ right class and branch and keeps the link back, that admission fees and termly
 fees never touch, that a lapsed enquiry is closed rather than deleted, and that
 one school cannot see another's applicants.
 
+The navigation and settings pass adds 71: that a person can rename themselves and
+cannot promote themselves doing it, that the logo is the proprietor's in the form as
+well as on the page, that "School settings" is gone from the one sidebar it 404'd in
+and present in the two where it works, that no footer link goes nowhere and About is
+in the sitemap, that the platform's Users screen shows a School column a school's
+Staff screen does not, that deactivation locks an account out without deleting
+anything and cannot be turned on yourself — and that `ui.js` and `app.css` still
+agree about how long each stage of a toast takes.
+
 Modules add 67: that fees and student records cannot be switched off and that
 messaging and admissions are off until somebody says otherwise, that the platform
 owner can toggle and that a school owner cannot — not even for their own school,
@@ -1138,6 +1147,9 @@ detail screen — including for their own school — and from the toggle endpoin
 | `/platform/` | Every school as a card: its own logo, its plan and status, its counts, and a chip per switchable module showing on *or* off. The whole card is the link. |
 | `/platform/schools/<id>/` | One school: identity, figures, the module switches, its campuses and their current terms, who can sign in, and a link to its collections report. |
 | `/platform/schools/<id>/modules/` | POST only. Switches one module. |
+| `/platform/schools/<id>/profile/` | POST only. The school's name, office contacts and logo — the same `SchoolProfileForm` a proprietor uses. A rejected form comes back on the whole detail page, not a stub. |
+| `/staff/` | **Users** at platform scope: every account, with its school, and a deactivate control. |
+| `/staff/<id>/activation/` | POST only. Switches an account off, or back on. |
 
 `/platform/` used to be a table of counts, which was the wrong shape for the job:
 the platform owner does not arrive to read numbers, they arrive to pick a school and
@@ -1152,6 +1164,24 @@ double-submitted or pressed the switch in a tab that had gone stale. A POST rath
 than a link, because a GET that changed what a school pays for would be followed by
 every crawler and prefetcher on the internet — a test asserts the endpoint answers
 405 to a GET.
+
+### Deactivating an account
+
+`DEACTIVATE_ACCOUNTS` is platform-only, for the same reason the modules are: it is
+how a school's access is suspended, and a proprietor who could do it could also
+lock out the platform's own support account at their school.
+
+It sets `is_active = False`, which is Django's own "may not sign in" — so the
+lockout happens at the authentication backend rather than in anything this codebase
+has to remember to check. **Nothing is deleted:** the payments the account recorded
+and the messages it sent keep its name, and reactivating restores access with the
+same password.
+
+Two guards worth knowing. The POST names the state it wants rather than flipping
+whatever it finds, so a stale tab cannot reactivate somebody by pressing what it
+thinks says deactivate. And you cannot deactivate your own account — not a
+permission question but a footgun one: switching off the account you are signed in
+as locks you out of the screen that switches it back on.
 
 ### The pilot
 
@@ -1766,6 +1796,30 @@ students, colleagues? — rather than reading a "setup complete" flag. A flag
 would go stale the moment someone deleted their last class, and the school would
 be told it had finished a step it had not.
 
+### Your own account
+
+`/accounts/settings/` carries three forms, told apart by a hidden `form` field so
+a rejected one does not wipe a half-typed other:
+
+| Form | Fields |
+| --- | --- |
+| **You** | First name, surname, job title |
+| **Password** | Old, new, new again — against `AUTH_PASSWORD_VALIDATORS` |
+| **Email address** | New address, confirmed with the current password |
+
+The name and job title used to be editable only in the Django admin, which a
+proprietor cannot reach — so a school whose owner was invited as "Owner" with no
+surname had no way to correct it, and the sidebar, the staff list and every report
+footer carried the wrong name indefinitely.
+
+**Role, school and campus are deliberately absent** from that form. They decide
+what the account can see, so they belong to whoever manages staff; a profile form
+you could promote yourself from would not be a profile form. A test posts
+`role=platform_owner` and `is_superuser=on` to it and asserts nothing moves.
+
+`job_title` stays free text and is never read to decide access — see
+[Permission role vs. job title](#permission-role-vs-job-title).
+
 ### Signing in, Account settings and temporary passwords
 
 **The split panel.** Sign in, sign up and the four password-reset stages all
@@ -1889,6 +1943,35 @@ tests pass. So there are two guards, and they work differently on purpose:
 
 Multi-line comments belong in `{% comment %}...{% endcomment %}`, which is what
 all twelve became.
+
+### The school logo is the proprietor's
+
+`MANAGE_SCHOOL_LOGO` is granted in `_SCHOOL_ADMIN` — the school owner and the
+platform — and not in `_LEADERSHIP`, so a **principal may correct the school's
+name or its office number and may not change the mark that goes on every receipt
+a parent is handed.**
+
+`SchoolProfileForm` takes `can_manage_logo` and *removes* the field rather than
+disabling it. A disabled input still looks like a control and still posts nothing,
+so a principal would meet a file picker that silently did not work; removing it
+means the form cannot accept a logo from them even if one is posted by hand —
+which a test does.
+
+**Finding it was the reported problem**, not doing it. Two changes:
+
+* `templates/core/_logo_field.html` replaces `{{ form.logo }}`. Django's
+  `ClearableFileInput` rendered "Currently: logos/…/file.png [ ] Clear  Change:
+  …" as loose text and inputs with nothing wrappable around them — a file path
+  where a school expected to see its own logo. The control now shows the logo at
+  the size it is used, with a `<label for>` styled as the button beside it. The
+  label *is* the button, so a pointer and a keyboard land on the same real input
+  with no click handler.
+* The school dashboard carries a prompt while there is no logo and the account may
+  add one, linking to `/settings/#logo`. It disappears the moment one is uploaded.
+
+Removal is our own `remove_logo` checkbox rather than `ClearableFileInput`'s,
+because the widget it belongs to is gone. A new file wins over the tick: somebody
+who chose a replacement and left the box checked meant to replace it.
 
 ### Logos
 
@@ -2055,6 +2138,18 @@ mobile drawer. Links the role may not use are never emitted; destinations that
 don't exist yet render greyed out with a "soon" tag and light up on their own
 once the URL name exists.
 
+Two entries point at one screen on purpose. `staff:list` is **Staff** for a
+school and **Users** for the platform, because the same list at platform scope is
+every account on the product across every school — and it then shows a School
+column and the deactivate control. The view reads the caller's scope; nothing in
+the template reads a role.
+
+**School settings** is offered to the school-side roles only. A platform owner has
+no school of their own, so `/settings/` raised a 404 for exactly the account whose
+sidebar was offering it; they reach each school's profile from Platform › Schools
+instead, and a bookmark or a typed URL now redirects there rather than hitting a
+wall.
+
 Three gates, and an entry has to pass all three: the **role**, the **capability**
 it declares (if any), and the **module** it belongs to (if any) — see
 [Modules](#modules-what-each-school-has). Both sets default to empty, so a caller
@@ -2083,6 +2178,14 @@ is both a utility and a CSS custom property.
   cards (`rounded-lg`), up to 32px (`rounded-2xl`). `.squircle` upgrades to a
   real superellipse where `corner-shape` is supported and stays a generous
   rounded rectangle everywhere else.
+- **Motion** — `--duration-quick` / `--duration-settle` / `--duration-slow` for
+  the general case, plus `--toast-rise` / `--toast-open` / `--toast-fade`, which a
+  toast has to itself because it is the one thing on screen whose job is to be read
+  before it goes. `ui.js` sequences the stages and names those tokens in its
+  constants; a test asserts the two files have not drifted, since a stage cut short
+  is exactly the jank that was reported. One `prefers-reduced-motion` opt-out near
+  the top of the stylesheet covers every component, including the status-dot pulse
+  — whose keyframes end transparent so the cut leaves no ring behind.
 - **Glass** — `--glass-bg`, `--glass-border`, `--glass-edge`, `--glass-blur`,
   plus a `--glass-dark-*` set for panes on the navy gradient. Used through
   `.glass` / `.glass-dark` / `.glass-lit`, and deliberately sparingly: a sticky

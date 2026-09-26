@@ -1,0 +1,115 @@
+{% comment %}
+The school logo control: the one place a school actually changes its mark.
+
+Takes `school` (for the current logo), `field` (the form's logo file field) and
+`remove_field` (its "remove the current logo" checkbox). Both fields are absent
+for an account that may not change the logo, and this partial then renders the
+read-only half.
+
+The problem this replaces: `{{ form.logo }}` rendered Django's stock
+ClearableFileInput -- a bare "Choose file" next to the words "Currently:
+logos/…/file.png" -- which people did not read as *the* place to add a logo, and
+which showed a file path rather than the image. So the control now shows the
+thing itself: the logo as it stands, at the size it is used, with a labelled
+button beside it.
+
+The <label> *is* the button. A styled <span> plus a hidden input would need a
+click handler to work; a label pointing at the real input needs nothing, works
+with the keyboard, and announces itself correctly.
+
+Only rendered where the account holds MANAGE_SCHOOL_LOGO -- the proprietor and
+the platform. The form drops the field entirely for anyone else, so there is
+nothing here to guard against: `field` is falsy and this partial renders the
+read-only half.
+{% endcomment %}
+
+<div class="flex flex-wrap items-start gap-5">
+
+  {# What it looks like now, at the size the sidebar and a receipt use. #}
+  <div class="shrink-0 text-center">
+    <div class="grid size-24 place-items-center rounded-lg border border-dashed
+                border-ink-300 bg-ink-50 p-2">
+      {% if school.logo %}
+        <img src="{{ school.logo.url }}" alt="{{ school.name }} logo"
+             class="max-h-full max-w-full object-contain">
+      {% else %}
+        <span class="grid size-14 place-items-center rounded-md bg-brand-100
+                     text-xl font-semibold text-brand-800" aria-hidden="true">
+          {{ school.initial }}
+        </span>
+      {% endif %}
+    </div>
+    <p class="mt-2 text-xs text-ink-500">
+      {% if school.logo %}Current logo{% else %}No logo yet{% endif %}
+    </p>
+  </div>
+
+  <div class="min-w-0 flex-1">
+    {% if field %}
+      <p class="text-sm font-medium text-ink-900">
+        {% if school.logo %}Replace your logo{% else %}Add your school logo{% endif %}
+      </p>
+      <p class="mt-1 text-sm text-ink-600">
+        PNG, JPEG, WebP or SVG, under 2&nbsp;MB. A square or a wide image both
+        work — it is scaled to fit, never cropped. Without one, your school's
+        initial is shown instead, which is a finished look rather than a gap.
+      </p>
+
+      <div class="mt-3 flex flex-wrap items-center gap-3">
+        {% comment %}
+        The label is styled as the button and the input is visually hidden but
+        still focusable, so the keyboard reaches it and the focus ring lands on
+        the label. `sr-only` rather than `display:none`, which would take it out
+        of the tab order entirely.
+        {% endcomment %}
+        <label for="{{ field.id_for_label }}" class="btn btn-primary text-sm">
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.6"
+               stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21
+                     18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+          </svg>
+          {% if school.logo %}Choose a new file{% else %}Choose a file{% endif %}
+        </label>
+        {{ field }}
+        <span class="text-xs text-ink-500" data-logo-filename aria-live="polite">
+          No file chosen
+        </span>
+      </div>
+
+      {% for error in field.errors %}
+        <p class="field-error">{{ error }}</p>
+      {% endfor %}
+
+      {% comment %}
+      Removal, only where there is something to remove. Our own checkbox rather
+      than ClearableFileInput's -- see SchoolProfileForm.remove_logo for why.
+      {% endcomment %}
+      {% if school.logo and remove_field %}
+        <label class="mt-3 flex items-start gap-2.5 text-sm text-ink-700">
+          {{ remove_field }}
+          <span>
+            {{ remove_field.label }}
+            <span class="block text-xs text-ink-500">{{ remove_field.help_text }}</span>
+          </span>
+        </label>
+      {% endif %}
+
+      <p class="mt-3 text-xs text-ink-500">
+        Nothing changes until you press <strong>Save</strong>.
+      </p>
+    {% else %}
+      {% comment %}
+      A principal sees the logo and is told whose decision it is, rather than
+      being shown a control that would refuse them. Saying who can do it is the
+      useful half: they know who to ask.
+      {% endcomment %}
+      <p class="text-sm font-medium text-ink-900">Your school's logo</p>
+      <p class="mt-1 text-sm text-ink-600">
+        It appears in the sidebar and on every payment receipt. Changing it is
+        the proprietor's decision, so it is not editable from this account —
+        ask them, or whoever manages the platform, to change it.
+      </p>
+    {% endif %}
+  </div>
+</div>

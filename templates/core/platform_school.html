@@ -32,44 +32,68 @@ flipping one: how many campuses, who can sign in, whether the terms are set.
 {% block content %}
 <div class="space-y-5">
 
-  {# ===== Who this is =================================================== #}
-  <div class="card p-5 sm:p-6">
-    <div class="flex flex-wrap items-start gap-4">
-      {% include "partials/_school_logo.html" with school=school size="size-16" %}
-      <div class="min-w-0 flex-1">
-        <h2 class="text-lg font-semibold text-brand-900">{{ school.name }}</h2>
-        <div class="mt-2 flex flex-wrap items-center gap-2">
-          <span class="chip">{{ school.get_plan_display }}</span>
-          <span class="status-pill
-                       {% if school.is_active %}status-paid{% else %}status-overdue{% endif %}">
-            {{ school.get_status_display }}
-          </span>
-          <span class="text-xs text-ink-500">
+  {% comment %}
+  ===== Who this is, and editable ========================================
+
+  The same form a proprietor uses on /settings/. This is where the platform owner
+  reaches it: they have no school of their own, so /settings/ had nothing to show
+  them and its sidebar entry -- which 404'd for exactly this account -- is gone.
+
+  The name, the office contacts and the logo, in one card with one Save. Plan and
+  status are read-only here and stay in the Django admin: they are billing state,
+  and a two-click change to somebody's subscription on a page about features is
+  not a control this screen should offer.
+  {% endcomment %}
+  <form method="post" action="{% url 'core:platform_school_profile' school.pk %}"
+        enctype="multipart/form-data" class="card overflow-hidden">
+    {% csrf_token %}
+
+    <div class="flex flex-wrap items-start justify-between gap-4 border-b
+                border-ink-200 px-5 py-4">
+      <div class="flex min-w-0 items-center gap-3">
+        {% include "partials/_school_logo.html" with school=school size="size-12" %}
+        <div class="min-w-0">
+          <h2 class="truncate text-base font-semibold text-brand-900">
+            {{ school.name }}
+          </h2>
+          <p class="text-xs text-ink-500">
             On the platform since {{ school.created_at|date:"j F Y" }}
-          </span>
+          </p>
         </div>
-        <dl class="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-          <div class="flex gap-2">
-            <dt class="text-ink-500">Office email</dt>
-            <dd class="min-w-0 truncate text-ink-800">
-              {% if school.contact_email %}
-                <a href="mailto:{{ school.contact_email }}" class="hover:underline">
-                  {{ school.contact_email }}
-                </a>
-              {% else %}<span class="text-ink-400">Not set</span>{% endif %}
-            </dd>
-          </div>
-          <div class="flex gap-2">
-            <dt class="text-ink-500">Office phone</dt>
-            <dd class="numeric min-w-0 truncate text-ink-800">
-              {% if school.contact_phone %}{{ school.contact_phone }}
-              {% else %}<span class="text-ink-400">Not set</span>{% endif %}
-            </dd>
-          </div>
-        </dl>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="chip">{{ school.get_plan_display }}</span>
+        <span class="status-pill
+                     {% if school.is_active %}status-paid{% else %}status-overdue{% endif %}">
+          {{ school.get_status_display }}
+        </span>
       </div>
     </div>
-  </div>
+
+    {% if profile_form.non_field_errors %}
+      <div class="border-b border-ink-200 bg-overdue-soft px-5 py-3 text-sm
+                  text-overdue-strong" role="alert">
+        {% for error in profile_form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="grid gap-5 px-5 py-5">
+      {% include "partials/_field.html" with field=profile_form.name %}
+      <div class="grid gap-5 sm:grid-cols-2">
+        {% include "partials/_field.html" with field=profile_form.contact_email %}
+        {% include "partials/_field.html" with field=profile_form.contact_phone %}
+      </div>
+      <div class="border-t border-ink-200 pt-5">
+        {% include "core/_logo_field.html" with school=school field=profile_form.logo remove_field=profile_form.remove_logo %}
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between gap-3 border-t border-ink-200
+                px-5 py-4">
+      <p class="numeric text-xs text-ink-500">/{{ school.slug }}/</p>
+      <button type="submit" class="btn btn-primary text-sm">Save school details</button>
+    </div>
+  </form>
 
   {# ===== The figures =================================================== #}
   <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
