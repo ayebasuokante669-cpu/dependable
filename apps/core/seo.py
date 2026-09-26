@@ -112,6 +112,7 @@ PRIVATE_PATHS: tuple[str, ...] = (
     "/messaging/",
     "/payments/",
     "/admissions/",
+    "/reports/",
     "/media/",
     # Each school's own public enquiry page, /<school-slug>/enquiry/. Public to
     # parents, but it is the school's page, not the product's, and it already

@@ -67,6 +67,9 @@ INSTALLED_APPS = [
     # an applicant into a student and prices the intake against an academics
     # class -- it depends on those apps, and nothing depends on it.
     "apps.admissions",
+    # Reads every app above and writes to none of them. No models, so no
+    # migrations: a report is a question asked of the data, not a record of it.
+    "apps.reports",
 ]
 
 MIDDLEWARE = [

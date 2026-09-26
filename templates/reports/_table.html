@@ -1,0 +1,110 @@
+{% comment %}
+One of a report's breakdowns.
+
+Takes `table` -- an apps.reports.structure.Table. Every cell arrives already
+formatted, so this template only decides where things sit: it adds up nothing,
+formats nothing, and reverses no URLs. That is what keeps this grid and the same
+grid in the PDF honest about each other.
+
+Rows are walked as `table.filled_rows`, which pairs each cell with its column --
+see structure.Filled for why the pairing is not done here.
+
+Three things are worth knowing:
+
+  * a column marked `bar` is the figure in the column beside it, drawn. It is
+    decoration for an eye scanning down the page, so it is hidden from screen
+    readers, which already have the number, and hidden below `sm`, where there is
+    no room for a picture of a number;
+  * the total row is the view's, not the template's -- a template that summed a
+    column would be a second source of truth for it;
+  * the footnote is not decoration. Every one of these grids leaves something
+    out, and the note says what.
+{% endcomment %}
+
+<section class="card overflow-hidden" id="report-{{ table.key }}">
+  <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
+    <h2 class="text-sm font-semibold text-ink-900">{{ table.title }}</h2>
+    {% if table.link %}
+      <a href="{{ table.link.1 }}" class="btn btn-secondary shrink-0 text-xs">
+        {{ table.link.0 }}
+      </a>
+    {% endif %}
+  </div>
+
+  {% if table.rows %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="table-head">
+          <tr>
+            {% for column in table.columns %}
+              {% if column.bar %}
+                <th scope="col" class="hidden w-32 px-4 py-3 font-semibold sm:table-cell">
+                  <span class="sr-only">{{ column.label }}</span>
+                </th>
+              {% else %}
+                <th scope="col"
+                    class="whitespace-nowrap px-4 py-3 font-semibold{% if column.align == 'right' %} text-right{% endif %}">
+                  {{ column.label }}
+                </th>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        </thead>
+
+        <tbody class="divide-y divide-ink-200">
+          {% for row in table.filled_rows %}
+            <tr>
+              {% for entry in row %}
+                {% if entry.column.bar %}
+                  <td class="hidden px-4 py-3 sm:table-cell" aria-hidden="true">
+                    <span class="chart-bar-track">
+                      <span class="chart-bar-fill"
+                            style="--bar: {{ entry.cell.share }}%;
+                                   --bar-color: var(--color-brand-500);"></span>
+                    </span>
+                  </td>
+                {% else %}
+                  <td class="whitespace-nowrap px-4 py-3{% if entry.column.numeric %} numeric{% endif %}{% if entry.column.align == 'right' %} text-right{% endif %} {% if entry.cell.strong %}font-medium text-ink-900{% elif entry.cell.muted %}text-ink-400{% else %}text-ink-700{% endif %}">
+                    {% if entry.cell.pill %}
+                      <span class="status-pill {{ entry.cell.pill }}">{{ entry.cell.text }}</span>
+                    {% elif entry.cell.href %}
+                      <a href="{{ entry.cell.href }}" class="text-brand-800 hover:underline">
+                        {{ entry.cell.text }}
+                      </a>
+                    {% else %}
+                      {{ entry.cell.text }}
+                    {% endif %}
+                  </td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+
+        {% if table.total %}
+          <tfoot class="border-t-2 border-brand-900 bg-brand-50/60">
+            <tr>
+              {% for entry in table.filled_total %}
+                {% if entry.column.bar %}
+                  <td class="hidden sm:table-cell"></td>
+                {% else %}
+                  <td class="whitespace-nowrap px-4 py-3 font-semibold text-ink-900{% if entry.column.numeric %} numeric{% endif %}{% if entry.column.align == 'right' %} text-right{% endif %}">
+                    {{ entry.cell.text }}
+                  </td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+          </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  {% else %}
+    <p class="px-5 py-8 text-center text-sm text-ink-500">{{ table.empty }}</p>
+  {% endif %}
+
+  {% if table.note %}
+    <p class="border-t border-ink-200 px-5 py-3 text-xs text-ink-500">
+      {{ table.note.text }}
+    </p>
+  {% endif %}
+</section>

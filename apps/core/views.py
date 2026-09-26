@@ -42,6 +42,10 @@ from apps.schools.models import Branch, School
 from apps.students.models import Student, StudentStatus
 
 from .branding import PRIVACY_EMAIL, branding
+# The money and payment-state derivations the dashboards and Reports share.
+# Re-exported by name so `from apps.core.views import status_breakdown` -- which
+# is how the dashboard tests reach it -- keeps working after the move.
+from .finance import collection_summary, status_breakdown, with_outstanding
 from .forms import SchoolProfileForm, SchoolSignupForm
 from .navigation import home_url_for, home_url_name
 from .permissions import Capability, CapabilityRequiredMixin
@@ -518,106 +522,6 @@ class BursarDashboardView(RoleDashboardMixin, TemplateView):
         )
         context["page_title"] = "Finance dashboard"
         return context
-
-
-def collection_summary(term) -> dict:
-    """What has actually come in against ``term``, and what is still waiting.
-
-    Resolved through the app registry rather than imported: the dashboards
-    shipped before payments did, and this screen must render whether or not
-    that app is installed. Confirmed money only -- pending receipts are
-    reported separately, because a bursar needs to know the difference between
-    money counted and money merely handed in.
-    """
-    from django.apps import apps as django_apps
-
-    summary = {"collected_total": ZERO, "pending_total": ZERO, "pending_count": 0}
-    if term is None or not django_apps.is_installed("apps.payments"):
-        return summary
-
-    from apps.payments.models import Payment, PaymentStatus
-
-    totals = Payment.objects.filter(term=term).aggregate(
-        collected=Sum("amount", filter=Q(status=PaymentStatus.CONFIRMED)),
-        pending=Sum("amount", filter=Q(status=PaymentStatus.PENDING)),
-        pending_count=Count("id", filter=Q(status=PaymentStatus.PENDING)),
-    )
-    summary["collected_total"] = totals["collected"] or ZERO
-    summary["pending_total"] = totals["pending"] or ZERO
-    summary["pending_count"] = totals["pending_count"] or 0
-    return summary
-
-
-def with_outstanding(summary: dict, expected_total) -> dict:
-    """Add the derived outstanding figure. Never negative: overpayment across
-    a branch is a credit sitting somewhere, not a negative debt."""
-    summary["outstanding_total"] = max(
-        expected_total - summary["collected_total"], ZERO
-    )
-    return summary
-
-
-def status_breakdown(term) -> dict:
-    """How many students sit in each payment state, for the dashboard chart.
-
-    Counted, not stored, and counted from the same derivation every other
-    screen uses -- ``apps.students.fees`` -- so the chart, the outstanding list
-    and the pill beside a child's name can never disagree. Nothing here decides
-    what "paid" means; it asks the module that owns that question.
-
-    Resolved through the app registry for the same reason
-    :func:`collection_summary` is: the dashboards must render whether or not
-    the payments app is installed.
-
-    ``term`` is only a short-circuit -- "is any term current in this scope at
-    all". It is deliberately not used to price anything: ``fees.load`` resolves
-    each student's own campus term itself, which is what lets a proprietor
-    looking at four campuses on different terms get one honest breakdown
-    instead of three campuses measured against a fourth one's calendar.
-
-    Returns the four states in a fixed order with their counts, plus the total
-    they are a share of. The order is the ladder from settled to worst, which
-    is the order the legend and the stacked bar both read in -- and it never
-    changes with the data, so a state keeps its colour and its position even
-    when its count is zero.
-    """
-    from django.apps import apps as django_apps
-
-    buckets = [
-        {"key": "paid", "label": "Paid", "count": 0},
-        {"key": "partial", "label": "Part paid", "count": 0},
-        {"key": "unpaid", "label": "Unpaid", "count": 0},
-        {"key": "overdue", "label": "Overdue", "count": 0},
-    ]
-    if term is None or not django_apps.is_installed("apps.payments"):
-        return {"buckets": buckets, "total": 0}
-
-    from apps.students import fees as student_fees
-    from apps.students.models import Student, StudentStatus
-
-    students = list(
-        Student.objects.filter(status=StudentStatus.ACTIVE).select_related(
-            "school_class"
-        )
-    )
-    schedule = student_fees.load(students)
-
-    by_key = {bucket["key"]: bucket for bucket in buckets}
-    for student in students:
-        position = schedule.position_for(student)
-        # A student in a class with no fee structure is not in any of the four
-        # states -- they are unpriced, which is a setup gap rather than a
-        # payment state. Counting them as "unpaid" would invent a debt.
-        if not position.is_priced:
-            continue
-        bucket = by_key.get(position.state)
-        if bucket is not None:
-            bucket["count"] += 1
-
-    return {
-        "buckets": buckets,
-        "total": sum(bucket["count"] for bucket in buckets),
-    }
 
 
 # ===========================================================================

@@ -7,4 +7,8 @@ openpyxl==3.1.5
 psycopg[binary]==3.3.4
 pwned-passwords-django==5.2.0
 python-dotenv==1.2.2
+# The Reports PDF export, and nothing else -- see apps/reports/pdf.py for
+# why this one is worth a dependency where the payment receipt was not.
+# Pillow arrives with it and is not otherwise used.
+reportlab==5.0.1
 whitenoise==6.12.0
