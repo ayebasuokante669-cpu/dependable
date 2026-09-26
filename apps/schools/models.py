@@ -185,3 +185,104 @@ class Branch(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.school.name} - {self.name}"
+
+
+class SchoolModuleQuerySet(TenantQuerySet):
+    # A row belongs to one school and to no campus: a module is bought by the
+    # school, not opened at a branch.
+    tenant_school_field = "school_id"
+    tenant_branch_field = None
+
+
+class SchoolModuleManager(TenantManager.from_queryset(SchoolModuleQuerySet)):
+    """Auto-scoped: a school reads its own switches and nobody else's."""
+
+
+class SchoolModuleUnscopedManager(
+    UnscopedManager.from_queryset(SchoolModuleQuerySet)
+):
+    """Every row, regardless of caller.
+
+    Used by the platform owner's screens, which are cross-tenant by definition,
+    and by ``apps.core.modules``, which is always asked about a school it has
+    been handed the id of -- including, for a school's public enquiry page, a
+    school that is not the reader's own.
+    """
+
+
+class SchoolModule(TimeStampedModel):
+    """Whether one school has one module. Absent means "nobody has decided".
+
+    A row is a *decision*, not a state: with no row, the school gets whatever
+    ``apps.core.modules`` declares as that module's default, so a school that
+    signs up today needs nothing written for it and a later change of default
+    moves every school that never chose. Writing a row is how the platform owner
+    overrides that, in either direction.
+
+    Nothing here knows what a module is or does. The registry in
+    ``apps.core.modules`` is the authority on which keys exist, which URLs and
+    capabilities each one owns, and which cannot be switched off at all -- so a
+    key stored here that the registry does not recognise is ignored rather than
+    obeyed.
+    """
+
+    school = models.ForeignKey(
+        School, on_delete=models.CASCADE, related_name="module_states"
+    )
+    #: A key from ``apps.core.modules.MODULES``. Deliberately a plain string
+    #: rather than a choices field: the registry is code, and a migration per
+    #: new module would make adding one a database change for no reason.
+    key = models.CharField(max_length=40)
+    enabled = models.BooleanField()
+    #: Who last flipped it. Kept because "who turned our messaging off?" is a
+    #: question somebody will ask, and null once that account is deleted.
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="module_changes",
+        null=True,
+        blank=True,
+    )
+
+    objects = SchoolModuleManager()
+    all_objects = SchoolModuleUnscopedManager()
+
+    class Meta:
+        ordering = ["school__name", "key"]
+        base_manager_name = "all_objects"
+        default_manager_name = "objects"
+        verbose_name = "school module"
+        constraints = [
+            # One decision per module per school, enforced in the database: two
+            # rows disagreeing about the same switch is a state no screen could
+            # render honestly.
+            models.UniqueConstraint(
+                fields=["school", "key"], name="unique_module_per_school"
+            )
+        ]
+        indexes = [models.Index(fields=["school", "key"])]
+
+    def __str__(self) -> str:
+        return f"{self.school.name} - {self.key}: {'on' if self.enabled else 'off'}"
+
+    @classmethod
+    def set_state(cls, school, key: str, enabled: bool, *, by=None) -> "SchoolModule":
+        """Record a decision about one module at one school.
+
+        Refuses a module the registry does not know, and one it says cannot be
+        switched off -- a caller that could write either would be creating a row
+        that every reader then has to ignore.
+        """
+        from apps.core.modules import ALWAYS_ON, BY_KEY
+
+        if key not in BY_KEY:
+            raise ValueError(f"No such module: {key!r}")
+        if key in ALWAYS_ON:
+            raise ValueError(f"{key!r} is part of the product and cannot be switched off.")
+
+        row, _ = cls.all_objects.update_or_create(
+            school=school,
+            key=key,
+            defaults={"enabled": bool(enabled), "changed_by": by},
+        )
+        return row

@@ -55,6 +55,11 @@ class Capability(str, Enum):
     DECIDE_ADMISSIONS = "decide_admissions"
     VIEW_ADMISSION_PAYMENTS = "view_admission_payments"
     RECORD_ADMISSION_PAYMENTS = "record_admission_payments"
+    # Which features a school has. The platform's decision and nobody else's:
+    # a proprietor who could switch on their own paid add-ons would be writing
+    # their own invoice. Granted only in _PLATFORM below, and it is the one
+    # capability deliberately absent from a school owner's set.
+    MANAGE_SCHOOL_MODULES = "manage_school_modules"
 
 
 #: Owner- and principal-level roles: set up the school, who attends it, and what
@@ -108,7 +113,16 @@ _SCHOOL_ADMIN = frozenset(
 #: approving a school's Sender ID is one: the platform submits it to the
 #: gateway, so a school approving its own would be marking its own homework and
 #: the first message would be rejected anyway.
-_PLATFORM = _LEADERSHIP | _SCHOOL_ADMIN | {Capability.MANAGE_MESSAGING_IDENTITY}
+#:
+#: Switching a school's modules is the other, and for the commercial reason
+#: rather than a technical one: which features a school has is what the school
+#: is paying for. A proprietor who could turn on the admissions add-on would be
+#: deciding their own bill.
+_PLATFORM = (
+    _LEADERSHIP
+    | _SCHOOL_ADMIN
+    | {Capability.MANAGE_MESSAGING_IDENTITY, Capability.MANAGE_SCHOOL_MODULES}
+)
 
 #: A bursar collects against the fee structure but does not decide it, and
 #: records payments against the roster without owning it -- they need to find a
@@ -170,11 +184,41 @@ def capabilities_for(role: str | None) -> frozenset[Capability]:
 
 
 def capabilities_of(user) -> frozenset[Capability]:
+    """What this account may actually do, here, today.
+
+    The role table is the ceiling; a module its school does not have takes
+    capabilities back off it. That second step is what closes the doors into a
+    switched-off module that are drawn on *other* modules' screens -- the
+    fee-reminder button on the bursar's dashboard is a messaging action sitting on
+    a payments page, and the middleware that guards ``/messaging/`` cannot reach
+    it.
+
+    Withdrawing rather than never granting, deliberately: a capability is a fact
+    about a role and stays one. ``capabilities_for(role)`` is still the pure
+    answer, and is what the capability table's own tests assert on.
+    """
     if user is None or not getattr(user, "is_authenticated", False):
         return frozenset()
     if getattr(user, "is_superuser", False):
         return _EVERYTHING
-    return capabilities_for(getattr(user, "role", None))
+
+    granted = capabilities_for(getattr(user, "role", None))
+    return granted - _withheld_from(user)
+
+
+def _withheld_from(user) -> frozenset[Capability]:
+    """Capabilities belonging to modules this account's school does not have.
+
+    Imported inside the function: ``apps.core.modules`` reaches the schools app
+    for the stored switches, and schools is built on ``apps.core.models``. A
+    module-level import here would close that circle.
+    """
+    from .modules import enabled_for_user, withheld_capabilities
+
+    withheld = withheld_capabilities(enabled_for_user(user))
+    if not withheld:
+        return frozenset()
+    return frozenset(c for c in Capability if c.value in withheld)
 
 
 def has_capability(user, capability: Capability) -> bool:

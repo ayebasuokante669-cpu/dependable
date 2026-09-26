@@ -62,11 +62,28 @@ class MessagingTestCase(TestCase):
     a real other branch to fail against rather than an empty one.
     """
 
+    @staticmethod
+    def enable_messaging(*schools):
+        """Give these schools the messaging module.
+
+        A helper rather than a line repeated in every fixture, because a suite
+        that forgot it would fail with a 403 from the middleware -- which looks
+        like a permissions bug and is not one.
+        """
+        from apps.schools.models import SchoolModule
+
+        for school in schools:
+            SchoolModule.set_state(school, "messaging", True)
+
     @classmethod
     def setUpTestData(cls):
         cls.alpha = School.all_objects.create(name="Alpha Schools")
         cls.north = Branch.all_objects.create(school=cls.alpha, name="North")
         cls.south = Branch.all_objects.create(school=cls.alpha, name="South")
+        # Messaging is a paid add-on and off until a school is set up to send --
+        # see apps/core/modules.py. This school is being tested for its
+        # messaging, so it has bought messaging.
+        cls.enable_messaging(cls.alpha)
 
         cls.owner = User.objects.create_user(
             "alpha.owner", password="pw", role=Role.SCHOOL_OWNER, school=cls.alpha
@@ -650,14 +667,40 @@ class ScopingTests(MessagingTestCase):
 
 class CapabilityTests(TestCase):
     def test_every_role_may_send(self):
-        """Chasing a fee is the bursar's job, so they send like a principal."""
+        """Chasing a fee is the bursar's job, so they send like a principal.
+
+        Asserted on ``capabilities_for``, the role table itself, rather than on a
+        user: a capability is a fact about a role and stays one, and whether a
+        particular account can exercise it today also depends on whether its
+        school has the messaging module -- which is the next test.
+        """
+        from apps.core.permissions import capabilities_for
+
         for role in (
             Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR, Role.PLATFORM_OWNER
         ):
-            user = User(role=role)
             with self.subTest(role=role):
-                self.assertTrue(has_capability(user, Capability.SEND_MESSAGES))
-                self.assertTrue(has_capability(user, Capability.VIEW_MESSAGES))
+                granted = capabilities_for(role)
+                self.assertIn(Capability.SEND_MESSAGES, granted)
+                self.assertIn(Capability.VIEW_MESSAGES, granted)
+
+    def test_a_school_without_the_module_holds_neither(self):
+        """The withdrawal that closes the fee-reminder button on the bursar's
+        dashboard, which is a messaging action drawn on a payments screen."""
+        from apps.schools.models import School, SchoolModule
+
+        school = School.all_objects.create(name="No Messaging Academy")
+        bursar = User.objects.create_user(
+            "quiet.bursar", password="pw", role=Role.BURSAR, school=school
+        )
+        self.assertFalse(has_capability(bursar, Capability.SEND_MESSAGES))
+        self.assertFalse(has_capability(bursar, Capability.VIEW_MESSAGES))
+        # Still holds everything that is not messaging.
+        self.assertTrue(has_capability(bursar, Capability.VIEW_PAYMENTS))
+
+        SchoolModule.set_state(school, "messaging", True)
+        bursar = User.objects.get(pk=bursar.pk)   # a fresh instance: the answer
+        self.assertTrue(has_capability(bursar, Capability.SEND_MESSAGES))
 
     def test_an_anonymous_visitor_may_not(self):
         from django.contrib.auth.models import AnonymousUser
@@ -785,13 +828,15 @@ class ViewTests(MessagingTestCase):
         self.send_two_messages()
         self.client.force_login(self.north_bursar)
 
-        with self.assertNumQueries(8):
+        with self.assertNumQueries(9):
             # session, user, count for pagination, the annotated page, the two
             # the tenant middleware needs, one for the school's messaging
-            # identity, and -- for a bursar only -- one for the school's
-            # admissions policy, which decides whether the sidebar offers them
-            # the applicant pipeline. The point of the assertion is that none
-            # of them grows with the number of messages on the page.
+            # identity, one for the school's enabled modules -- which decides
+            # what the sidebar offers and which URLs are reachable at all -- and
+            # -- for a bursar only -- one for the school's admissions policy,
+            # which decides whether the sidebar offers them the applicant
+            # pipeline. The point of the assertion is that none of them grows
+            # with the number of messages on the page.
             response = self.client.get(reverse("messaging:index"))
 
         rows = list(response.context["messages_sent"])
@@ -820,9 +865,27 @@ class NavigationTests(TestCase):
         for role in (
             Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR, Role.PLATFORM_OWNER
         ):
-            sections = nav_for(role, "/messaging/")
+            # The entry is module-gated as well as role-gated, so the module has
+            # to be in hand for the question "does this role get it?" to mean
+            # anything. The other direction is the next test.
+            sections = nav_for(role, "/messaging/", modules={"messaging"})
             items = [i for s in sections for i in s.items if i.label == "Messaging"]
             with self.subTest(role=role):
                 self.assertEqual(len(items), 1)
                 self.assertTrue(items[0].available)
                 self.assertEqual(items[0].href, reverse("messaging:index"))
+
+    def test_a_school_without_the_module_gets_no_messaging_entries(self):
+        from apps.core.navigation import nav_for
+
+        for role in (
+            Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR, Role.PLATFORM_OWNER
+        ):
+            with self.subTest(role=role):
+                labels = {
+                    i.label
+                    for s in nav_for(role, "/", modules=frozenset())
+                    for i in s.items
+                }
+                self.assertNotIn("Messaging", labels)
+                self.assertNotIn("Sender ID", labels)

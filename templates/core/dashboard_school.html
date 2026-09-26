@@ -1,5 +1,17 @@
 {% extends "base.html" %}
-{% load charts %}
+
+{% comment %}
+The proprietor's overview: how big the school is, and where its fees stand.
+
+Three figures, one picture, and the two things that are alerts rather than
+breakdowns -- the setup checklist, and a campus with no current term, which
+cannot be billed at all.
+
+The campus-by-campus table that used to close this page is on the report at
+/reports/, where each campus now carries a collected and an outstanding column
+beside its head count, and the same split per class underneath. Managing the
+campuses themselves is a different job and lives at /branches/.
+{% endcomment %}
 
 {% block page_subtitle %}
   <p class="truncate text-sm text-ink-600">
@@ -8,8 +20,8 @@
 {% endblock %}
 
 {% block page_actions %}
-  <a href="{% url 'students:student_list' %}" class="btn btn-secondary text-sm">
-    <span class="hidden sm:inline">View</span> roster
+  <a href="{% url 'reports:index' %}" class="btn btn-secondary text-sm">
+    <span class="hidden sm:inline">Full</span> report
   </a>
 {% endblock %}
 
@@ -85,76 +97,27 @@
     {% include "partials/_status_breakdown.html" with breakdown=status.buckets breakdown_total=status.total heading="Fees across every campus" %}
   </div>
 
-  <div class="card overflow-hidden">
-    <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
-      <h2 class="text-sm font-semibold text-ink-900">Your campuses</h2>
-      <a href="{% url 'schools:branch_list' %}"
-         class="btn btn-secondary text-xs">Manage branches</a>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="table-head">
-          <tr>
-            <th scope="col" class="px-5 py-3 font-semibold">Campus</th>
-            <th scope="col" class="px-5 py-3 font-semibold">Location</th>
-            <th scope="col" class="px-5 py-3 font-semibold">Current term</th>
-            <th scope="col" class="px-5 py-3 text-right font-semibold">Classes</th>
-            <th scope="col" class="px-5 py-3 text-right font-semibold">Students</th>
-            {% comment %}
-            The same head count, drawn, so the relative size of each campus is
-            readable by scanning rather than by comparing numbers. Hidden from
-            screen readers: the figure is already in the column beside it.
-            {% endcomment %}
-            <th scope="col" class="hidden w-36 px-5 py-3 font-semibold sm:table-cell">
-              <span class="sr-only">Relative size</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-ink-200">
-          {% for row in rows %}
-            <tr>
-              <td class="px-5 py-3 font-medium text-ink-900">{{ row.branch.name }}</td>
-              <td class="px-5 py-3 text-ink-700">
-                {{ row.branch.city }}{% if row.branch.city and row.branch.state %}, {% endif %}{{ row.branch.state }}
-              </td>
-              <td class="px-5 py-3">
-                {% if row.term %}
-                  <span class="text-ink-700">{{ row.term.name }}</span>
-                {% else %}
-                  <span class="status-pill status-partial">Not set</span>
-                {% endif %}
-              </td>
-              <td class="numeric px-5 py-3 text-right text-ink-700">{{ row.branch.classes_count }}</td>
-              <td class="numeric px-5 py-3 text-right text-ink-700">{{ row.branch.students_count }}</td>
-              <td class="hidden px-5 py-3 sm:table-cell" aria-hidden="true">
-                <span class="chart-bar-track">
-                  <span class="chart-bar-fill"
-                        style="--bar: {{ row.branch.students_count|percent_of:busiest_campus }}%;
-                               --bar-color: var(--color-acc-violet);"></span>
-                </span>
-              </td>
-            </tr>
-          {% empty %}
-            <tr>
-              <td colspan="6" class="px-5 py-8 text-center text-ink-500">
-                No campuses yet.
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    {% if branches_without_a_term %}
-      <p class="border-t border-ink-200 bg-partial-soft px-5 py-3 text-xs text-partial-strong">
-        No current term at {{ branches_without_a_term|join:", " }} — nothing there
-        can be priced or billed until one is set.
+  {% comment %}
+  An alert, not a breakdown, so it stays: a campus with no current term cannot be
+  priced or billed, and nothing on the report above will say so louder than
+  nothing appearing for it.
+  {% endcomment %}
+  {% if branches_without_a_term %}
+    <div class="card border-partial/30 bg-partial-soft px-5 py-4 text-sm text-partial-strong">
+      <p class="font-semibold">
+        No current term at {{ branches_without_a_term|join:", " }}.
+      </p>
+      <p class="mt-0.5">
+        Nothing there can be priced or billed until one is set, and those campuses
+        contribute nothing to any figure above.
         <a href="{% url 'fees:term_list' %}" class="font-semibold underline">
           Set a term
         </a>.
       </p>
-    {% endif %}
-  </div>
+    </div>
+  {% endif %}
+
+  {% include "partials/_report_link.html" with blurb="Every campus side by side — expected against collected, what each class is worth, how the money came in, and who still owes — plus a PDF to send on." %}
 
 </div>
 {% endblock %}

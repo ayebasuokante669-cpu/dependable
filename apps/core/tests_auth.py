@@ -441,16 +441,28 @@ class DashboardScopingTests(SeededRoleTestCase):
         )
 
     def test_an_owner_sees_their_own_campuses_and_no_others(self):
+        """The campus-by-campus table moved to Reports, so the leak it could
+        spring is tested where it now lives -- and the dashboard is still checked
+        for the rival's name, because a leak there would be just as bad."""
         self.client.force_login(User.objects.get(username="fulfilled-academy.owner"))
-        response = self.client.get(reverse("core:school_dashboard"))
-        names = {row["branch"].name for row in response.context["rows"]}
+
+        dashboard = self.client.get(reverse("core:school_dashboard"))
+        self.assertEqual(dashboard.context["branch_count"], 2)
+        self.assertNotContains(dashboard, "West Campus")
+
+        report = self.client.get(reverse("reports:index"))
+        names = {
+            branch.name for branch in report.context["scope"].branches
+        }
         self.assertEqual(names, {"Main Campus", "Annex"})
-        self.assertNotContains(response, "West Campus")
+        self.assertNotContains(report, "West Campus")
 
     def test_a_platform_owner_sees_every_school(self):
+        """The overview is cards now rather than a table, so the context is one
+        row per card -- each carrying the school and its module chips."""
         self.client.force_login(User.objects.get(username="platform.owner"))
         response = self.client.get(reverse("core:platform_overview"))
-        names = {school.name for school in response.context["schools"]}
+        names = {card["school"].name for card in response.context["cards"]}
         self.assertEqual(names, {"Fulfilled Academy", "Rival College"})
         self.assertEqual(response.context["school_count"], 2)
 

@@ -86,6 +86,11 @@ MIDDLEWARE = [
     # An account on a temporary password is held at Account settings until it
     # chooses its own. Reads request.user, so after AuthenticationMiddleware.
     "apps.accounts.middleware.RequirePasswordChangeMiddleware",
+    # A URL belonging to a module this school does not have answers 403 with a
+    # page saying so. Last, so the temporary-password redirect above wins: being
+    # told a feature is unavailable is a dead end for somebody who cannot use any
+    # screen yet. See apps/core/modules.py for why this is a middleware.
+    "apps.core.middleware.ModuleAccessMiddleware",
 ]
 
 # Sign in with an email address or a username. The username is derived from the

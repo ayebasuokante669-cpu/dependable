@@ -71,6 +71,21 @@ class IdentityTestCase(TestCase):
     against rather than an empty one.
     """
 
+    @staticmethod
+    def enable_messaging(*schools):
+        """Give these schools the messaging module.
+
+        Messaging is a paid add-on and off until a school is set up to send --
+        see apps/core/modules.py. Every fixture school in this file is one that
+        sends, so each gets it. A suite that forgot would fail with a 403 from
+        ``ModuleAccessMiddleware``, which looks like a permissions bug and is not
+        one.
+        """
+        from apps.schools.models import SchoolModule
+
+        for school in schools:
+            SchoolModule.set_state(school, "messaging", True)
+
     @classmethod
     def setUpTestData(cls):
         cls.dap = School.all_objects.create(name="Dap Group of Schools")
@@ -79,6 +94,7 @@ class IdentityTestCase(TestCase):
 
         cls.beta = School.all_objects.create(name="Beta College")
         cls.beta_main = Branch.all_objects.create(school=cls.beta, name="Beta Main")
+        cls.enable_messaging(cls.dap, cls.beta)
 
         cls.platform = User.objects.create_user(
             "platform.owner", password="pw", role=Role.PLATFORM_OWNER
@@ -583,28 +599,34 @@ class BulkSMSNigeriaTests(TestCase):
 
 
 class IdentityCapabilityTests(TestCase):
+    """The role table, which is the ceiling.
+
+    Asserted on ``capabilities_for`` rather than on a user, because a user also
+    carries a school, and a school without the messaging module has these
+    capabilities withdrawn -- see apps/core/permissions.py. That withdrawal is a
+    fact about the school; what is being tested here is the fact about the role.
+    """
+
     def test_leadership_may_view_their_schools_identity(self):
+        from apps.core.permissions import capabilities_for
+
         for role in (Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.PLATFORM_OWNER):
             with self.subTest(role=role):
-                self.assertTrue(
-                    has_capability(
-                        User(role=role), Capability.VIEW_MESSAGING_IDENTITY
-                    )
+                self.assertIn(
+                    Capability.VIEW_MESSAGING_IDENTITY, capabilities_for(role)
                 )
 
     def test_only_the_platform_may_register_or_approve_one(self):
-        self.assertTrue(
-            has_capability(
-                User(role=Role.PLATFORM_OWNER),
-                Capability.MANAGE_MESSAGING_IDENTITY,
-            )
+        from apps.core.permissions import capabilities_for
+
+        self.assertIn(
+            Capability.MANAGE_MESSAGING_IDENTITY,
+            capabilities_for(Role.PLATFORM_OWNER),
         )
         for role in (Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR):
             with self.subTest(role=role):
-                self.assertFalse(
-                    has_capability(
-                        User(role=role), Capability.MANAGE_MESSAGING_IDENTITY
-                    )
+                self.assertNotIn(
+                    Capability.MANAGE_MESSAGING_IDENTITY, capabilities_for(role)
                 )
 
 
@@ -922,11 +944,20 @@ class IdentityScopingTests(IdentityTestCase):
 
 
 class NavigationTests(TestCase):
+    #: The Communication section is module-gated, so these tests hand it the
+    #: module and ask their own question -- which role gets the Sender ID entry
+    #: at a school that sends. Whether a school that does not send gets the
+    #: section at all is tested in apps/messaging/tests.py::NavigationTests.
+    SENDS = frozenset({"messaging"})
+
     def test_leadership_gets_the_sender_id_link(self):
         from apps.core.navigation import nav_for
 
         for role in (Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.PLATFORM_OWNER):
-            sections = {s.label: s.items for s in nav_for(role, "/messaging/")}
+            sections = {
+                s.label: s.items
+                for s in nav_for(role, "/messaging/", modules=self.SENDS)
+            }
             labels = {i.label: i for i in sections["Communication"]}
             with self.subTest(role=role):
                 self.assertIn("Sender ID", labels)
@@ -935,7 +966,10 @@ class NavigationTests(TestCase):
     def test_a_bursar_does_not(self):
         from apps.core.navigation import nav_for
 
-        sections = {s.label: s.items for s in nav_for(Role.BURSAR, "/messaging/")}
+        sections = {
+            s.label: s.items
+            for s in nav_for(Role.BURSAR, "/messaging/", modules=self.SENDS)
+        }
         labels = {i.label for i in sections["Communication"]}
         self.assertNotIn("Sender ID", labels)
 

@@ -1,0 +1,27 @@
+{% comment %}
+A report's headline figures.
+
+Takes `stats` -- apps.reports.structure.Stat objects. Each carries a `tone`, which
+is a design-system *token* name rather than a class: the structure has to stay
+renderer-agnostic, so mapping "overdue" onto a text colour is this template's job
+and the PDF's own. The chain below is the only place it happens on screen.
+{% endcomment %}
+
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {% for stat in stats %}
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">{{ stat.label }}</div>
+      <div class="numeric mt-2 text-3xl font-semibold
+                  {% if stat.tone == 'paid' %}text-paid-strong
+                  {% elif stat.tone == 'partial' %}text-partial-strong
+                  {% elif stat.tone == 'overdue' %}text-overdue-strong
+                  {% elif stat.tone == 'muted' %}text-ink-400
+                  {% else %}text-brand-900{% endif %}">
+        {{ stat.value.text }}
+      </div>
+      {% if stat.note %}
+        <div class="mt-1 text-xs text-ink-500">{{ stat.note }}</div>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>

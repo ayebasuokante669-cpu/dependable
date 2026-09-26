@@ -42,6 +42,7 @@ from django.views.generic import (
 )
 
 from apps.academics.models import Class, Level
+from apps.core import modules
 from apps.schools.models import School
 
 from . import enrolment, notifications
@@ -103,7 +104,16 @@ class SchoolFromSlugMixin:
     school's enquiry page is missing", which is at least loud.
 
     A suspended or cancelled school's page goes dark rather than quietly
-    collecting enquiries nobody will read.
+    collecting enquiries nobody will read. So does a school that does not have
+    the admissions module, and that check lives here rather than in
+    ``ModuleAccessMiddleware`` for a reason worth stating: this page belongs to
+    the school named in the URL, not to whoever is reading it, and usually nobody
+    is signed in at all. The middleware knows the caller's school; only this
+    mixin knows the page's.
+
+    404 rather than the middleware's 403 page, and deliberately. To a parent with
+    a link from Instagram there is no such page, and a signed-out stranger is owed
+    no account of which features a school has or has not bought.
     """
 
     def get_school(self) -> School:
@@ -113,6 +123,8 @@ class SchoolFromSlugMixin:
             )
             if not school.is_active:
                 raise Http404("This school is not accepting enquiries.")
+            if "admissions" not in modules.enabled_for_school(school.pk):
+                raise Http404("This school does not have an enquiry page.")
             self._school = school
         return self._school
 

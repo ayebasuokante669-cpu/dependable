@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% comment %}
+"Your school does not have this feature."
+
+Deliberately not the ordinary 403 page. A permission refusal is about the account
+-- your role does not allow this -- and this one is not: the person may well hold
+every capability the screen needs, and the answer would be the same for their
+proprietor. So it names the module, says who can switch it on, and does not
+suggest they were doing anything wrong.
+
+Nothing here is deleted. The wording says so, because the first question a school
+asks on seeing this is whether their data is still there.
+{% endcomment %}
+
+{% block title %}{{ module.label }} is not available{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl py-10">
+  <div class="card p-6 sm:p-8">
+    <span class="icon-tile accent-amber">
+      <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0
+                 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0
+                 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+      </svg>
+    </span>
+
+    <h1 class="mt-4 text-xl font-semibold text-brand-900">
+      {{ module.label }} is not switched on for your school
+    </h1>
+    <p class="mt-2 text-sm text-ink-600">{{ module.description }}</p>
+    <p class="mt-3 text-sm text-ink-600">
+      Nothing has been deleted and nothing has been lost. The feature is simply not
+      part of your school's plan at the moment, which is why it is not in your
+      sidebar either. Whoever manages the platform can switch it back on, and every
+      screen returns exactly as it was.
+    </p>
+
+    <div class="mt-6 flex flex-wrap gap-2">
+      <a href="{% url 'core:dashboard' %}" class="btn btn-primary text-sm">
+        Back to your dashboard
+      </a>
+      {% if support_email %}
+        <a href="mailto:{{ support_email }}?subject=Enabling {{ module.label }}"
+           class="btn btn-secondary text-sm">Ask about {{ module.label|lower }}</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

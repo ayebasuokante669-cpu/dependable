@@ -4,14 +4,19 @@
 {% comment %}
 The bursar's term at a glance.
 
-Three figures, then two pictures of them, then the table the pictures came
-from. Every number on this page is produced by the view from the one
-derivation in apps/payments/balances.py -- nothing here adds anything up, and
-the charts are widths written from figures that were already worked out.
+Three figures and one picture of them. Every number on this page is produced by
+the view from the one derivation in apps/payments/balances.py -- nothing here
+adds anything up, and the chart is widths written from figures that were already
+worked out.
 
-The charts are CSS: no library, no runtime, no load. They follow the theme
-because their colours are tokens, and each one keeps its figures on screen as
-text beside the bar, so the page is readable without reading a picture.
+The breakdowns that used to follow -- the roster across the four payment states,
+and what each class is worth -- are on the report at /reports/, which has the
+collected and outstanding columns this page never had room for. A dashboard is
+what you see on arrival; a report is what you open.
+
+The chart is CSS: no library, no runtime, no load. It follows the theme because
+its colours are tokens, and it keeps its figures on screen as text beside the
+bar, so the page is readable without reading a picture.
 {% endcomment %}
 
 {% block page_subtitle %}
@@ -22,8 +27,8 @@ text beside the bar, so the page is readable without reading a picture.
 {% endblock %}
 
 {% block page_actions %}
-  <a href="{% url 'students:student_list' %}" class="btn btn-secondary text-sm">
-    <span class="hidden sm:inline">Find a</span> student
+  <a href="{% url 'reports:index' %}" class="btn btn-secondary text-sm">
+    <span class="hidden sm:inline">Full</span> report
   </a>
   {# The bursar's core outbound job, one click from the figures that prompt it. #}
   {% if "send_messages" in capabilities %}
@@ -118,8 +123,8 @@ text beside the bar, so the page is readable without reading a picture.
 
   </div>
 
-  {# ===== The two pictures =============================================== #}
-  <div class="glass-ground grid gap-4 rounded-2xl lg:grid-cols-2">
+  {# ===== The one picture ================================================ #}
+  <div class="glass-ground rounded-2xl">
 
     {% comment %}
     Collection against the term. One measure against its own whole, so it is a
@@ -127,6 +132,11 @@ text beside the bar, so the page is readable without reading a picture.
     there to say how far along that is. Pending is drawn as its own segment
     because money handed in but not yet confirmed is genuinely a third state,
     and a bursar reading this needs to see it separately from both.
+
+    This is the page's one chart, deliberately. The roster's split across the
+    four payment states was beside it and is now on the report, with the same
+    split per class next to it -- which is where somebody comparing classes was
+    always going to end up anyway.
     {% endcomment %}
     <div class="card card-glass p-5 sm:p-6">
       <div class="flex items-baseline justify-between gap-3">
@@ -180,98 +190,37 @@ text beside the bar, so the page is readable without reading a picture.
       </dl>
     </div>
 
-    {# The roster split across the four payment states. #}
-    <div class="card card-glass p-5 sm:p-6">
-      {% include "partials/_status_breakdown.html" with breakdown=status.buckets breakdown_total=status.total %}
-      {% if status.total %}
-        <a href="{% url 'payments:outstanding' %}"
-           class="mt-5 inline-flex items-center gap-1.5 text-xs font-semibold
-                  text-brand-700 hover:underline">
-          See who still owes
-          <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2"
-               stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-          </svg>
-        </a>
-      {% endif %}
-    </div>
-
   </div>
 
-  {# ===== The table the pictures came from ============================== #}
-  <div class="card overflow-hidden">
-    <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
-      <h2 class="text-sm font-semibold text-ink-900">What each class is worth</h2>
-      <a href="{% url 'fees:structure_list' %}" class="btn btn-secondary text-xs">
-        Fee structures
-      </a>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="table-head">
-          <tr>
-            <th scope="col" class="px-5 py-3 font-semibold">Class</th>
-            <th scope="col" class="px-5 py-3 text-right font-semibold">Per student</th>
-            <th scope="col" class="px-5 py-3 text-right font-semibold">Students</th>
-            <th scope="col" class="px-5 py-3 text-right font-semibold">Expected</th>
-            {% comment %}
-            The bar column is the same figure as the one beside it, drawn. It
-            is decoration for the eye scanning the column and is hidden from
-            screen readers, which already have the number.
-            {% endcomment %}
-            <th scope="col" class="hidden w-40 px-5 py-3 font-semibold sm:table-cell">
-              <span class="sr-only">Share of the term</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-ink-200">
-          {% for row in rows %}
-            <tr>
-              <td class="px-5 py-3 font-medium text-ink-900">
-                {{ row.klass.display_name }}
-              </td>
-              <td class="numeric px-5 py-3 text-right text-ink-700">
-                {{ row.per_student|naira }}
-              </td>
-              <td class="numeric px-5 py-3 text-right text-ink-700">{{ row.students }}</td>
-              <td class="numeric px-5 py-3 text-right font-medium text-ink-900">
-                {{ row.expected|naira }}
-              </td>
-              <td class="hidden px-5 py-3 sm:table-cell" aria-hidden="true">
-                <span class="chart-bar-track">
-                  <span class="chart-bar-fill"
-                        style="--bar: {{ row.expected|percent_of:busiest_expected }}%;
-                               --bar-color: var(--color-brand-500);"></span>
-                </span>
-              </td>
-            </tr>
-          {% empty %}
-            <tr>
-              <td colspan="5" class="px-5 py-8 text-center text-ink-500">
-                {% if term %}
-                  No class has fees set for {{ term.name }} yet.
-                {% else %}
-                  Nothing to price without a current term.
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    {% if unpriced_classes %}
-      <p class="border-t border-ink-200 bg-partial-soft px-5 py-3 text-xs text-partial-strong">
-        Not counted above:
+  {% comment %}
+  A hole in the figure above rather than a breakdown of it, so it stays on the
+  dashboard: these children are on the roster, are counted in the head count, and
+  contribute nothing to what the term is expected to be worth.
+  {% endcomment %}
+  {% if unpriced_classes %}
+    <div class="card border-partial/30 bg-partial-soft px-5 py-4 text-sm text-partial-strong">
+      <p class="font-semibold">
+        Not counted in the expected total:
+        {{ unpriced_classes|length }} class{{ unpriced_classes|length|pluralize:"es" }}
+        with students but no fees this term.
+      </p>
+      <p class="mt-1">
         {% for klass in unpriced_classes %}
           <span class="chip">{{ klass.display_name }} ({{ klass.students_count }})</span>
         {% endfor %}
-        — these classes have students but no fee structure this term, so their
-        expected total is unknown rather than zero.
       </p>
-    {% endif %}
-  </div>
+      <p class="mt-1.5">
+        Their expected total is unknown rather than zero.
+        {% if "manage_fees" in capabilities %}
+          <a href="{% url 'fees:structure_list' %}" class="font-semibold underline">
+            Set their fees
+          </a>.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+
+  {% include "partials/_report_link.html" with blurb="Every class priced against what has come in for it, the roster across the four payment states, how the money arrived and when, and who still owes — plus a PDF of the lot." %}
 
 </div>
 {% endblock %}

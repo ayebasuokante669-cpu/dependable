@@ -91,6 +91,19 @@ def enquiry_post(**overrides) -> dict:
 class AdmissionsTestCase(TestCase):
     """One school with two campuses, and a second school to stay out of."""
 
+    @staticmethod
+    def enable_admissions(*schools):
+        """Give these schools the admissions module.
+
+        A helper rather than a line in every fixture: a suite that forgot it
+        would fail with a 403 from ``ModuleAccessMiddleware``, which looks like a
+        permissions bug and is not one.
+        """
+        from apps.schools.models import SchoolModule
+
+        for school in schools:
+            SchoolModule.set_state(school, "admissions", True)
+
     @classmethod
     def setUpTestData(cls):
         cls.alpha = School.all_objects.create(
@@ -101,6 +114,12 @@ class AdmissionsTestCase(TestCase):
 
         cls.beta = School.all_objects.create(name="Beta Academy")
         cls.beta_main = Branch.all_objects.create(school=cls.beta, name="Main")
+
+        # Admissions is a paid add-on and off by default -- see
+        # apps/core/modules.py. Both schools here are being tested for their
+        # pipelines, so both have bought it. Turning it off is tested on its own,
+        # in apps/core/tests_modules.py.
+        cls.enable_admissions(cls.alpha, cls.beta)
 
         cls.alpha_owner = User.objects.create_user(
             "alpha.owner", password="pw", role=Role.SCHOOL_OWNER, school=cls.alpha
@@ -1405,11 +1424,33 @@ class PermissionTests(AdmissionsTestCase):
         from apps.admissions.access import admissions_capabilities
 
         sections = nav_for(
-            Role.BURSAR, "/admissions/", admissions_capabilities(self.north_bursar)
+            Role.BURSAR,
+            "/admissions/",
+            admissions_capabilities(self.north_bursar),
+            # This school has the add-on; what is being tested is which of its
+            # entries a bursar gets. A school without it is tested in
+            # apps/core/tests_modules.py.
+            modules={"admissions"},
         )
         labels = {item.label for section in sections for item in section.items}
         self.assertNotIn("Applications", labels)
         self.assertIn("Admission fees", labels)
+
+    def test_a_school_without_the_add_on_offers_a_bursar_nothing_at_all(self):
+        from apps.core.navigation import nav_for
+        from apps.admissions.access import admissions_capabilities
+
+        sections = nav_for(
+            Role.BURSAR,
+            "/",
+            admissions_capabilities(self.north_bursar),
+            modules=frozenset(),
+        )
+        labels = {item.label for section in sections for item in section.items}
+        for entry in ("Applications", "Admission fees", "Requirements",
+                      "New enquiry", "Admissions settings"):
+            with self.subTest(entry=entry):
+                self.assertNotIn(entry, labels)
 
 
 class ScreenTests(AdmissionsTestCase):

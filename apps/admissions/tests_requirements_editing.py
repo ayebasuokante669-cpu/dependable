@@ -43,6 +43,15 @@ def payload(**overrides) -> dict:
 
 
 class RequirementEditingTestCase(TestCase):
+    @staticmethod
+    def enable_admissions(*schools):
+        """See AdmissionsTestCase.enable_admissions -- admissions is off by
+        default, and these are schools that have bought it."""
+        from apps.schools.models import SchoolModule
+
+        for school in schools:
+            SchoolModule.set_state(school, "admissions", True)
+
     @classmethod
     def setUpTestData(cls):
         cls.school = School.all_objects.create(name="Fulfilled Academy")
@@ -51,6 +60,7 @@ class RequirementEditingTestCase(TestCase):
         cls.other_branch = Branch.all_objects.create(
             school=cls.other_school, name="Their Campus"
         )
+        cls.enable_admissions(cls.school, cls.other_school)
         cls.owner = User.objects.create_user(
             "owner", email="owner@example.com", password="pw",
             role=Role.SCHOOL_OWNER, school=cls.school,

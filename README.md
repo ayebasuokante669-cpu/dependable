@@ -121,6 +121,25 @@ right class and branch and keeps the link back, that admission fees and termly
 fees never touch, that a lapsed enquiry is closed rather than deleted, and that
 one school cannot see another's applicants.
 
+Modules add 67: that fees and student records cannot be switched off and that
+messaging and admissions are off until somebody says otherwise, that the platform
+owner can toggle and that a school owner cannot — not even for their own school,
+and not by POSTing to the endpoint directly — that every URL a switched-off module
+owns answers 403 with a page rather than a 500, including one that does not exist
+yet, that the school's public enquiry page 404s while admissions is off and opens
+again when it is on, that switching a module off deletes no rows and switching it
+back on restores the screens, that toggling school A never moves school B, and that
+Fulfilled Academy's recorded state is the one the client asked for.
+
+Reports adds 46: that one school's report never contains another's campus, class
+or child — including when the other school's id is typed into the query string
+— that expected, collected and outstanding are the same numbers the dashboards
+show, that confirming or voiding a payment moves every figure at once, that an
+overdue term turns unpaid balances overdue, that the export is a PDF and arrives as
+a download, that every amount on it carries both spellings and no substitute font
+ever reaches the file, and that the tables which came off the dashboards are gone
+from them and present on the report.
+
 Messaging adds a class of its own for the gateway: that a batch goes out under
 the school's own Sender ID on Termii's `dnd` route, that a success and a refusal
 map onto the right `MessageRecipient` rows, that nothing but an explicitly
@@ -201,6 +220,12 @@ with scope_to(school_id=7, branch_id=3, role=Role.BURSAR):
 ```
 
 ### Capabilities: what a role may *do*
+
+> Capabilities are the ceiling, and a school's [modules](#modules-what-each-school-has)
+> take some of it back: `capabilities_for(role)` is the pure role table, and
+> `capabilities_of(user)` is that table minus anything belonging to a module the
+> account's school does not have.
+
 
 Scoping answers "which rows?". Capabilities (`apps/core/permissions.py`) answer
 "which actions?" — so a bursar can have full visibility of the academic setup
@@ -970,7 +995,9 @@ has a receipt with an admission number on it and types it — and the browser's
 own search matches a surname too. The receipt is plain HTML with a print
 stylesheet rather than a generated PDF; the browser already knows how to print
 and how to save as PDF, and a PDF library would be a dependency the school has
-to keep working for a page that is one page long.
+to keep working for a page that is one page long. That judgement still stands for
+this page. It does not extend to [Reports](#reports), where the export is a filed
+document rather than a single page.
 
 ### Permissions
 
@@ -1006,6 +1033,256 @@ wall of red rather than adding a fourth colour beside them. Set a due date on
 the term (Django admin → Terms) and the overdue pill appears everywhere it
 should. The behaviour itself is covered by tests in
 `apps/payments/tests.py::OverdueTests`.
+
+## Modules: what each school has
+
+Three questions decide whether an account can reach a screen, and they are
+deliberately separate:
+
+| Question | Answered by |
+| --- | --- |
+| *Which rows?* | Tenancy — `apps/core/tenancy.py` |
+| *Which actions?* | Capabilities — `apps/core/permissions.py` |
+| *Which features does this school have at all?* | Modules — `apps/core/modules.py` |
+
+A module is a commercial fact about a school, not a permission. Admissions is a
+paid add-on; parent messaging costs the platform money per message. A school that
+has not taken them should not see them and should not be able to reach them by
+typing a URL — but none of that is a statement about the principal doing the
+typing, which is why it cannot live in the capability table.
+
+### The registry is the only declaration
+
+`apps/core/modules.py` holds one `Module` per feature: its URL prefixes, the
+capabilities it owns, its default, and whether it can be switched off at all.
+Adding a module means adding an entry there and nothing else — no migration, no
+second list of names anywhere in the codebase.
+
+| Module | Paths | Default |
+| --- | --- | --- |
+| `academics` | `/academics/` | always on |
+| `students` | `/students/` | always on |
+| `fees` | `/fees/`, `/payments/`, `/reports/` | always on |
+| `messaging` | `/messaging/` | **off** |
+| `admissions` | `/admissions/`, and the school's public enquiry page | **off** |
+
+The always-on three are what the product *is*: a school with no student records,
+no fees and no classes is not a school. `SchoolModule.set_state` refuses to record
+a decision about them, and a stale row claiming otherwise is ignored.
+
+### Absent means "nobody has decided"
+
+`SchoolModule` stores *decisions*, not state. With no row, a school gets the
+registry default — so a school that signs up this morning needs nothing written
+for it, and changing a default later moves every school that never chose. Writing
+a row is how the platform owner overrides that, in either direction, and the screen
+shows which of the two a switch currently is (`Platform default` against a chip).
+
+A key the registry does not recognise — a module since renamed or removed — is
+ignored rather than obeyed. The registry is the authority on what exists.
+
+### Enforcement is in four places, each because it knows something the others don't
+
+1. **`ModuleAccessMiddleware`** gates the URL prefixes for the caller's own school.
+   A middleware rather than a view mixin, deliberately: the requirement is that a
+   switched-off module is *never* reachable by typing its URL, and a mixin delivers
+   that only for as long as everybody remembers to add one. Matching on the prefix
+   means a screen added under `/admissions/` tomorrow is gated today. A test asserts
+   exactly that, against a URL that does not exist.
+2. **`capabilities_of(user)`** withdraws the module's capabilities. This is what
+   closes the doors drawn on *other* modules' screens — the fee-reminder button on
+   the bursar's dashboard is a messaging action sitting on a payments page, and the
+   middleware guarding `/messaging/` cannot reach it. Withdrawal, not absence:
+   `capabilities_for(role)` stays the pure answer, because a capability is a fact
+   about a role.
+3. **`nav_for(...)`** drops the module's nav entries, so the sidebar never offers a
+   door the middleware would shut. `NavItem.module` is the third gate beside
+   `roles` and `capability`, and like `capabilities` it defaults to empty — a
+   caller that does not pass it gets less, not more.
+4. **The school's public enquiry page** checks for itself, in
+   `SchoolFromSlugMixin`. It belongs to the school named in the URL rather than to
+   the reader, and usually nobody is signed in at all: the middleware knows the
+   caller's school, and only that mixin knows the page's.
+
+### What a refusal looks like
+
+A staff URL answers **403** with `templates/403_module.html` — which names the
+feature, says who can switch it on, and says that nothing has been deleted, because
+that is the first thing a school asks. Deliberately not the ordinary 403 page: a
+permission refusal is about the account, and this one is not.
+
+The public enquiry page answers **404**. To a parent with a link from Instagram
+there is no such page, and a signed-out stranger is owed no account of which
+features a school has bought.
+
+### Nothing is deleted
+
+Switching a module off hides it and closes its screens. The rows stay, the code
+stays, the URLs stay routed. Switching it back on the same afternoon restores every
+screen exactly as it was — one row written, no migration, no redeploy, and the
+answer moves inside the same request cycle. A test switches admissions off with an
+applicant on the board and finds them still there when it comes back on.
+
+### Only the platform owner switches them
+
+`MANAGE_SCHOOL_MODULES` is granted in `_PLATFORM` and nowhere else. It is the one
+capability deliberately absent from a school owner's set, and for a commercial
+reason rather than a technical one: a proprietor who could turn on the admissions
+add-on would be deciding their own bill. A school owner gets a 403 from the school
+detail screen — including for their own school — and from the toggle endpoint.
+
+### The platform owner's screens
+
+| URL | What it is |
+| --- | --- |
+| `/platform/` | Every school as a card: its own logo, its plan and status, its counts, and a chip per switchable module showing on *or* off. The whole card is the link. |
+| `/platform/schools/<id>/` | One school: identity, figures, the module switches, its campuses and their current terms, who can sign in, and a link to its collections report. |
+| `/platform/schools/<id>/modules/` | POST only. Switches one module. |
+
+`/platform/` used to be a table of counts, which was the wrong shape for the job:
+the platform owner does not arrive to read numbers, they arrive to pick a school and
+do something to it. **Schools** in the sidebar points here now rather than at the
+Django admin changelist — the admin is neither tenant-aware nor the place to make a
+commercial decision from, though `SchoolModule` is registered there for the question
+the admin is good at: when did this change, and who changed it.
+
+Each switch is its own form, and it POSTs the state it wants rather than "flip it".
+A toggle that flipped whatever it found would do the wrong thing the moment somebody
+double-submitted or pressed the switch in a tab that had gone stale. A POST rather
+than a link, because a GET that changed what a school pays for would be followed by
+every crawler and prefetcher on the internet — a test asserts the endpoint answers
+405 to a GET.
+
+### The pilot
+
+Fulfilled Academy is recorded with messaging and the full admissions pipeline
+**off**, and fees, student records and classes **on** — by
+`schools/migrations/0004_pilot_module_state.py`, which is keyed on the school's name,
+guarded by an `exists()` so it is inert where that school is absent, idempotent, and
+reversible.
+
+It writes rows for a state the registry defaults would produce anyway, and that is
+the point: a default is what the platform does when nobody has decided, and somebody
+*has* decided here. Leaving it implied would mean a later change of default silently
+switching a live school's features on, mid-term, with an SMS bill attached.
+
+## Reports
+
+The dashboards answer "how are we doing?" at a glance. Reports answers "show me".
+Everything detailed enough to need a table or a second chart moved off the four
+dashboards and onto `/reports/`, which each one now links to.
+
+### One structure, two renderers
+
+`apps/reports/reporting.py` builds a `Report` — headline figures, two charts, the
+breakdowns, and the notes that keep them from being misread. The page and the PDF
+each walk that same structure and neither computes anything, which is the only
+reason a printed figure can be trusted to match the screen. A third renderer would
+need no changes to the builder.
+
+`apps/reports/structure.py` is the contract: `Stat`, `Chart`, `Segment`, `Table`,
+`Column`, `Cell`. It imports nothing that knows about output. A `Cell` carries its
+figure already formatted in both spellings it needs — `₦102,000` for the
+screen, `NGN 102,000` for print — and `prose()` does the same for a sentence
+with money in it.
+
+### It defines nothing of its own
+
+| Question | Answered by |
+| --- | --- |
+| What is a child expected to pay, and which state are they in? | `apps/students/fees.py` |
+| What counts as money received? | `apps/payments/` via `apps/core/finance.py` |
+| Who still owes? | `apps/payments/balances.py::outstanding` |
+
+The report only *groups* those answers — by school, campus, class, method, month
+— and formats them. `apps/core/finance.py` is new but not: `collection_summary`,
+`with_outstanding` and `status_breakdown` moved there out of `core/views.py` and
+grew a plural, so the four dashboards and the report read the same three functions.
+`from apps.core.views import status_breakdown` still works.
+
+### Two figures that are deliberately not the same thing
+
+The report says this in its own notes rather than quietly picking one:
+
+- **Collected**, wherever money is totalled, is every confirmed payment credited
+  to the term. The till question, the same figure the bursar's dashboard shows,
+  and it adds up: the campus rows sum to the headline.
+- **Still owed**, on the outstanding table, is what the *current roster* has left
+  to pay. The chase question. It parts company with expected-less-collected when a
+  child who has paid has since left, or a parent has overpaid.
+
+### Scope, not permission
+
+`VIEW_PAYMENTS` gates the screen, and every role holds it — a bursar collects
+against these figures, a principal and a proprietor answer for them. What differs
+between roles is what the report *covers*, and the scoped managers have already
+settled that before `resolve_scope` runs:
+
+| Role | Covers | Picker |
+| --- | --- | --- |
+| Bursar / Principal | their campus | none — a select with one option is not a choice |
+| School owner | every campus they run | campus |
+| Platform owner | every school | school, then campus |
+
+A school or branch id typed into the query string is matched against the
+tenant-scoped querysets. An id that is not there counts as *not chosen* rather than
+as an error, so a caller can neither widen their scope nor earn a 404 for trying
+— they get their own report.
+
+**There is no term picker, on purpose.** Every campus is measured against its own
+current term. A proprietor mid-transition has two terms in flight, and pricing one
+campus against another's calendar would overstate one and understate the other.
+
+### Screens
+
+| URL | What it is |
+| --- | --- |
+| `/reports/` | The collections report: six figures, two charts, seven breakdowns, and the small print. |
+| `/reports/collections.pdf` | The same report as a download, carrying the same query string. |
+
+The breakdowns are: by school (platform scope), by campus, by class, payment status
+by class, how the money came in, what it was recorded against, when it arrived, and
+the twenty largest outstanding balances. Each carries a footnote saying what it
+leaves out, because every one of them leaves something out.
+
+### The PDF, and the receipt that is not one
+
+`ReceiptView` prints from the browser and deliberately does not generate a PDF, on
+the grounds that a browser already knows how to print one page. That reasoning
+holds for one page and stops holding for a report, which somebody files, emails to
+a bank or hands to a board: it needs a fixed page size, repeating table headers,
+page numbers and a filename, and none of those survive "Ctrl-P, save as PDF" intact
+across four browsers. So ReportLab is a dependency, confined to
+`apps/reports/pdf.py` — nothing else in the codebase imports it. Pillow arrives
+with it and is not otherwise used.
+
+**Why the PDF says `NGN` where the screen says `₦`.** The fourteen fonts every
+PDF reader has built in are Latin-1, and `₦` (U+20A6) is not in Latin-1.
+ReportLab does not refuse a character it cannot encode — it silently substitutes
+ZapfDingbats — so the first draft of this export rendered every amount as a
+dingbat, with nothing in any log to say so. Embedding a font for one character is a
+file the school then has to keep shipped and licensed, so the report prints the ISO
+code, which is what a bank statement does too. A test asserts no substitute font
+ever appears in the output.
+
+The charts are drawn: `StackedBar` is a ReportLab `Flowable` filling rectangles in
+the app's own status colours, copied into `pdf.py` as hex because a PDF has no CSS
+custom properties. They are the light-theme values, since paper is white. Every
+segment drawn is also named and counted in a legend underneath — on paper as on
+screen, hue is never the only signal.
+
+### What the dashboards kept
+
+Each keeps its summary figures and exactly one chart, plus anything that is an
+*alert* rather than a breakdown — a campus with no current term, a class carrying
+children with no fee against their name. Those are holes in the figures beside
+them, not detail to go and look up.
+
+| Dashboard | Keeps | Moved to Reports |
+| --- | --- | --- |
+| `/finance/` | Three money figures, the collection meter | The roster's four states, "What each class is worth" |
+| `/school/` | Three counts, the four-state breakdown | "Your campuses" |
+| `/branch/` | Three counts, the four-state breakdown | "Classes on this campus" |
 
 ## Admissions and enquiries
 
@@ -1446,10 +1723,13 @@ screens rather than one with three quarters hidden:
 
 | Role | Lands on | Answers |
 | --- | --- | --- |
-| Platform owner | `/platform/` | Every school, its plan, its size. |
+| Platform owner | `/platform/` | Every school as a card you open — see [the platform owner's screens](#the-platform-owners-screens). |
 | School owner | `/school/` | Every campus they run, side by side. |
 | Principal | `/branch/` | Their campus: enrolment, classes, what is unpriced. |
-| Bursar | `/finance/` | What the term is worth, per class. |
+| Bursar | `/finance/` | What the term is worth, and how much of it is in. |
+
+Each keeps its summary figures and one chart; the breakdowns live on
+[Reports](#reports), which every dashboard links to.
 
 `ROLE_HOME` in `apps/core/navigation.py` is the single source for that mapping.
 Both the post-login redirect and the sidebar's "Dashboard" entry read it, so
@@ -1774,6 +2054,13 @@ client `navFor(role)`. A context processor injects the result, and
 mobile drawer. Links the role may not use are never emitted; destinations that
 don't exist yet render greyed out with a "soon" tag and light up on their own
 once the URL name exists.
+
+Three gates, and an entry has to pass all three: the **role**, the **capability**
+it declares (if any), and the **module** it belongs to (if any) — see
+[Modules](#modules-what-each-school-has). Both sets default to empty, so a caller
+that does not pass them gets the role-only menu with every gated entry hidden. That
+is the safe direction: a menu offering too little is a bug somebody reports, and one
+offering too much is a door the middleware then has to slam.
 
 ## Design tokens
 

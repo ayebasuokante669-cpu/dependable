@@ -1,0 +1,45 @@
+{% comment %}
+Where the detail went.
+
+The three role dashboards each used to end in a table -- campuses, classes, what
+each class is worth. Those are breakdowns, and breakdowns are a report, so they
+live at /reports/ now. This is the pointer that replaces them: one on each
+dashboard, saying what is over there rather than showing a thinner copy of it.
+
+Takes an optional `blurb`. The default describes the whole report, which is what
+a proprietor sees; a campus dashboard can name the part of it they came for.
+
+Role-gated by nothing, because Reports is not: every role holds VIEW_PAYMENTS,
+and what differs between them is the scope of the report rather than the right to
+open it -- see apps/reports/views.py.
+{% endcomment %}
+
+<a href="{% url 'reports:index' %}"
+   class="card card-interactive group flex items-center justify-between gap-4 p-5">
+  <div class="min-w-0">
+    <p class="text-sm font-semibold text-ink-900">
+      Collections report
+      {% include "partials/_tile_arrow.html" %}
+    </p>
+    <p class="mt-0.5 text-sm text-ink-600">
+      {% if blurb %}{{ blurb }}{% else %}
+        Expected against collected per campus and per class, the roster across the
+        four payment states, how the money came in and when, and who still owes —
+        with the whole thing as a PDF.
+      {% endif %}
+    </p>
+  </div>
+  <span class="icon-tile accent-indigo shrink-0">
+    <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+         stroke="currentColor" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round"
+            d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125
+               1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3
+               19.875v-6.75Zm6.75-4.5c0-.621.504-1.125 1.125-1.125h2.25c.621 0
+               1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125
+               1.125 0 0 1-1.125-1.125V8.625Zm6.75-4.5c0-.621.504-1.125
+               1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504
+               1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+    </svg>
+  </span>
+</a>

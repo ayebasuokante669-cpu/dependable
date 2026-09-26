@@ -656,7 +656,13 @@ def _tables(scope, by_school, by_branch, by_class, terms, ledger, students) -> t
 
 
 def _class_table(scope, by_class) -> Table:
-    groups = sorted(by_class.values(), key=lambda g: g.expected, reverse=True)
+    # Only classes that have fees set this term. A class whose children are all
+    # unpriced has an *unknown* expected total, not a zero one, and a row of
+    # zeroes here would read as a class that charges nothing -- which is the one
+    # thing the note underneath promises this table does not say. The children
+    # themselves are named in the report's notes instead.
+    groups = [group for group in by_class.values() if group.priced]
+    groups.sort(key=lambda g: g.expected, reverse=True)
     biggest = max((g.expected for g in groups), default=ZERO)
     columns = _money_columns("Class")
     rows = []

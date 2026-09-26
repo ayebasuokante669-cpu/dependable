@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% comment %}
+The collections report.
+
+Everything on this page was worked out by apps/reports/reporting.py and arrives
+as one structure -- stats, charts, tables, notes. This template lays it out and
+does nothing else: no arithmetic, no totals, no formatting of money. The PDF
+behind the download button walks the same structure, which is the only reason the
+file and the screen can be trusted to agree.
+
+The detail that used to sit on the dashboards lives here. A dashboard keeps the
+figures somebody needs at a glance and one picture of them; the breakdowns --
+per campus, per class, per method, per month, and who owes -- are a report, and a
+report is a thing you open on purpose.
+{% endcomment %}
+
+{% block page_subtitle %}
+  <p class="truncate text-sm text-ink-600">
+    {{ report.scope_label }} &middot; {{ report.period_label }}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'reports:pdf' %}{% if pdf_query %}?{{ pdf_query }}{% endif %}"
+     class="btn btn-primary text-sm">
+    <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+         stroke="currentColor" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round"
+            d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21
+               18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    </svg>
+    <span class="hidden sm:inline">Download as</span> PDF
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {% comment %}
+  The scope picker, and only where there is a choice to make. A principal has one
+  campus and is shown no select at all -- see ReportScopeForm, which drops a
+  select with one option rather than offering a decision nobody has.
+  {% endcomment %}
+  {% if scope_form.is_useful %}
+    <form method="get" class="card p-4 sm:p-5">
+      <div class="grid gap-3 sm:grid-cols-[repeat(2,minmax(0,1fr))_auto] sm:items-end">
+        {% for field in scope_form %}
+          <div>
+            <label for="{{ field.id_for_label }}" class="field-label">{{ field.label }}</label>
+            {{ field }}
+          </div>
+        {% endfor %}
+        <div class="flex gap-2">
+          <button type="submit" class="btn btn-secondary text-sm">Apply</button>
+          {% if pdf_query %}
+            <a href="{% url 'reports:index' %}" class="btn btn-ghost text-sm">Clear</a>
+          {% endif %}
+        </div>
+      </div>
+    </form>
+  {% endif %}
+
+  {% if scope.is_empty %}
+    <div class="card empty-state">
+      <p class="text-base font-medium text-ink-700">Nothing to report on yet</p>
+      <p class="mx-auto mt-1 max-w-md text-sm">
+        {% for note in report.notes %}{{ note.text }}{% endfor %}
+      </p>
+    </div>
+  {% else %}
+
+    {% include "reports/_stats.html" with stats=report.stats %}
+
+    <div class="glass-ground grid gap-4 rounded-2xl lg:grid-cols-2">
+      {% for chart in report.charts %}
+        <div class="card card-glass p-5 sm:p-6">
+          {% include "reports/_chart.html" with chart=chart %}
+        </div>
+      {% endfor %}
+    </div>
+
+    {% for table in report.tables %}
+      {% include "reports/_table.html" with table=table %}
+    {% endfor %}
+
+    {% comment %}
+    The notes are the report's own small print, and they are printed as well as
+    shown. A figure on this page is only as good as the sentence saying what it
+    counts, so they are not tucked behind a disclosure.
+    {% endcomment %}
+    {% if report.notes %}
+      <section class="card p-5 sm:p-6">
+        <h2 class="text-sm font-semibold text-ink-900">How to read this report</h2>
+        <ul class="mt-3 space-y-2.5 text-xs leading-relaxed text-ink-600">
+          {% for note in report.notes %}
+            <li class="flex gap-2.5">
+              <span class="mt-1.5 size-1.5 shrink-0 rounded-full bg-ink-300"
+                    aria-hidden="true"></span>
+              <span>{{ note.text }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+        <p class="mt-4 border-t border-ink-200 pt-3 text-xs text-ink-500">
+          Generated {{ report.generated_at|date:"j F Y \a\t H:i" }}
+          {% if report.prepared_for %}for {{ report.prepared_for }}{% endif %}.
+          Every figure is derived when the report is opened, so this page is never
+          stale and never cached.
+        </p>
+      </section>
+    {% endif %}
+
+  {% endif %}
+</div>
+{% endblock %}

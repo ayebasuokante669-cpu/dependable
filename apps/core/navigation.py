@@ -180,6 +180,12 @@ class NavItem:
     #: -- the entry also names the capability the account must hold. Left blank
     #: the entry is role-gated only, which is every other entry above.
     capability: str = ""
+    #: The module this entry belongs to, from ``apps.core.modules``. A school
+    #: without that module never receives the entry, whatever its staff hold --
+    #: a different question from the capability above, and answered by the
+    #: school's plan rather than by the account. Left blank, the entry is part of
+    #: the product and always offered.
+    module: str = ""
 
 
 @dataclass(frozen=True)
@@ -222,7 +228,11 @@ NAVIGATION: tuple[NavSection, ...] = (
     NavSection(
         label="Platform",
         items=(
-            NavItem("Schools", "admin:schools_school_changelist", "building",
+            # A real screen rather than the admin changelist: this is where the
+            # platform owner opens a school and switches its modules, and the
+            # admin is neither tenant-aware nor the place to make a commercial
+            # decision from.
+            NavItem("Schools", "core:platform_overview", "building",
                     (Role.PLATFORM_OWNER,)),
             NavItem("Plans & Billing", "billing:index", "money", (Role.PLATFORM_OWNER,)),
         ),
@@ -270,28 +280,34 @@ NAVIGATION: tuple[NavSection, ...] = (
     NavSection(
         label="Admissions",
         items=(
-            # Capability-gated as well as role-gated: a bursar reaches the
-            # pipeline only where their school has switched it on, and the
-            # sidebar has to agree with what the view will actually allow.
+            # Module-gated first: a school without the admissions add-on never
+            # receives this section at all. Capability-gated on top of that,
+            # because even at a school that has it, a bursar reaches the pipeline
+            # only where the school has switched *them* on -- and the sidebar has
+            # to agree with what the view will actually allow.
             NavItem("Applications", "admissions:pipeline", "clipboard", ALL_ROLES,
-                    capability="view_admissions"),
+                    capability="view_admissions", module="admissions"),
             NavItem("New enquiry", "admissions:enquiry_create", "userplus",
-                    _LEADERSHIP, capability="manage_admissions"),
+                    _LEADERSHIP, capability="manage_admissions",
+                    module="admissions"),
             NavItem("Admission fees", "admissions:fee_schedules", "money", ALL_ROLES,
-                    capability="view_admission_payments"),
+                    capability="view_admission_payments", module="admissions"),
             NavItem("Requirements", "admissions:requirements", "clipboard",
-                    ALL_ROLES, capability="view_admissions"),
+                    ALL_ROLES, capability="view_admissions", module="admissions"),
             NavItem("Admissions settings", "admissions:settings", "cog",
-                    _LEADERSHIP, capability="manage_admissions"),
+                    _LEADERSHIP, capability="manage_admissions",
+                    module="admissions"),
         ),
     ),
     NavSection(
         label="Communication",
         items=(
-            NavItem("Messaging", "messaging:index", "chat", ALL_ROLES),
+            NavItem("Messaging", "messaging:index", "chat", ALL_ROLES,
+                    module="messaging"),
             # What parents see the school's messages come from. Read-only for
             # a school; the platform owner registers and approves it here.
-            NavItem("Sender ID", "messaging:identity", "identity", _LEADERSHIP),
+            NavItem("Sender ID", "messaging:identity", "identity", _LEADERSHIP,
+                    module="messaging"),
         ),
     ),
     NavSection(
@@ -331,17 +347,27 @@ def nav_for(
     role: str | None,
     current_path: str = "",
     capabilities: frozenset[str] | set[str] = frozenset(),
+    modules: frozenset[str] | set[str] = frozenset(),
 ) -> list[ResolvedSection]:
     """Return the navigation tree a holder of ``role`` should see.
 
-    Sections with no visible items are dropped, so a bursar simply never
-    receives a "Platform" heading.
+    Sections with no visible items are dropped, so a bursar simply never receives
+    a "Platform" heading, and a school without the admissions add-on never
+    receives an "Admissions" one.
 
-    ``capabilities`` is the set of capability *strings* the account holds. Only
-    entries that declare one consult it; the rest are role-gated as before. It
-    defaults to empty, so a caller that does not pass it gets exactly the
-    role-only navigation and any capability-gated entry stays hidden -- the
-    safe direction for a default to fail in.
+    Three gates, and an entry has to pass all three:
+
+    * ``role`` -- who is asking;
+    * ``capabilities`` -- the capability *strings* the account holds. Only entries
+      that declare one consult it;
+    * ``modules`` -- the module keys the account's school has. Only entries that
+      declare one consult it.
+
+    Both sets default to empty, so a caller that does not pass them gets exactly
+    the role-only navigation with every gated entry hidden. That is the safe
+    direction for a default to fail in: a menu offering too little is a bug
+    somebody reports, and one offering too much is a door the middleware then has
+    to slam in their face.
     """
     if not role:
         return []
@@ -350,7 +376,9 @@ def nav_for(
         items = [
             _resolve(i, current_path, role)
             for i in section.items
-            if role in i.roles and (not i.capability or i.capability in capabilities)
+            if role in i.roles
+            and (not i.capability or i.capability in capabilities)
+            and (not i.module or i.module in modules)
         ]
         if items:
             sections.append(ResolvedSection(label=section.label, items=items))

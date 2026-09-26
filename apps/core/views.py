@@ -32,13 +32,13 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView, PasswordResetView
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponseForbidden, HttpResponseRedirect
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import FormView, TemplateView, UpdateView
+from django.views.generic import DetailView, FormView, TemplateView, UpdateView, View
 
 from apps.academics.models import Class, Subject
 from apps.fees.models import FeeComponent, FeeStructure, Term
-from apps.schools.models import Branch, School
+from apps.schools.models import Branch, School, SchoolModule
 from apps.students.models import Student, StudentStatus
 
 from .branding import PRIVACY_EMAIL, branding
@@ -47,6 +47,7 @@ from .branding import PRIVACY_EMAIL, branding
 # is how the dashboard tests reach it -- keeps working after the move.
 from .finance import collection_summary, status_breakdown, with_outstanding
 from .forms import SchoolProfileForm, SchoolSignupForm
+from .modules import BY_KEY, MODULES, state_for_school
 from .navigation import home_url_for, home_url_name
 from .permissions import Capability, CapabilityRequiredMixin
 from .roles import Role, scope_for
@@ -313,7 +314,17 @@ class RoleDashboardMixin(LoginRequiredMixin):
 
 
 class PlatformOverviewView(RoleDashboardMixin, TemplateView):
-    """Every school on the platform, and how much of it is in use."""
+    """Every school on the platform, as a card you open.
+
+    The platform owner's job is not reading a table of counts; it is picking a
+    school and doing something to it. So each school is a card with its own logo
+    and name, and the card is the link -- into :class:`PlatformSchoolView`, where
+    the plan, the campuses and the module switches are.
+
+    Platform scope means the managers here filter nothing, which is the question
+    this screen asks. It is also why every count below is a plain
+    ``.count()`` and still right.
+    """
 
     template_name = "core/dashboard_platform.html"
     home_url_name = "core:platform_overview"
@@ -322,14 +333,12 @@ class PlatformOverviewView(RoleDashboardMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         User = get_user_model()
 
-        # Platform scope means these managers filter nothing -- the counts are
-        # the whole platform, which is the question this screen asks.
         context["school_count"] = School.objects.count()
         context["branch_count"] = Branch.objects.count()
         context["user_count"] = User.objects.count()
         context["student_count"] = Student.objects.count()
 
-        context["schools"] = (
+        schools = list(
             School.objects.annotate(
                 branches_count=Count("branches", distinct=True),
                 students_count=Count(
@@ -337,14 +346,166 @@ class PlatformOverviewView(RoleDashboardMixin, TemplateView):
                     filter=Q(students_student_set__status=StudentStatus.ACTIVE),
                     distinct=True,
                 ),
-            ).order_by("name")[:25]
+                staff_count=Count("users", distinct=True),
+            ).order_by("name")
         )
-        context["page_title"] = "Platform overview"
+        # One query for every school's switches rather than one per card. The
+        # cards show which add-ons each school has, because "who is paying for
+        # admissions?" is a question this screen should answer at a glance.
+        decided: dict[int, dict[str, bool]] = {}
+        for school_id, key, enabled in SchoolModule.objects.values_list(
+            "school_id", "key", "enabled"
+        ):
+            decided.setdefault(school_id, {})[key] = enabled
+        context["cards"] = [
+            {"school": school, "modules": _module_chips(decided.get(school.pk, {}))}
+            for school in schools
+        ]
+        context["page_title"] = "Schools"
         return context
 
 
+def _module_chips(decided: dict) -> list[dict]:
+    """The toggleable modules and whether this school has them, for a card.
+
+    Takes the school's decided rows rather than its id, so a list of thirty
+    schools costs one query in total. The default comes from the registry, the
+    same way :func:`apps.core.modules.enabled_for_school` reads it.
+    """
+    from .modules import TOGGLEABLE
+
+    return [
+        {
+            "label": module.label,
+            "key": module.key,
+            "enabled": decided.get(module.key, module.default_on),
+        }
+        for module in TOGGLEABLE
+    ]
+
+
+class PlatformSchoolView(CapabilityRequiredMixin, DetailView):
+    """One school, everything the platform knows about it, and its switches.
+
+    Gated on ``MANAGE_SCHOOL_MODULES``, which only the platform owner holds -- so
+    a proprietor typing this URL gets a 403 rather than a screen showing them
+    somebody else's school, and the sidebar never offers it to them either.
+
+    ``School.objects`` rather than ``all_objects``: at platform scope the scoped
+    manager already returns every school, and using the unscoped one here would
+    mean a capability bug presented as a cross-tenant leak instead of as a 404.
+    """
+
+    capability = Capability.MANAGE_SCHOOL_MODULES
+    template_name = "core/platform_school.html"
+    context_object_name = "school"
+
+    def get_queryset(self):
+        return School.objects.all()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        school = self.object
+        User = get_user_model()
+
+        context["modules"] = state_for_school(school.pk)
+        context["always_on"] = [m for m in MODULES if m.always_on]
+
+        branches = list(
+            Branch.objects.filter(school=school)
+            .annotate(
+                students_count=Count(
+                    "students",
+                    filter=Q(students__status=StudentStatus.ACTIVE),
+                    distinct=True,
+                ),
+                classes_count=Count(
+                    "classes", filter=Q(classes__is_active=True), distinct=True
+                ),
+            )
+            .select_related("head")
+            .order_by("name")
+        )
+        # One query for every campus's current term, paired up here rather than
+        # handed to the template as a dict: a Django template cannot look a dict
+        # up by a variable key without a filter invented for the purpose.
+        current_terms = {
+            term.branch_id: term
+            for term in Term.objects.filter(is_current=True, branch__school=school)
+        }
+        context["branches"] = branches
+        context["rows"] = [
+            {"branch": branch, "term": current_terms.get(branch.pk)}
+            for branch in branches
+        ]
+        context["staff"] = (
+            User.objects.filter(school=school)
+            .select_related("branch")
+            .order_by("role", "username")
+        )
+        context["student_count"] = Student.objects.filter(
+            school=school, status=StudentStatus.ACTIVE
+        ).count()
+        context["class_count"] = Class.objects.filter(
+            school=school, is_active=True
+        ).count()
+        # A pointer rather than a copy: the collections figures for this school
+        # are a report, and the report already knows how to scope itself to one.
+        context["report_url"] = f"{reverse('reports:index')}?school={school.pk}"
+        context["page_title"] = school.name
+        return context
+
+
+class SchoolModuleToggleView(CapabilityRequiredMixin, View):
+    """Switch one module on or off for one school.
+
+    POST only, and it names both the module and the state it wants rather than
+    flipping whatever it finds. A toggle that said "flip it" would do the wrong
+    thing the moment somebody double-submitted, or opened the page in two tabs
+    and pressed the switch in the stale one.
+
+    ``SchoolModule.set_state`` refuses a key the registry does not know and one it
+    says cannot be switched off, so a hand-made POST cannot record a decision that
+    every reader would then have to ignore.
+    """
+
+    capability = Capability.MANAGE_SCHOOL_MODULES
+
+    def post(self, request, pk, *args, **kwargs):
+        school = get_object_or_404(School.objects, pk=pk)
+        key = request.POST.get("module", "")
+        enabled = request.POST.get("enabled") == "on"
+
+        module = BY_KEY.get(key)
+        if module is None or module.always_on:
+            messages.error(
+                request,
+                "That is not a feature that can be switched." if module is None
+                else f"{module.label} is part of the product and cannot be switched off.",
+            )
+            return HttpResponseRedirect(self._back(school))
+
+        SchoolModule.set_state(school, key, enabled, by=request.user)
+        messages.success(
+            request,
+            f"{module.label} is now {'on' if enabled else 'off'} for "
+            f"{school.name}. Nothing has been deleted"
+            f"{'' if enabled else ', and switching it back on restores every screen'}.",
+        )
+        return HttpResponseRedirect(self._back(school))
+
+    def _back(self, school) -> str:
+        return reverse("core:platform_school", args=[school.pk])
+
+
 class SchoolDashboardView(RoleDashboardMixin, TemplateView):
-    """A school owner's view: every campus they run, side by side."""
+    """A school owner's view: how big the school is, and where its fees stand.
+
+    The campus-by-campus table this screen used to carry moved to Reports, where
+    it sits beside the same breakdown per class, per method and per month. What
+    stays is what a proprietor wants without asking for it -- three figures, one
+    picture of the roster, and a warning when a campus cannot be billed at all.
+    """
 
     template_name = "core/dashboard_school.html"
     home_url_name = "core:school_dashboard"
@@ -369,30 +530,31 @@ class SchoolDashboardView(RoleDashboardMixin, TemplateView):
             term.branch_id: term
             for term in Term.objects.filter(is_current=True)
         }
-        context["rows"] = [
-            {"branch": branch, "term": current_terms.get(branch.pk)}
-            for branch in branches
-        ]
 
         context["branch_count"] = len(branches)
         context["student_count"] = sum(b.students_count for b in branches)
         context["class_count"] = sum(b.classes_count for b in branches)
+        # An alert rather than a breakdown, so it stays: a campus with no current
+        # term cannot be billed, and that is not something to go and look up.
         context["branches_without_a_term"] = [
             b.name for b in branches if b.pk not in current_terms
         ]
-        # Display-only. `any current term` is the guard; the breakdown itself
-        # resolves each campus's own term -- see status_breakdown.
+        # The one headline chart. `any current term` is the guard; the breakdown
+        # itself resolves each campus's own term -- see status_breakdown.
         context["status"] = status_breakdown(next(iter(current_terms.values()), None))
-        context["busiest_campus"] = max(
-            (b.students_count for b in branches), default=0
-        )
         context["setup"] = setup_progress(self.request)
         context["page_title"] = "School overview"
         return context
 
 
 class BranchDashboardView(RoleDashboardMixin, TemplateView):
-    """A principal's campus: who is enrolled, in what, and what is unpriced."""
+    """A principal's campus: how big it is, and what nobody has priced.
+
+    The class-by-class table moved to Reports. The *count* of unpriced classes
+    did not, because it is not a breakdown -- it is children being carried on the
+    roster with no fee against their name, which a principal should be told
+    rather than have to go and find.
+    """
 
     template_name = "core/dashboard_branch.html"
     home_url_name = "core:branch_dashboard"
@@ -408,15 +570,6 @@ class BranchDashboardView(RoleDashboardMixin, TemplateView):
         context["class_count"] = Class.objects.filter(is_active=True).count()
         context["subject_count"] = Subject.objects.filter(is_active=True).count()
 
-        classes = list(
-            Class.objects.filter(is_active=True).annotate(
-                students_count=Count(
-                    "students",
-                    filter=Q(students__status=StudentStatus.ACTIVE),
-                    distinct=True,
-                ),
-            )
-        )
         priced = set()
         if term is not None:
             priced = set(
@@ -424,31 +577,41 @@ class BranchDashboardView(RoleDashboardMixin, TemplateView):
                     "school_class_id", flat=True
                 )
             )
-        context["classes"] = [
-            {"klass": klass, "is_priced": klass.pk in priced} for klass in classes
-        ]
         # The setup gap a principal needs to see: children enrolled in a class
         # nobody has priced for the term they are being billed for.
         context["unpriced_classes"] = [
-            row for row in context["classes"]
-            if not row["is_priced"] and row["klass"].students_count
+            klass
+            for klass in Class.objects.filter(is_active=True)
+            .annotate(
+                students_count=Count(
+                    "students",
+                    filter=Q(students__status=StudentStatus.ACTIVE),
+                    distinct=True,
+                ),
+            )
+            .filter(students_count__gt=0)
+            if klass.pk not in priced
         ]
-        # Display-only, from the same derivation the bursar's screen uses.
+        # The one headline chart, from the same derivation the bursar's screen
+        # and the report both use.
         context["status"] = status_breakdown(term)
-        context["busiest_class"] = max(
-            (klass.students_count for klass in classes), default=0
-        )
         context["setup"] = setup_progress(self.request)
         context["page_title"] = "Branch dashboard"
         return context
 
 
 class BursarDashboardView(RoleDashboardMixin, TemplateView):
-    """A bursar's view: what the term is worth, and what is not yet priced.
+    """A bursar's view: what the term is worth, and how much of it is in.
 
     Read-only throughout, which matches the capability table -- a bursar sees
-    every figure here and cannot change any of them until the payments layer
-    gives them something to record.
+    every figure here and changes none of them from this screen.
+
+    The class-by-class table this page used to end with moved to Reports, where
+    it gained a collected and an outstanding column and the company of five more
+    breakdowns. What stays is the three figures a bursar checks on arrival and the
+    one picture of them -- plus the unpriced-class warning, which is a hole in the
+    expected total rather than a breakdown of it, so it belongs next to the
+    figure it undermines.
     """
 
     template_name = "core/dashboard_bursar.html"
@@ -459,14 +622,11 @@ class BursarDashboardView(RoleDashboardMixin, TemplateView):
         term = Term.objects.filter(is_current=True).first()
         context["term"] = term
 
-        rows: list[dict] = []
         expected_total = ZERO
         if term is not None:
-            structures = list(
-                FeeStructure.objects.filter(term=term).select_related("school_class")
-            )
-            # Two queries for the whole table however many classes there are:
-            # one for the line-item totals, one for the head counts.
+            structures = list(FeeStructure.objects.filter(term=term))
+            # Two queries however many classes there are: one for the line-item
+            # totals, one for the head counts.
             totals = {
                 row["fee_structure__school_class_id"]: row["amount"] or ZERO
                 for row in FeeComponent.objects.filter(
@@ -482,16 +642,9 @@ class BursarDashboardView(RoleDashboardMixin, TemplateView):
                 .annotate(n=Count("id"))
             }
             for structure in structures:
-                per_student = totals.get(structure.school_class_id, ZERO)
-                students = head_counts.get(structure.school_class_id, 0)
-                line = per_student * students
-                expected_total += line
-                rows.append({
-                    "klass": structure.school_class,
-                    "per_student": per_student,
-                    "students": students,
-                    "expected": line,
-                })
+                expected_total += totals.get(
+                    structure.school_class_id, ZERO
+                ) * head_counts.get(structure.school_class_id, 0)
 
             context["unpriced_classes"] = (
                 Class.objects.filter(is_active=True)
@@ -506,19 +659,12 @@ class BursarDashboardView(RoleDashboardMixin, TemplateView):
                 .filter(students_count__gt=0)
             )
 
-        context["rows"] = rows
         context["expected_total"] = expected_total
         context["student_count"] = Student.objects.filter(
             status=StudentStatus.ACTIVE
         ).count()
         context.update(
             with_outstanding(collection_summary(term), expected_total)
-        )
-        # Display-only, and derived from the same source as everything else on
-        # the page -- see status_breakdown.
-        context["status"] = status_breakdown(term)
-        context["busiest_expected"] = max(
-            (row["expected"] for row in rows), default=ZERO
         )
         context["page_title"] = "Finance dashboard"
         return context

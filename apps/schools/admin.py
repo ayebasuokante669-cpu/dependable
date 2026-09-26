@@ -3,7 +3,7 @@ from django.utils.html import format_html
 
 from apps.core.admin import TenantScopedAdminMixin
 
-from .models import Branch, School, SchoolStatus
+from .models import Branch, School, SchoolModule, SchoolStatus
 
 _STATUS_COLOURS = {
     SchoolStatus.ACTIVE: "#0f7a52",
@@ -74,3 +74,28 @@ class BranchAdmin(TenantScopedAdminMixin):
         ("Leadership", {"fields": ("head",)}),
         ("Audit", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
+
+
+@admin.register(SchoolModule)
+class SchoolModuleAdmin(TenantScopedAdminMixin):
+    """The stored module decisions, for support and for reading history.
+
+    The screen a human uses is ``/platform/schools/<id>/`` -- it explains what each
+    module is, refuses a key the registry does not know, and says what switching
+    one off does. This exists for the questions the admin is good at: when did this
+    change, and who changed it.
+
+    ``key`` is a free-text choice field here on purpose. The registry in
+    ``apps.core.modules`` is the authority on which keys exist, and a row carrying
+    one it does not recognise is ignored by every reader rather than obeyed -- so a
+    typo here is inert rather than dangerous.
+    """
+
+    tenant_school_field = "school_id"
+    tenant_branch_field = None
+
+    list_display = ("school", "key", "enabled", "changed_by", "updated_at")
+    list_filter = ("key", "enabled")
+    search_fields = ("school__name", "key")
+    autocomplete_fields = ("school", "changed_by")
+    readonly_fields = ("created_at", "updated_at")

@@ -222,8 +222,10 @@ class NavigationTests(TestCase):
     def test_unbuilt_destinations_render_as_unavailable(self):
         """The shell stays honest while feature screens are still being built.
 
-        The pair moves as features land: Payments was the unbuilt half of this
-        assertion until the payments app shipped, and Reports is next.
+        The pair moves as features land. Payments was the unbuilt half of this
+        assertion until the payments app shipped; Reports was next and has now
+        shipped too, so Plans & Billing carries it -- which is why the unbuilt
+        side is checked on a role that can see one at all.
         """
         sections = {s.label: s.items for s in nav_for(Role.SCHOOL_OWNER, "/")}
         students = next(i for i in sections["School"] if i.label == "Students")
@@ -231,7 +233,11 @@ class NavigationTests(TestCase):
         reports = next(i for i in sections["Overview"] if i.label == "Reports")
         self.assertTrue(students.available)   # roster screens exist now
         self.assertTrue(payments.available)   # and payments screens do too
-        self.assertFalse(reports.available)   # feature screen not built yet
+        self.assertTrue(reports.available)    # and the report does as well
+
+        platform = {s.label: s.items for s in nav_for(Role.PLATFORM_OWNER, "/")}
+        billing = next(i for i in platform["Platform"] if i.label == "Plans & Billing")
+        self.assertFalse(billing.available)   # feature screen not built yet
 
     def test_dashboard_is_marked_active_on_its_own_path(self):
         from django.urls import reverse
@@ -268,6 +274,8 @@ class NavigationTests(TestCase):
         """
         from apps.core.permissions import capabilities_for
 
+        from apps.core.modules import ALL_KEYS
+
         capabilities = {c.value for c in capabilities_for(Role.SCHOOL_OWNER)}
         nested = [
             "/fees/terms/",
@@ -275,11 +283,15 @@ class NavigationTests(TestCase):
             "/admissions/new/",
             "/messaging/identity/",
         ]
+        # Every module in hand: this test is about prefix matching, and two of
+        # the four paths belong to modules that are off by default.
         for path in nested:
             with self.subTest(path=path):
                 active = [
                     item.label
-                    for section in nav_for(Role.SCHOOL_OWNER, path, capabilities)
+                    for section in nav_for(
+                        Role.SCHOOL_OWNER, path, capabilities, ALL_KEYS
+                    )
                     for item in section.items
                     if item.active
                 ]

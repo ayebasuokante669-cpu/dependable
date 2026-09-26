@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% comment %}
+One school, everything the platform knows about it.
+
+Opened from a card on /platform/. Gated on MANAGE_SCHOOL_MODULES, which only the
+platform owner holds -- a proprietor typing this URL gets a 403, and never sees
+this page for their own school either. That is deliberate: what a school is paying
+for is not a school's own decision.
+
+The module switches are the reason this screen exists, so they come first after
+the identity card. Everything below them is the context somebody needs before
+flipping one: how many campuses, who can sign in, whether the terms are set.
+{% endcomment %}
+
+{% block page_subtitle %}
+  <p class="numeric truncate text-sm text-ink-600">
+    /{{ school.slug }}/ &middot; {{ school.get_plan_display }}
+  </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'core:platform_overview' %}" class="btn btn-ghost text-sm">
+    <span class="hidden sm:inline">All</span> schools
+  </a>
+  <a href="{% url 'admin:schools_school_change' school.pk %}"
+     class="btn btn-secondary text-sm">
+    <span class="hidden sm:inline">Edit in</span> admin
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {# ===== Who this is =================================================== #}
+  <div class="card p-5 sm:p-6">
+    <div class="flex flex-wrap items-start gap-4">
+      {% include "partials/_school_logo.html" with school=school size="size-16" %}
+      <div class="min-w-0 flex-1">
+        <h2 class="text-lg font-semibold text-brand-900">{{ school.name }}</h2>
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <span class="chip">{{ school.get_plan_display }}</span>
+          <span class="status-pill
+                       {% if school.is_active %}status-paid{% else %}status-overdue{% endif %}">
+            {{ school.get_status_display }}
+          </span>
+          <span class="text-xs text-ink-500">
+            On the platform since {{ school.created_at|date:"j F Y" }}
+          </span>
+        </div>
+        <dl class="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+          <div class="flex gap-2">
+            <dt class="text-ink-500">Office email</dt>
+            <dd class="min-w-0 truncate text-ink-800">
+              {% if school.contact_email %}
+                <a href="mailto:{{ school.contact_email }}" class="hover:underline">
+                  {{ school.contact_email }}
+                </a>
+              {% else %}<span class="text-ink-400">Not set</span>{% endif %}
+            </dd>
+          </div>
+          <div class="flex gap-2">
+            <dt class="text-ink-500">Office phone</dt>
+            <dd class="numeric min-w-0 truncate text-ink-800">
+              {% if school.contact_phone %}{{ school.contact_phone }}
+              {% else %}<span class="text-ink-400">Not set</span>{% endif %}
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  {# ===== The figures =================================================== #}
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Campuses</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">
+        {{ branches|length }}
+      </div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Students enrolled</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ student_count }}</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Classes running</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ class_count }}</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-medium text-ink-600">Accounts</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ staff|length }}</div>
+    </div>
+  </div>
+
+  {# ===== The switches, which are why this screen exists ================ #}
+  {% include "core/_module_switches.html" %}
+
+  {# ===== Campuses ====================================================== #}
+  <section class="card overflow-hidden">
+    <div class="border-b border-ink-200 px-5 py-4">
+      <h2 class="text-sm font-semibold text-ink-900">Campuses</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="table-head">
+          <tr>
+            <th scope="col" class="px-5 py-3 font-semibold">Campus</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Location</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Current term</th>
+            <th scope="col" class="px-5 py-3 text-right font-semibold">Classes</th>
+            <th scope="col" class="px-5 py-3 text-right font-semibold">Students</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-ink-200">
+          {% for row in rows %}
+            <tr>
+              <td class="px-5 py-3 font-medium text-ink-900">
+                {{ row.branch.name }}
+                {% if not row.branch.is_active %}
+                  <span class="status-pill status-unpaid">Closed</span>
+                {% endif %}
+              </td>
+              <td class="px-5 py-3 text-ink-700">
+                {{ row.branch.city }}{% if row.branch.city and row.branch.state %}, {% endif %}{{ row.branch.state }}
+              </td>
+              <td class="px-5 py-3">
+                {% if row.term %}
+                  <span class="text-ink-700">{{ row.term.name }}</span>
+                {% else %}
+                  <span class="status-pill status-partial">Not set</span>
+                {% endif %}
+              </td>
+              <td class="numeric px-5 py-3 text-right text-ink-700">{{ row.branch.classes_count }}</td>
+              <td class="numeric px-5 py-3 text-right text-ink-700">{{ row.branch.students_count }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-5 py-8 text-center text-ink-500">
+                This school has no campuses yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ===== Accounts ====================================================== #}
+  <section class="card overflow-hidden">
+    <div class="border-b border-ink-200 px-5 py-4">
+      <h2 class="text-sm font-semibold text-ink-900">Who can sign in</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="table-head">
+          <tr>
+            <th scope="col" class="px-5 py-3 font-semibold">Account</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Role</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Campus</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Last signed in</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-ink-200">
+          {% for person in staff %}
+            <tr>
+              <td class="px-5 py-3">
+                <span class="font-medium text-ink-900">
+                  {{ person.get_full_name|default:person.username }}
+                </span>
+                <span class="numeric block text-xs text-ink-500">{{ person.email }}</span>
+              </td>
+              <td class="px-5 py-3 text-ink-700">{{ person.get_role_display }}</td>
+              <td class="px-5 py-3 text-ink-700">
+                {% if person.branch %}{{ person.branch.name }}
+                {% else %}<span class="text-ink-400">Every campus</span>{% endif %}
+              </td>
+              <td class="px-5 py-3 text-ink-700">
+                {% if person.last_login %}{{ person.last_login|date:"j M Y, H:i" }}
+                {% else %}<span class="text-ink-400">Never</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-5 py-8 text-center text-ink-500">
+                Nobody can sign in to this school yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% comment %}
+  A pointer, not a copy. This school's money is a report, and the report already
+  knows how to scope itself to one school -- duplicating its figures here would be
+  a second place for them to be worked out and a second place to be wrong.
+  {% endcomment %}
+  <a href="{{ report_url }}" class="card card-interactive group flex items-center
+            justify-between gap-4 p-5">
+    <div class="min-w-0">
+      <p class="text-sm font-semibold text-ink-900">
+        {{ school.name }}'s collections report
+        {% include "partials/_tile_arrow.html" %}
+      </p>
+      <p class="mt-0.5 text-sm text-ink-600">
+        Expected against collected for every campus, per class, and who still owes.
+      </p>
+    </div>
+    <span class="icon-tile accent-indigo shrink-0">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125
+                 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3
+                 19.875v-6.75Zm6.75-4.5c0-.621.504-1.125 1.125-1.125h2.25c.621 0
+                 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125
+                 1.125 0 0 1-1.125-1.125V8.625Zm6.75-4.5c0-.621.504-1.125
+                 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504
+                 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+      </svg>
+    </span>
+  </a>
+
+</div>
+{% endblock %}

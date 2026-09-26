@@ -15,6 +15,19 @@ urlpatterns = [
 
     # One per role -- see navigation.ROLE_HOME, which decides who lands where.
     path("platform/", views.PlatformOverviewView.as_view(), name="platform_overview"),
+    # The platform owner opens a school from the cards above. Both are gated on
+    # MANAGE_SCHOOL_MODULES rather than on the role, so a proprietor typing either
+    # gets a 403 -- see PlatformSchoolView.
+    path(
+        "platform/schools/<int:pk>/",
+        views.PlatformSchoolView.as_view(),
+        name="platform_school",
+    ),
+    path(
+        "platform/schools/<int:pk>/modules/",
+        views.SchoolModuleToggleView.as_view(),
+        name="school_module_toggle",
+    ),
     path("school/", views.SchoolDashboardView.as_view(), name="school_dashboard"),
     path("branch/", views.BranchDashboardView.as_view(), name="branch_dashboard"),
     path("finance/", views.BursarDashboardView.as_view(), name="bursar_dashboard"),

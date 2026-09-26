@@ -1,9 +1,31 @@
 {% extends "base.html" %}
 
+{% comment %}
+The platform owner's front page: every school as a card you open.
+
+This used to be a table of counts, which was the wrong shape for the job. The
+platform owner does not arrive here to read numbers; they arrive to pick a school
+and do something to it -- change a plan, switch a module on, see why a campus has
+no term. So the school is the unit, the whole card is the target, and the counts
+that were the page are now a strip above it.
+
+Each card carries the school's own logo and name. It also carries a chip per
+switchable module, on and off both shown, because "which schools are paying for
+admissions?" is a question this screen should answer without opening anything.
+{% endcomment %}
+
 {% block page_subtitle %}
   <p class="truncate text-sm text-ink-600">
-    Every school on the platform &middot; {{ role_label }}
+    {{ school_count }} school{{ school_count|pluralize }} on the platform
+    &middot; {{ role_label }}
   </p>
+{% endblock %}
+
+{% block page_actions %}
+  <a href="{% url 'admin:schools_school_changelist' %}"
+     class="btn btn-secondary text-sm">
+    <span class="hidden sm:inline">Django</span> admin
+  </a>
 {% endblock %}
 
 {% block content %}
@@ -40,52 +62,81 @@
     </div>
   </div>
 
-  <div class="card overflow-hidden">
-    <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
-      <h2 class="text-sm font-semibold text-ink-900">Schools</h2>
-      <a href="{% url 'admin:schools_school_changelist' %}"
-         class="btn btn-secondary text-xs">Manage in admin</a>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="table-head">
-          <tr>
-            <th scope="col" class="px-5 py-3 font-semibold">School</th>
-            <th scope="col" class="px-5 py-3 font-semibold">Plan</th>
-            <th scope="col" class="px-5 py-3 font-semibold">Status</th>
-            <th scope="col" class="px-5 py-3 text-right font-semibold">Branches</th>
-            <th scope="col" class="px-5 py-3 text-right font-semibold">Students</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-ink-200">
-          {% for school in schools %}
-            <tr>
-              <td class="px-5 py-3">
-                <div class="flex items-center gap-2.5">
-                  {% include "partials/_school_logo.html" with school=school size="size-8" %}
-                  <span class="font-medium text-ink-900">{{ school.name }}</span>
-                </div>
-              </td>
-              <td class="px-5 py-3 text-ink-700">{{ school.get_plan_display }}</td>
-              <td class="px-5 py-3">
-                <span class="status-pill
-                             {% if school.is_active %}status-paid{% else %}status-overdue{% endif %}">
-                  {{ school.get_status_display }}
-                </span>
-              </td>
-              <td class="numeric px-5 py-3 text-right text-ink-700">{{ school.branches_count }}</td>
-              <td class="numeric px-5 py-3 text-right text-ink-700">{{ school.students_count }}</td>
-            </tr>
-          {% empty %}
-            <tr>
-              <td colspan="5" class="px-5 py-8 text-center text-ink-500">
-                No schools on the platform yet.
-              </td>
-            </tr>
+  <div class="flex items-baseline justify-between gap-3 pt-1">
+    <h2 class="text-sm font-semibold text-ink-900">Schools</h2>
+    <p class="text-xs text-ink-500">Open a school to change its plan or its features</p>
+  </div>
+
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    {% for card in cards %}
+      <a href="{% url 'core:platform_school' card.school.pk %}"
+         class="card card-interactive group flex flex-col p-5">
+        <div class="flex items-start gap-3">
+          {% include "partials/_school_logo.html" with school=card.school size="size-12" %}
+          <div class="min-w-0 flex-1">
+            <p class="flex items-center gap-1.5 text-base font-semibold text-ink-900">
+              <span class="truncate">{{ card.school.name }}</span>
+              {% include "partials/_tile_arrow.html" %}
+            </p>
+            <p class="numeric truncate text-xs text-ink-500">/{{ card.school.slug }}/</p>
+          </div>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          <span class="chip">{{ card.school.get_plan_display }}</span>
+          <span class="status-pill
+                       {% if card.school.is_active %}status-paid{% else %}status-overdue{% endif %}">
+            {{ card.school.get_status_display }}
+          </span>
+        </div>
+
+        <dl class="mt-4 grid grid-cols-3 gap-3 border-t border-ink-200 pt-3">
+          <div>
+            <dt class="text-xs text-ink-500">Campuses</dt>
+            <dd class="numeric text-lg font-semibold text-brand-900">
+              {{ card.school.branches_count }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs text-ink-500">Students</dt>
+            <dd class="numeric text-lg font-semibold text-brand-900">
+              {{ card.school.students_count }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs text-ink-500">Accounts</dt>
+            <dd class="numeric text-lg font-semibold text-brand-900">
+              {{ card.school.staff_count }}
+            </dd>
+          </div>
+        </dl>
+
+        {% comment %}
+        On and off are both shown, and each is labelled. A card that listed only
+        what was on would leave the reader unable to tell a school without
+        admissions from a school whose chips had not loaded -- and the dot is
+        paired with the word, never the only signal.
+        {% endcomment %}
+        <div class="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-ink-200 pt-3">
+          {% for module in card.modules %}
+            <span class="flex items-center gap-1.5 text-xs
+                         {% if module.enabled %}text-ink-700{% else %}text-ink-400{% endif %}">
+              <span class="status-dot {% if module.enabled %}status-dot-paid{% else %}bg-ink-300{% endif %}"
+                    aria-hidden="true"></span>
+              {{ module.label }}
+              <span class="font-semibold">{% if module.enabled %}on{% else %}off{% endif %}</span>
+            </span>
           {% endfor %}
-        </tbody>
-      </table>
-    </div>
+        </div>
+      </a>
+    {% empty %}
+      <div class="card empty-state sm:col-span-2 xl:col-span-3">
+        <p class="text-base font-medium text-ink-700">No schools on the platform yet</p>
+        <p class="mx-auto mt-1 max-w-md text-sm">
+          A school appears here the moment somebody signs one up.
+        </p>
+      </div>
+    {% endfor %}
   </div>
 
 </div>

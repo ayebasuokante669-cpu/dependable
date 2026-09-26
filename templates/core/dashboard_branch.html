@@ -1,5 +1,17 @@
 {% extends "base.html" %}
-{% load charts %}
+
+{% comment %}
+The principal's campus: how big it is, and what nobody has priced.
+
+Three figures, one picture, and the two alerts -- no current term, and classes
+carrying children with no fee against their name. Those are holes in the figures
+rather than breakdowns of them, so they stay here.
+
+The class-by-class table that used to close this page is on the report at
+/reports/, which shows the same head counts beside what each class is expected to
+bring in and how much of it has arrived. Managing the classes is a different job
+and lives at /academics/classes/.
+{% endcomment %}
 
 {% block page_subtitle %}
   <p class="truncate text-sm text-ink-600">
@@ -89,8 +101,14 @@
         {{ unpriced_classes|length }} class{{ unpriced_classes|length|pluralize:"es" }}
         with students but no fees for {{ term.name }}.
       </p>
-      <p class="mt-0.5">
-        Those children have no expected fee this term.
+      <p class="mt-1">
+        {% for klass in unpriced_classes %}
+          <span class="chip">{{ klass.display_name }} ({{ klass.students_count }})</span>
+        {% endfor %}
+      </p>
+      <p class="mt-1.5">
+        Those children have no expected fee this term, so they are counted in the
+        head count above and in none of the four payment states below.
         {% if "manage_fees" in capabilities %}
           <a href="{% url 'fees:structure_list' %}" class="font-semibold underline">
             Set their fees
@@ -109,64 +127,7 @@
     {% include "partials/_status_breakdown.html" with breakdown=status.buckets breakdown_total=status.total heading="Where this campus stands" %}
   </div>
 
-  <div class="card overflow-hidden">
-    <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
-      <h2 class="text-sm font-semibold text-ink-900">Classes on this campus</h2>
-      <a href="{% url 'students:student_list' %}" class="btn btn-secondary text-xs">
-        Full roster
-      </a>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="table-head">
-          <tr>
-            <th scope="col" class="px-5 py-3 font-semibold">Class</th>
-            <th scope="col" class="px-5 py-3 text-right font-semibold">Students</th>
-            {% comment %}
-            The head count, drawn. Hidden from screen readers: the figure is
-            already in the column beside it.
-            {% endcomment %}
-            <th scope="col" class="hidden w-32 px-5 py-3 font-semibold sm:table-cell">
-              <span class="sr-only">Relative size</span>
-            </th>
-            <th scope="col" class="px-5 py-3 font-semibold">Fees this term</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-ink-200">
-          {% for row in classes %}
-            <tr>
-              <td class="px-5 py-3 font-medium text-ink-900">
-                {{ row.klass.display_name }}
-              </td>
-              <td class="numeric px-5 py-3 text-right text-ink-700">
-                {{ row.klass.students_count }}
-              </td>
-              <td class="hidden px-5 py-3 sm:table-cell" aria-hidden="true">
-                <span class="chart-bar-track">
-                  <span class="chart-bar-fill"
-                        style="--bar: {{ row.klass.students_count|percent_of:busiest_class }}%;
-                               --bar-color: var(--color-acc-teal);"></span>
-                </span>
-              </td>
-              <td class="px-5 py-3">
-                {% if row.is_priced %}
-                  <span class="status-pill status-paid">Set</span>
-                {% else %}
-                  <span class="status-pill status-unpaid">No fees set</span>
-                {% endif %}
-              </td>
-            </tr>
-          {% empty %}
-            <tr>
-              <td colspan="4" class="px-5 py-8 text-center text-ink-500">
-                No classes set up yet.
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+  {% include "partials/_report_link.html" with blurb="What each class on this campus is expected to bring in and how much of it has arrived, the roster across the four payment states, and who still owes — plus a PDF." %}
 
 </div>
 {% endblock %}
