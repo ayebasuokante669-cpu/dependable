@@ -121,6 +121,15 @@ right class and branch and keeps the link back, that admission fees and termly
 fees never touch, that a lapsed enquiry is closed rather than deleted, and that
 one school cannot see another's applicants.
 
+This round adds 47 more: that one named account can never be deactivated while
+every platform owner still can deactivate anybody else, that the platform's sidebar
+carries no Admissions or Messaging and does carry Sender IDs, that exactly one row
+is highlighted on every screen each role can reach — and that two entries sharing
+an href can never both light up again — that the About page carries its copy, its
+real addresses and both social accounts, that the footer's icons point at those same
+URLs and none at a placeholder, and that the reset email leaves as multipart with an
+absolute PNG logo, brand colours, no SVG, and a link present in both halves.
+
 The navigation and settings pass adds 71: that a person can rename themselves and
 cannot promote themselves doing it, that the logo is the proprietor's in the form as
 well as on the page, that "School settings" is gone from the one sidebar it 404'd in
@@ -1177,11 +1186,36 @@ has to remember to check. **Nothing is deleted:** the payments the account recor
 and the messages it sent keep its name, and reactivating restores access with the
 same password.
 
-Two guards worth knowing. The POST names the state it wants rather than flipping
-whatever it finds, so a stale tab cannot reactivate somebody by pressing what it
-thinks says deactivate. And you cannot deactivate your own account — not a
-permission question but a footgun one: switching off the account you are signed in
-as locks you out of the screen that switches it back on.
+Three guards worth knowing.
+
+The POST names the state it wants rather than flipping whatever it finds, so a
+stale tab cannot reactivate somebody by pressing what it thinks says deactivate.
+
+You cannot deactivate your own account — not a permission question but a footgun
+one: switching off the account you are signed in as locks you out of the screen
+that switches it back on.
+
+**And one account is out of reach of it entirely.** Every platform owner holds the
+capability, which means each can switch the others off — a state the platform can
+lock itself out of, with nobody left who can undo it. So `PLATFORM_OWNER_EMAIL`
+names one address that is never a valid target:
+
+```
+# config/settings/base.py, overridable in .env
+PLATFORM_OWNER_EMAIL=ayebasuokante@gmail.com
+```
+
+Matched case-insensitively on the trimmed address, and **defaulted rather than left
+blank** — an unset env var must not quietly remove the protection, so the fallback
+is the real address and an override is a deliberate act.
+
+The rule is a *target*, not a role: the protected account still holds the capability
+and can deactivate anybody, including another platform owner. What changes is that
+nobody, itself included, can deactivate it. `permissions.may_deactivate(actor,
+target)` is the single answer to "may this happen?", and both the view and the
+template that draws the button read it — so a row can never show a control the view
+would refuse. A row that is protected says so, rather than leaving a gap to wonder
+about.
 
 ### The pilot
 
@@ -1911,6 +1945,32 @@ given. In dev the console backend prints password-reset emails, link included.
 
 ## Branding and identity
 
+### Addresses and accounts
+
+Three constants in `apps/core/branding.py`, handed to every page — signed out
+included — by the branding context processor:
+
+| Constant | For |
+| --- | --- |
+| `CONTACT_EMAIL` | `hello@theschoolcord.com`. The general way in: the footer, the About page, the system-email footer. |
+| `PRIVACY_EMAIL` | `privacy@theschoolcord.com`. A statutory contact point named in the policy, kept separate so it does not collect sales questions. |
+| `SOCIAL_LINKS` | X, Instagram and email, in the order the footer draws them. |
+
+`SOCIAL_LINKS` is one list read by both the footer and the About page, so an
+account added there appears on both and neither can carry a link the other does
+not. Each glyph is `templates/partials/_social_icon.html`.
+
+The URLs are the **share links as supplied**, query strings and all — `?s=11` on X
+and `stkn=…&utm_source=qr` on Instagram. Both are what those apps hand you when you
+share a profile from a phone, and both are kept on purpose: the tail is the
+platform's own attribution, and stripping it would quietly drop whatever it reports
+back.
+
+The `&` in the Instagram URL is a literal ampersand in `branding.py`. Django escapes
+it to `&amp;` on the way into the `href`, which is correct HTML and resolves to the
+same address — so a test asserting on the rendered page has to escape it too, and
+they do.
+
 ### One name, one file
 
 `apps/core/branding.py` holds `PRODUCT_NAME` and nothing else does. Settings
@@ -2054,6 +2114,42 @@ Any left on the host are ignored. Dev still prints mail to the console.
 arriving at Resend's API with the network stubbed and `smtplib` rigged to fail
 the test if anything reaches for a socket.
 
+### Branded system email
+
+`templates/email/_base.html` is the shell for every message SCHOOLCORD sends **as
+itself** — a password reset, an invitation, anything about somebody's own account.
+Deliberately not the same base as `templates/admissions/email/_base.html`, which is
+signed by the *school* and where the platform appears nowhere: a parent who found a
+school on Instagram has never heard of us.
+
+It is written like email rather than like the rest of the app, and each of those is
+a constraint rather than a preference:
+
+- **tables for layout** — Outlook does no flexbox or grid, and a `<div>` column
+  collapses in it;
+- **every style inline** — mail clients strip `<style>` blocks and class
+  attributes, so the design tokens are repeated as literal hex. Same trade the
+  admin skin makes, for the same reason: there is no stylesheet to read from;
+- **no web font** — Public Sans is named first for clients that have it locally,
+  then the stack falls back;
+- **`width` attributes *and* inline widths** on images, because Outlook reads the
+  attribute and ignores the style.
+
+The header is a brand-navy band with the **logo as a PNG at an absolute URL**. SVG
+is unsupported in almost every mail client, and a relative path has no site to
+resolve against once the message has left. The address is built from `protocol` and
+`domain`, which every sender supplies. The wordmark sits beside it as live text and
+the alt text reads "SCHOOLCORD" rather than "logo", so a client that blocks remote
+images still leaves the brand on the page.
+
+Mobile: one 560px column that shrinks to the viewport, 16px body copy (anything
+smaller and iOS Mail zooms, which reflows the table), and a button with a 44px tap
+area built the `mso-padding-alt` way so Outlook gets the same rounded fill.
+
+Every message stays **multipart** — the text half is the body, the HTML is the
+alternative — so a client that refuses HTML gets a complete message rather than a
+blank one. The sender name stays `SCHOOLCORD`.
+
 ### The password-reset email
 
 Now multipart. The plain-text body Django has always sent is unchanged and
@@ -2144,6 +2240,22 @@ every account on the product across every school — and it then shows a School
 column and the deactivate control. The view reads the caller's scope; nothing in
 the template reads a role.
 
+**A platform owner's menu is not a school's menu with extra rows on it.**
+Admissions and Messaging are a school's own work — running a pipeline, writing to
+its parents — so neither appears in the platform sidebar. Sender IDs does, and
+moves up into the Platform section beside Schools, because registering one with the
+gateway and approving it is the platform's job and a school can only read its own.
+The routes stay reachable: it is the *menu* that is scoped, not the permission, so
+the platform can still open a school's pipeline to help them through it.
+
+**Two entries pointing at one href used to light up both rows.** The platform
+owner's Dashboard and their Schools entry both resolved to `/platform/`, and
+`_keep_only_the_closest_match` compares href *lengths* — so a tie cleared neither,
+and clicking through left the previous row highlighted beside the new one. The
+duplicate row is gone (their home *is* Schools, so they have one entry for it, not
+two), and the tie-break now keeps the first declared rather than keeping both. A
+test asserts exactly one row is active on every screen each role can reach.
+
 **School settings** is offered to the school-side roles only. A platform owner has
 no school of their own, so `/settings/` raised a 404 for exactly the account whose
 sidebar was offering it; they reach each school's profile from Platform › Schools
@@ -2178,6 +2290,15 @@ is both a utility and a CSS custom property.
   cards (`rounded-lg`), up to 32px (`rounded-2xl`). `.squircle` upgrades to a
   real superellipse where `corner-shape` is supported and stays a generous
   rounded rectangle everywhere else.
+- **The collapsed sidebar** — one `--sidebar-pad` token, dropped to zero when the
+  rail narrows so every glyph sits on one vertical axis. Anything the collapsed
+  state has to *undo* is declared in the components layer rather than as a utility
+  in the markup (`sidebar-grow`, `nav-soon`, `sidebar-toggle-inline`), because
+  Tailwind's utilities sit in a later layer and win over these rules whatever their
+  specificity — which is why `flex-1` and `ml-auto` on folded labels went on
+  expanding and pushing glyphs off centre no matter what was written here. Rows
+  also drop their `gap`, since a flex gap is still drawn beside an item that has
+  folded to zero width.
 - **Motion** — `--duration-quick` / `--duration-settle` / `--duration-slow` for
   the general case, plus `--toast-rise` / `--toast-open` / `--toast-fade`, which a
   toast has to itself because it is the one thing on screen whose job is to be read

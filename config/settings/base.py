@@ -33,6 +33,20 @@ def env_list(name: str, default: str = "") -> list[str]:
 
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-change-me")
+
+#: The account that may never be deactivated, by email address.
+#:
+#: Deactivation is a platform capability, so every platform owner holds it -- and
+#: that includes being able to switch off another platform owner. One account has
+#: to be out of reach or the platform can be locked out of itself: two owners can
+#: disable each other, and nobody is left who can undo it.
+#:
+#: Matched case-insensitively against ``user.email``. Defaulted rather than left
+#: blank on purpose: an unset env var must not quietly remove the protection, so
+#: the fallback is the real address and an override is a deliberate act.
+PLATFORM_OWNER_EMAIL = os.environ.get(
+    "PLATFORM_OWNER_EMAIL", "ayebasuokante@gmail.com"
+).strip().lower()
 DEBUG = env_bool("DEBUG", False)
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
 

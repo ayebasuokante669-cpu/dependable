@@ -950,10 +950,10 @@ class NavigationTests(TestCase):
     #: section at all is tested in apps/messaging/tests.py::NavigationTests.
     SENDS = frozenset({"messaging"})
 
-    def test_leadership_gets_the_sender_id_link(self):
+    def test_a_schools_leadership_gets_the_sender_id_link(self):
         from apps.core.navigation import nav_for
 
-        for role in (Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.PLATFORM_OWNER):
+        for role in (Role.SCHOOL_OWNER, Role.PRINCIPAL):
             sections = {
                 s.label: s.items
                 for s in nav_for(role, "/messaging/", modules=self.SENDS)
@@ -962,6 +962,27 @@ class NavigationTests(TestCase):
             with self.subTest(role=role):
                 self.assertIn("Sender ID", labels)
                 self.assertTrue(labels["Sender ID"].available)
+
+    def test_the_platform_gets_it_under_platform_rather_than_communication(self):
+        """Registering and approving a Sender ID is the platform's own job -- the
+        school only reads its own -- so the entry sits beside Schools rather than
+        in a Communication section that would otherwise hold nothing for them.
+
+        Not module-gated either: a school without messaging still has a Sender ID
+        the platform may need to look at.
+        """
+        from apps.core.navigation import nav_for
+
+        sections = {
+            s.label: s.items
+            for s in nav_for(Role.PLATFORM_OWNER, "/messaging/identity/")
+        }
+        self.assertNotIn("Communication", sections)
+        labels = {i.label: i for i in sections["Platform"]}
+        self.assertIn("Sender IDs", labels)
+        self.assertTrue(labels["Sender IDs"].available)
+        self.assertEqual(labels["Sender IDs"].href, reverse("messaging:identity"))
+        self.assertTrue(labels["Sender IDs"].active)
 
     def test_a_bursar_does_not(self):
         from apps.core.navigation import nav_for

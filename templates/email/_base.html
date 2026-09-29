@@ -1,0 +1,172 @@
+{% load static %}{% comment %}
+The shared shell for every email SCHOOLCORD sends *as itself*.
+
+Not the same thing as templates/admissions/email/_base.html, and the difference is
+deliberate: those are signed by the *school*, and the platform appears nowhere in
+them, because a parent who found a school on Instagram has never heard of us. These
+are ours -- a password reset, an invitation, a notification about somebody's own
+account -- and they carry our mark.
+
+Written like email, not like the rest of the app:
+
+  * tables for layout. Outlook does not do flexbox or grid, and a <div> column
+    layout collapses in it;
+  * every style inline. Mail clients strip <style> blocks and class attributes, so
+    the design tokens are reproduced here as literal hex -- the same trade the
+    admin skin makes, for the same reason: there is no stylesheet to read from;
+  * no web font. `Public Sans` is named first for the handful of clients that have
+    it locally, then the stack falls back to what the machine has;
+  * `width` attributes *and* inline widths on the images, because Outlook reads the
+    attribute and ignores the style.
+
+The logo is a PNG at an absolute URL. SVG is unsupported in almost every mail
+client, and a relative path has no site to resolve against once the message has
+left. Clients that block remote images fall back to the alt text, which is why it
+reads "SCHOOLCORD" rather than "logo" -- and why the wordmark is also set as live
+text beside it, so a blocked image still leaves the brand on the page.
+
+The address is built from `protocol` and `domain`, which every sender supplies:
+Django's `PasswordResetForm` puts them in the context, and our own senders get them
+from `invites.public_site()`. This assumes `STATIC_URL` is a path on the same origin
+(`/static/`, served by whitenoise), which it is. Move static files to a CDN and this
+concatenation becomes `https://domain` + `https://cdn/...`; the fix then is to drop
+the prefix here, since the CDN URL is already absolute.
+
+Mobile: one 560px column that shrinks to the viewport, 16px type in the body, and
+a button with a 44px-tall tap area. Nothing side by side, because a two-column row
+at 320px is two unreadable columns.
+
+Blocks a message fills:
+  `subject`    the <title> -- not the mail subject, which is its own template
+  `preheader`  one line, shown in the inbox list next to the subject
+  `heading`    the <h1>
+  `body`       the message
+  `cta`        an optional button, via email/_button.html
+  `outro`      small print under the button
+
+Context every sender has to supply, because a mail template renders with no request
+and therefore no context processors: `protocol`, `domain`, and the branding keys --
+`product_name`, `product_tagline`, `contact_email`. `apps.core.branding.branding()`
+returns the last three as a dict, which is what `BrandedPasswordResetView` passes
+as `extra_email_context`.
+{% endcomment %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>{% block subject %}{{ product_name }}{% endblock %}</title>
+</head>
+<body style="margin:0;padding:0;width:100%;background-color:#f6f8fb;
+             -webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+
+  {% comment %}
+  The preheader: the grey line an inbox shows after the subject. Hidden in the
+  message itself, and padded with zero-width spaces so the client does not pull
+  the first line of the body in after it.
+  {% endcomment %}
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;
+              opacity:0;overflow:hidden;mso-hide:all;">
+    {% block preheader %}{% endblock %}
+    &#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background-color:#f6f8fb;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0"
+               border="0"
+               style="width:100%;max-width:560px;background-color:#ffffff;
+                      border:1px solid #dfe4ed;border-radius:12px;
+                      overflow:hidden;">
+
+          {% comment %}
+          The header band: brand navy, the mark, and the wordmark as live text so a
+          blocked image still leaves the brand visible. `--gradient-brand` is a
+          gradient in the app; here it is the flat navy it starts from, because
+          gradient support in mail is Outlook-specific and a fallback colour that
+          differs from the design is worse than the design's own solid.
+          {% endcomment %}
+          <tr>
+            <td style="background-color:#0f2547;padding:20px 28px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:12px;">
+                    <img src="{{ protocol|default:'https' }}://{{ domain }}{% static 'img/schoolcord-logo.png' %}"
+                         width="36" height="36"
+                         alt="{{ product_name }}"
+                         style="display:block;border:0;outline:none;
+                                text-decoration:none;width:36px;height:36px;
+                                border-radius:8px;">
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <span style="font-family:'Public Sans',-apple-system,'Segoe UI',
+                                 Roboto,Helvetica,Arial,sans-serif;font-size:17px;
+                                 font-weight:700;letter-spacing:0.02em;
+                                 color:#ffffff;">{{ product_name }}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:28px 28px 8px 28px;
+                       font-family:'Public Sans',-apple-system,'Segoe UI',Roboto,
+                       Helvetica,Arial,sans-serif;">
+              <h1 style="margin:0 0 14px 0;font-size:20px;line-height:28px;
+                         font-weight:600;color:#0f2547;">
+                {% block heading %}{% endblock %}
+              </h1>
+              <div style="font-size:16px;line-height:25px;color:#435065;">
+                {% block body %}{% endblock %}
+              </div>
+            </td>
+          </tr>
+
+          {% block cta %}{% endblock %}
+
+          {% block outro %}{% endblock %}
+
+          {% comment %}
+          The footer. Says who sent this and gives a real address to reply to,
+          because the From line is a no-reply and a message with no way back is a
+          message people distrust.
+          {% endcomment %}
+          <tr>
+            <td style="padding:18px 28px 22px 28px;border-top:1px solid #eef1f6;
+                       background-color:#f6f8fb;
+                       font-family:'Public Sans',-apple-system,'Segoe UI',Roboto,
+                       Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;
+                       color:#5a6b85;">
+              <strong style="color:#0f2547;">{{ product_name }}</strong>
+              &nbsp;&middot;&nbsp;{{ product_tagline }}<br>
+              Questions? Write to
+              <a href="mailto:{{ contact_email }}"
+                 style="color:#1d3f79;text-decoration:underline;">{{ contact_email }}</a>.
+              <br>
+              <span style="color:#94a0b5;">
+                This message was sent to you because somebody asked for it from a
+                {{ product_name }} account. We never ask for your password by email.
+              </span>
+            </td>
+          </tr>
+
+        </table>
+
+        <div style="max-width:560px;margin:14px auto 0;
+                    font-family:'Public Sans',-apple-system,'Segoe UI',Roboto,
+                    Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;
+                    color:#94a0b5;text-align:center;">
+          &copy; {% now "Y" %} {{ product_name }}
+        </div>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

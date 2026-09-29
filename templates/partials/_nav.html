@@ -57,11 +57,13 @@ background difference.
                 </svg>
               </span>
               <span class="sidebar-label truncate">{{ item.label }}</span>
-              <span class="sidebar-label ml-auto rounded-xs bg-white/10 px-1.5 py-0.5
-                           text-[10px] font-semibold uppercase tracking-wide
-                           text-panel-subtle/80">
-                soon
-              </span>
+              {% comment %}
+              `nav-soon` rather than `sidebar-label ml-auto ...`: an auto margin
+              beats `justify-content`, so the utility version stayed in place as
+              the rail narrowed and shoved the glyph off centre. See the class in
+              assets/app.css.
+              {% endcomment %}
+              <span class="nav-soon">soon</span>
             </span>
           {% endif %}
         </li>

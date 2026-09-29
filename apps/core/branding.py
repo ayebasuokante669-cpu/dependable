@@ -30,9 +30,56 @@ PRODUCT_DESCRIPTION = (
 #: The letter in the brand mark when the full logo will not fit.
 PRODUCT_INITIAL = "S"
 
+#: The general way in: the footer, the About page, and anywhere a school is
+#: invited to get in touch. A real mailbox a person reads, unlike the no-reply
+#: sender below -- and deliberately separate from PRIVACY_EMAIL, which is a
+#: statutory contact point named in the policy and should not collect sales
+#: questions.
+CONTACT_EMAIL = "hello@theschoolcord.com"
+
 #: Where privacy requests go -- printed on the privacy policy, and a mailbox a
 #: person can actually reply to, unlike the no-reply sender below.
 PRIVACY_EMAIL = "privacy@theschoolcord.com"
+
+#: The product's own accounts, in the order the footer draws them.
+#:
+#: One list, read by the footer and by the About page, so an account added here
+#: appears in both and neither can carry a link the other does not. ``icon`` names
+#: a glyph in templates/partials/_social_icon.html.
+#:
+#: The URLs are the share links as supplied, query strings and all -- ``?s=11`` on
+#: X and ``stkn=...&utm_source=qr`` on Instagram. Both are what those apps hand you
+#: when you share a profile from a phone, and both are kept on purpose: the tail is
+#: the platform's own attribution, and stripping it would quietly drop whatever it
+#: reports back.
+#:
+#: The ``&`` in the Instagram URL is left as a literal ampersand here. Django
+#: escapes it to ``&amp;`` on the way into the ``href``, which is correct HTML and
+#: resolves to the same address -- so anything asserting on the rendered page has
+#: to escape it too, and the tests do.
+SOCIAL_LINKS: tuple[dict[str, str], ...] = (
+    {
+        "icon": "x",
+        "label": "X",
+        "handle": "@theschoolcord",
+        "url": "https://x.com/theschoolcord?s=11",
+    },
+    {
+        "icon": "instagram",
+        "label": "Instagram",
+        "handle": "@theschoolcord",
+        "url": (
+            "https://www.instagram.com/theschoolcord"
+            "?stkn=MWdxbmx3NXhxZXNhdg%3D%3D&utm_source=qr"
+        ),
+    },
+    {
+        "icon": "mail",
+        "label": "Email",
+        "handle": CONTACT_EMAIL,
+        "url": f"mailto:{CONTACT_EMAIL}",
+    },
+)
 
 #: Sent as the From: address on transactional mail.
 #:
@@ -54,4 +101,7 @@ def branding(request=None) -> dict:
         "product_name": PRODUCT_NAME,
         "product_tagline": PRODUCT_TAGLINE,
         "product_initial": PRODUCT_INITIAL,
+        # The footer is on signed-out pages too, and it needs both.
+        "contact_email": CONTACT_EMAIL,
+        "social_links": SOCIAL_LINKS,
     }

@@ -30,7 +30,13 @@ vertical axis, and a utility class cannot be overridden from the components laye
       visibly does nothing. `aria-expanded` carries the state, and the label
       says what pressing it will do rather than what it currently is.
       {% endcomment %}
-      <button type="button" class="sidebar-toggle sidebar-label ml-auto"
+      {% comment %}
+      `sidebar-toggle-inline`, not `sidebar-label ml-auto`. Folding this to zero
+      width left it invisible and still absorbing the row's free space through its
+      auto margin, which pinned the brand mark to the left edge of the collapsed
+      rail. The class in assets/app.css takes it out of the layout instead.
+      {% endcomment %}
+      <button type="button" class="sidebar-toggle sidebar-toggle-inline"
               data-sidebar-toggle aria-expanded="true"
               aria-controls="app-sidebar" title="Collapse the sidebar" hidden>
         <span class="sr-only">Collapse the sidebar</span>

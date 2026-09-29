@@ -60,7 +60,7 @@ they recorded still carry their name.
           </tr>
         </thead>
         <tbody class="divide-y divide-ink-200">
-          {% for person in staff %}
+          {% for row in rows %}{% with person=row.person %}
             <tr class="{% if not person.is_active %}bg-ink-50/60{% endif %}">
               {# Name and email together: they are one identity, not two columns. #}
               <td class="px-5 py-3">
@@ -126,7 +126,7 @@ they recorded still carry their name.
                     wants rather than "flip it", so a stale tab cannot reactivate
                     somebody by pressing what it thinks says deactivate.
                     {% endcomment %}
-                    {% if can_deactivate and person.pk != user.pk %}
+                    {% if row.may_deactivate %}
                       <form method="post"
                             action="{% url 'staff:activation' person.pk %}">
                         {% csrf_token %}
@@ -143,6 +143,16 @@ they recorded still carry their name.
                           </button>
                         {% endif %}
                       </form>
+                    {% elif can_deactivate and row.is_protected %}
+                      {% comment %}
+                      Said rather than silently absent: a platform owner looking
+                      for the control on this row should learn why it is not
+                      there, not wonder whether the page failed to draw it.
+                      {% endcomment %}
+                      <span class="chip" title="This account cannot be deactivated,
+                            so the platform can never be locked out of itself.">
+                        protected
+                      </span>
                     {% endif %}
                     {% if not person.email and not can_deactivate %}
                       <span class="text-ink-400">&mdash;</span>
@@ -151,7 +161,7 @@ they recorded still carry their name.
                 </td>
               {% endif %}
             </tr>
-          {% empty %}
+          {% endwith %}{% empty %}
             <tr>
               <td colspan="8" class="px-5 py-8 text-center text-ink-600">
                 {% if is_platform %}No accounts on the platform yet.
@@ -181,7 +191,9 @@ they recorded still carry their name.
     <p class="mt-2 text-sm text-ink-600">
       Deactivating an account stops it signing in and deletes nothing — the
       payments it recorded and the messages it sent keep its name, and
-      reactivating restores access with the same password.
+      reactivating restores access with the same password. One account is marked
+      <span class="chip">protected</span> and cannot be deactivated at all, so
+      the platform can never be locked out of itself.
     </p>
   {% endif %}
 {% endblock %}

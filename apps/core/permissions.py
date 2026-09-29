@@ -245,6 +245,50 @@ def has_capability(user, capability: Capability) -> bool:
     return capability in capabilities_of(user)
 
 
+def is_protected_account(user) -> bool:
+    """Whether ``user`` is the account that may never be deactivated.
+
+    Deactivation is a platform capability, so every platform owner holds it --
+    which includes holding it against another platform owner. That is a state the
+    platform can lock itself out of: two owners disable each other and nobody is
+    left who can undo it. So one account, named by ``PLATFORM_OWNER_EMAIL``, is
+    out of reach of the capability entirely.
+
+    Not a role and not a row on the account: a role would be held by whoever was
+    given it next, and a flag on the user is a second place permissions are
+    decided. An address in the settings is one line, readable in a deploy, and
+    survives the database being restored from a backup.
+
+    Compared case-insensitively and on the trimmed address, because an email is
+    not case-sensitive in its domain and people paste them with spaces.
+    """
+    from django.conf import settings
+
+    protected = (getattr(settings, "PLATFORM_OWNER_EMAIL", "") or "").strip().lower()
+    if not protected:
+        return False
+    return (getattr(user, "email", "") or "").strip().lower() == protected
+
+
+def may_deactivate(actor, target) -> bool:
+    """Whether ``actor`` may switch ``target`` off.
+
+    Three rules, and all three have to hold:
+
+    * the actor holds ``DEACTIVATE_ACCOUNTS`` -- the platform, and nobody at a
+      school;
+    * the target is not the protected account (see :func:`is_protected_account`);
+    * the target is not the actor. Not a permission question but a footgun one:
+      switching off the account you are signed in as locks you out of the screen
+      that switches it back on.
+    """
+    if not has_capability(actor, Capability.DEACTIVATE_ACCOUNTS):
+        return False
+    if is_protected_account(target):
+        return False
+    return getattr(actor, "pk", None) != getattr(target, "pk", object())
+
+
 class CapabilityRequiredMixin(LoginRequiredMixin):
     """Refuse the view unless the account holds :attr:`capability`.
 

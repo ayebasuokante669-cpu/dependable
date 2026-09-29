@@ -251,14 +251,73 @@ class NavigationTests(TestCase):
         self.assertEqual(dashboard.href, home)
         self.assertTrue(dashboard.active)
 
-    def test_the_dashboard_entry_points_each_role_at_its_own(self):
-        hrefs = {
-            role: nav_for(role, "/")[0].items[0].href for role in Role.values
-        }
-        # Four roles, four destinations -- none of them sharing one screen.
-        self.assertEqual(len(set(hrefs.values())), len(hrefs))
-        self.assertEqual(hrefs[Role.BURSAR], "/finance/")
-        self.assertEqual(hrefs[Role.PLATFORM_OWNER], "/platform/")
+    def test_every_role_has_exactly_one_entry_pointing_at_its_own_home(self):
+        """The invariant, stated without assuming what the entry is called.
+
+        Three roles reach their home through the Overview "Dashboard" row. The
+        platform owner reaches theirs through Platform > "Schools", because for
+        them the two are one screen -- and a second row pointing at it was what
+        lit two rows at once. So the thing to assert is that each role has one
+        entry for its home, not that the entry is labelled Dashboard.
+        """
+        from django.urls import reverse
+
+        from apps.core.modules import ALL_KEYS
+        from apps.core.navigation import home_url_name
+        from apps.core.permissions import capabilities_for
+
+        for role in Role.values:
+            with self.subTest(role=role):
+                home = reverse(home_url_name(role))
+                matching = [
+                    item.label
+                    for section in nav_for(
+                        role, "/", {c.value for c in capabilities_for(role)},
+                        ALL_KEYS,
+                    )
+                    for item in section.items
+                    if item.href == home
+                ]
+                self.assertEqual(len(matching), 1, f"{role}: {matching}")
+
+    def test_the_four_homes_are_four_different_screens(self):
+        from django.urls import reverse
+
+        from apps.core.navigation import home_url_name
+
+        homes = {role: reverse(home_url_name(role)) for role in Role.values}
+        self.assertEqual(len(set(homes.values())), len(homes))
+        self.assertEqual(homes[Role.BURSAR], "/finance/")
+        self.assertEqual(homes[Role.PLATFORM_OWNER], "/platform/")
+
+    def test_two_entries_on_one_href_never_both_light_up(self):
+        """The bug behind "clicking a new item leaves the old one highlighted".
+
+        `_keep_only_the_closest_match` compares href *lengths*, so a tie cleared
+        neither -- and the platform owner had a tie, with Dashboard and Schools
+        both resolving to /platform/. The duplicate row is gone; this guards the
+        tie-break itself, since any future pair would fail the same way.
+        """
+        import dataclasses
+
+        from apps.core.navigation import (
+            ResolvedItem,
+            ResolvedSection,
+            _keep_only_the_closest_match,
+        )
+
+        twins = [
+            ResolvedSection(
+                label="Overview",
+                items=[
+                    ResolvedItem(label="First", href="/same/", active=True),
+                    ResolvedItem(label="Second", href="/same/", active=True),
+                ],
+            )
+        ]
+        _keep_only_the_closest_match(twins)
+        active = [i.label for s in twins for i in s.items if i.active]
+        self.assertEqual(active, ["First"], "the first declared should win")
 
     def test_anonymous_gets_no_navigation(self):
         self.assertEqual(nav_for(None), [])

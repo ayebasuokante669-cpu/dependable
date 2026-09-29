@@ -1,0 +1,31 @@
+{% comment %}
+The one button style for platform email. Takes `url` and `label`.
+
+A table wrapping an <a>, because a styled <a> alone is not clickable across its
+padding in Outlook -- the cell carries the background and the anchor carries the
+padding, which is the shape that works everywhere.
+
+`mso-padding-alt` and the conditional VML are what give Outlook the same rounded
+filled rectangle the rest get; without them it renders a square block. The padding
+puts the tap area above 44px tall, which is the floor on a phone.
+{% endcomment %}
+<tr>
+  <td style="padding:20px 28px 4px 28px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td align="center" bgcolor="#1d3f79"
+            style="background-color:#1d3f79;border-radius:10px;
+                   mso-padding-alt:14px 26px;">
+          <a href="{{ url }}"
+             style="display:inline-block;padding:14px 26px;
+                    font-family:'Public Sans',-apple-system,'Segoe UI',Roboto,
+                    Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;
+                    line-height:20px;color:#ffffff;text-decoration:none;
+                    border-radius:10px;mso-padding-alt:0;">
+            {{ label }}
+          </a>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>

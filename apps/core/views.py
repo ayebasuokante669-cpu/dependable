@@ -133,6 +133,10 @@ class AboutView(TemplateView):
         context = super().get_context_data(**kwargs)
         context["features"] = FEATURES
         context["product_description"] = PRODUCT_DESCRIPTION
+        # `contact_email` and `social_links` arrive from the branding context
+        # processor, which runs on signed-out pages too. Only the privacy address
+        # is named here, because it is this page's own aside rather than shell
+        # furniture.
         context["privacy_email"] = PRIVACY_EMAIL
         context["page_title"] = "About"
         return context
@@ -244,7 +248,18 @@ class BrandedPasswordResetView(PasswordResetView):
 
     The HTML half is sent multipart alongside the plain-text body Django has
     always sent, so a client that refuses HTML -- or a reader who prefers it --
-    still gets a complete message rather than a blank one.
+    still gets a complete message rather than a blank one. It is built on
+    ``templates/email/_base.html``, the shared shell for mail SCHOOLCORD sends as
+    itself -- distinct from the admissions mail, which is signed by the school and
+    where the platform appears nowhere.
+
+    ``branding()`` supplies the product name, the tagline and the contact address.
+    The protocol and domain come from ``PasswordResetForm``, and the base builds the
+    logo's absolute URL out of them.
+
+    This is also the invitation email: ``invites.send_set_password_email`` reuses
+    these three template names, so a new account and a forgotten password get one
+    message that is maintained once.
     """
 
     extra_email_context = branding()

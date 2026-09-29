@@ -250,16 +250,36 @@ class RoleRedirectTests(SeededRoleTestCase):
                     self.client.get(reverse("core:dashboard")), reverse(url_name)
                 )
 
-    def test_the_sidebar_dashboard_link_matches_where_login_lands(self):
+    def test_the_sidebar_home_link_matches_where_login_lands(self):
+        """The invariant that matters: whatever the sidebar's entry for this
+        role's home is called, it points where signing in lands.
+
+        Asserted by href rather than by position and label. Three roles reach
+        their home through Overview > Dashboard; the platform owner reaches theirs
+        through Platform > Schools, because for them that *is* the screen -- and a
+        Dashboard row beside it was a duplicate that lit two rows at once.
+        """
+        from apps.core.modules import ALL_KEYS
+        from apps.core.permissions import capabilities_for
+
         for username, url_name in self.EXPECTED.items():
             with self.subTest(username=username):
                 user = User.objects.get(username=username)
-                home = nav_for(
-                    Role.PLATFORM_OWNER if user.is_superuser else user.role, "/"
-                )[0].items[0]
-                self.assertEqual(home.label, "Dashboard")
-                self.assertEqual(home.href, reverse(url_name))
-                self.assertEqual(home_url_for(user), reverse(url_name))
+                role = Role.PLATFORM_OWNER if user.is_superuser else user.role
+                expected = reverse(url_name)
+
+                entries = [
+                    item
+                    for section in nav_for(
+                        role, "/", {c.value for c in capabilities_for(role)},
+                        ALL_KEYS,
+                    )
+                    for item in section.items
+                    if item.href == expected
+                ]
+                self.assertEqual(len(entries), 1, f"{username}: {entries}")
+                self.assertTrue(entries[0].available)
+                self.assertEqual(home_url_for(user), expected)
 
     def test_another_roles_dashboard_bounces_you_to_your_own(self):
         self.client.force_login(User.objects.get(username="fulfilled-academy.bursar"))

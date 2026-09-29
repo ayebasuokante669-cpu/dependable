@@ -859,12 +859,10 @@ class ViewTests(MessagingTestCase):
 
 
 class NavigationTests(TestCase):
-    def test_messaging_is_reachable_from_the_sidebar_for_every_role(self):
+    def test_messaging_is_reachable_from_the_sidebar_for_every_school_role(self):
         from apps.core.navigation import nav_for
 
-        for role in (
-            Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR, Role.PLATFORM_OWNER
-        ):
+        for role in (Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR):
             # The entry is module-gated as well as role-gated, so the module has
             # to be in hand for the question "does this role get it?" to mean
             # anything. The other direction is the next test.
@@ -874,6 +872,19 @@ class NavigationTests(TestCase):
                 self.assertEqual(len(items), 1)
                 self.assertTrue(items[0].available)
                 self.assertEqual(items[0].href, reverse("messaging:index"))
+
+    def test_the_platform_owner_is_not_offered_a_schools_messaging(self):
+        """Writing to a school's parents is the school's work, not the
+        platform's. Their half of messaging is the Sender ID roll -- see
+        apps/messaging/tests_identity.py::NavigationTests."""
+        from apps.core.navigation import nav_for
+
+        labels = {
+            i.label
+            for s in nav_for(Role.PLATFORM_OWNER, "/", modules={"messaging"})
+            for i in s.items
+        }
+        self.assertNotIn("Messaging", labels)
 
     def test_a_school_without_the_module_gets_no_messaging_entries(self):
         from apps.core.navigation import nav_for

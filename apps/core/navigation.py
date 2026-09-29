@@ -214,6 +214,14 @@ class ResolvedSection:
 ALL_ROLES = tuple(Role.values)
 _LEADERSHIP = (Role.PLATFORM_OWNER, Role.SCHOOL_OWNER, Role.PRINCIPAL)
 
+#: Everyone who works *at a school*, as opposed to on the platform. Used by the
+#: sections that are a school's own day-to-day work -- admissions and writing to
+#: parents -- which a platform owner has no part in and does not need in their
+#: sidebar. It scopes the *menu*, not the permission: the routes stay reachable so
+#: the platform can still support a school through them.
+_SCHOOL_SIDE = (Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR)
+_SCHOOL_LEADERSHIP = (Role.SCHOOL_OWNER, Role.PRINCIPAL)
+
 #: The whole navigation map, declared once.  Feature destinations are listed
 #: now and light up on their own as the URL names come into existence.
 NAVIGATION: tuple[NavSection, ...] = (
@@ -221,7 +229,15 @@ NAVIGATION: tuple[NavSection, ...] = (
         label="Overview",
         items=(
             # Resolves per role -- see HOME and ROLE_HOME above.
-            NavItem("Dashboard", HOME, "home", ALL_ROLES),
+            #
+            # Not the platform owner. Their home *is* Platform > Schools, so a
+            # Dashboard row beside it was a second row pointing at one page --
+            # and because both resolved to the same href, both lit up at once:
+            # `_keep_only_the_closest_match` compares href *lengths*, so a tie
+            # left neither cleared. One row per destination is the fix; the
+            # tie-break below is the guard against it happening again.
+            NavItem("Dashboard", HOME, "home",
+                    (Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR)),
             NavItem("Reports", "reports:index", "chart", _LEADERSHIP + (Role.BURSAR,)),
         ),
     ),
@@ -233,6 +249,17 @@ NAVIGATION: tuple[NavSection, ...] = (
             # admin is neither tenant-aware nor the place to make a commercial
             # decision from.
             NavItem("Schools", "core:platform_overview", "building",
+                    (Role.PLATFORM_OWNER,)),
+            # Platform work that happens to live under /messaging/: the platform
+            # registers a school's Sender ID with the gateway and approves it, and
+            # a school can only read its own. So it sits here rather than in
+            # Communication, which for a platform owner holds nothing else --
+            # they do not write a school's messages to its parents.
+            #
+            # The screen itself already answers both questions: a school sees its
+            # own identity, the platform sees the roll of every school's. See
+            # apps/messaging/views.py::MessagingIdentityView.
+            NavItem("Sender IDs", "messaging:identity", "identity",
                     (Role.PLATFORM_OWNER,)),
             NavItem("Plans & Billing", "billing:index", "money", (Role.PLATFORM_OWNER,)),
         ),
@@ -293,29 +320,38 @@ NAVIGATION: tuple[NavSection, ...] = (
             # because even at a school that has it, a bursar reaches the pipeline
             # only where the school has switched *them* on -- and the sidebar has
             # to agree with what the view will actually allow.
-            NavItem("Applications", "admissions:pipeline", "clipboard", ALL_ROLES,
+            # School-side roles only. Admissions is a school's own pipeline --
+            # enquiries, assessments, offers, enrolment -- and none of it is the
+            # platform's work, so the whole section is absent from their sidebar.
+            # The routes stay reachable for support; it is the menu that is
+            # scoped, not the permission.
+            NavItem("Applications", "admissions:pipeline", "clipboard", _SCHOOL_SIDE,
                     capability="view_admissions", module="admissions"),
             NavItem("New enquiry", "admissions:enquiry_create", "userplus",
-                    _LEADERSHIP, capability="manage_admissions",
+                    _SCHOOL_LEADERSHIP, capability="manage_admissions",
                     module="admissions"),
-            NavItem("Admission fees", "admissions:fee_schedules", "money", ALL_ROLES,
-                    capability="view_admission_payments", module="admissions"),
+            NavItem("Admission fees", "admissions:fee_schedules", "money",
+                    _SCHOOL_SIDE, capability="view_admission_payments",
+                    module="admissions"),
             NavItem("Requirements", "admissions:requirements", "clipboard",
-                    ALL_ROLES, capability="view_admissions", module="admissions"),
+                    _SCHOOL_SIDE, capability="view_admissions", module="admissions"),
             NavItem("Admissions settings", "admissions:settings", "cog",
-                    _LEADERSHIP, capability="manage_admissions",
+                    _SCHOOL_LEADERSHIP, capability="manage_admissions",
                     module="admissions"),
         ),
     ),
     NavSection(
         label="Communication",
         items=(
-            NavItem("Messaging", "messaging:index", "chat", ALL_ROLES,
+            # A school writing to its own parents. Not the platform's, which is
+            # why this section is empty for them -- their half of messaging is
+            # Sender IDs, up in Platform.
+            NavItem("Messaging", "messaging:index", "chat", _SCHOOL_SIDE,
                     module="messaging"),
-            # What parents see the school's messages come from. Read-only for
-            # a school; the platform owner registers and approves it here.
-            NavItem("Sender ID", "messaging:identity", "identity", _LEADERSHIP,
-                    module="messaging"),
+            # What parents see the school's messages come from. Read-only here:
+            # the platform registers and approves it, from its own entry above.
+            NavItem("Sender ID", "messaging:identity", "identity",
+                    _SCHOOL_LEADERSHIP, module="messaging"),
         ),
     ),
     NavSection(
@@ -424,7 +460,18 @@ def _keep_only_the_closest_match(sections: list[ResolvedSection]) -> None:
     # ResolvedItem is frozen, so the losers are replaced rather than edited.
     # The section's list is mutable even though its items are not, which is
     # what lets this happen in place.
+    #
+    # `kept` breaks a tie. Two entries pointing at the *same* href are equally
+    # deep, so the length test alone clears neither and both rows stay lit -- the
+    # bug the platform owner met when their Dashboard and their Schools entry both
+    # resolved to /platform/. The first one declared wins, which makes the outcome
+    # a property of the menu's order rather than of dictionary iteration.
+    kept = False
     for section in sections:
         for index, item in enumerate(section.items):
-            if item.active and len(item.href) < deepest:
+            if not item.active:
+                continue
+            if len(item.href) < deepest or kept:
                 section.items[index] = dataclasses.replace(item, active=False)
+            else:
+                kept = True

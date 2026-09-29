@@ -81,6 +81,13 @@ class UITestCase(TestCase):
             "platform", email="platform@example.com", password="pw",
             role=Role.PLATFORM_OWNER,
         )
+        # The account PLATFORM_OWNER_EMAIL names, and a second platform owner who
+        # is not it. `cls.platform` above is a third, also unprotected -- so the
+        # tests can tell "holds the capability" apart from "is out of reach of it".
+        cls.protected = User.objects.create_superuser(
+            "protected", email=settings.PLATFORM_OWNER_EMAIL, password="pw",
+            role=Role.PLATFORM_OWNER,
+        )
         cls.stranger = User.objects.create_user(
             "stranger", email="stranger@example.com", password="pw",
             role=Role.BURSAR, school=cls.other, branch=cls.other_branch,
@@ -832,3 +839,448 @@ class MotionContractTests(TestCase):
             )
             with self.subTest(template=name):
                 self.assertIn("sidebar-pad", path.read_text(encoding="utf-8"))
+
+
+# ===========================================================================
+# One account is out of reach of deactivation
+# ===========================================================================
+
+
+class ProtectedAccountTests(UITestCase):
+    """Every platform owner can deactivate; one account cannot be deactivated.
+
+    Without this the platform can lock itself out of itself: two owners hold the
+    same capability, they can switch each other off, and nobody is left who can
+    undo it. So the capability stays with the role and one *target* is removed
+    from its reach.
+    """
+
+    def activate(self, actor, target, on: bool):
+        self.client.force_login(actor)
+        data = {"active": "on"} if on else {}
+        return self.client.post(
+            reverse("staff:activation", args=[target.pk]), data, follow=True
+        )
+
+    def test_the_setting_names_an_account(self):
+        self.assertTrue(settings.PLATFORM_OWNER_EMAIL)
+        self.assertEqual(
+            settings.PLATFORM_OWNER_EMAIL, settings.PLATFORM_OWNER_EMAIL.lower()
+        )
+
+    def test_it_recognises_that_account_and_no_other(self):
+        from apps.core.permissions import is_protected_account
+
+        self.assertTrue(is_protected_account(self.protected))
+        for other in (self.platform, self.owner, self.principal, self.bursar):
+            with self.subTest(user=other.username):
+                self.assertFalse(is_protected_account(other))
+
+    def test_the_match_ignores_case_and_surrounding_space(self):
+        self.protected.email = f"  {settings.PLATFORM_OWNER_EMAIL.upper()}  "
+        from apps.core.permissions import is_protected_account
+
+        self.assertTrue(is_protected_account(self.protected))
+
+    def test_another_platform_owner_still_deactivates_everyone_else(self):
+        for target in (self.owner, self.principal, self.bursar, self.platform):
+            with self.subTest(target=target.username):
+                self.activate(self.protected, target, False)
+                target.refresh_from_db()
+                self.assertFalse(target.is_active)
+                self.activate(self.protected, target, True)
+
+    def test_a_platform_owner_may_deactivate_another_platform_owner(self):
+        """The capability is unchanged -- it is one target that is protected, not
+        a whole role."""
+        self.activate(self.protected, self.platform, False)
+        self.platform.refresh_from_db()
+        self.assertFalse(self.platform.is_active)
+
+    def test_nobody_may_deactivate_the_protected_account(self):
+        for actor in (self.platform, self.owner, self.principal, self.bursar):
+            with self.subTest(actor=actor.username):
+                self.activate(actor, self.protected, False)
+                self.protected.refresh_from_db()
+                self.assertTrue(self.protected.is_active)
+
+    def test_not_even_itself(self):
+        """The self-deactivation guard still applies, so the top account cannot be
+        locked out by the person holding it either."""
+        self.activate(self.protected, self.protected, False)
+        self.protected.refresh_from_db()
+        self.assertTrue(self.protected.is_active)
+
+    def test_the_refusal_says_why(self):
+        response = self.activate(self.platform, self.protected, False)
+        self.assertContains(response, "cannot be deactivated")
+
+    def test_the_control_is_not_drawn_on_that_row(self):
+        self.client.force_login(self.platform)
+        response = self.client.get(reverse("staff:list"))
+        self.assertNotContains(
+            response, reverse("staff:activation", args=[self.protected.pk])
+        )
+        # And the row says why, rather than leaving a gap to wonder about.
+        self.assertContains(response, "protected")
+
+    def test_the_control_is_still_drawn_on_other_platform_owners(self):
+        self.client.force_login(self.protected)
+        response = self.client.get(reverse("staff:list"))
+        self.assertContains(
+            response, reverse("staff:activation", args=[self.platform.pk])
+        )
+
+    def test_may_deactivate_is_the_one_answer_both_places_use(self):
+        """The template draws the button from the same function the view checks,
+        so the two cannot disagree about a row."""
+        from apps.core.permissions import may_deactivate
+
+        self.assertFalse(may_deactivate(self.platform, self.protected))
+        self.assertFalse(may_deactivate(self.platform, self.platform))
+        self.assertFalse(may_deactivate(self.owner, self.bursar))
+        self.assertTrue(may_deactivate(self.platform, self.bursar))
+        self.assertTrue(may_deactivate(self.protected, self.platform))
+
+
+# ===========================================================================
+# The platform's own sidebar
+# ===========================================================================
+
+
+class PlatformSidebarTests(UITestCase):
+    """A platform owner's menu is not a school's menu with extra rows on it."""
+
+    def platform_labels(self) -> set[str]:
+        return self.labels_for(Role.PLATFORM_OWNER)
+
+    def test_admissions_is_absent(self):
+        labels = self.platform_labels()
+        for entry in ("Applications", "New enquiry", "Admission fees",
+                      "Requirements", "Admissions settings"):
+            with self.subTest(entry=entry):
+                self.assertNotIn(entry, labels)
+
+    def test_a_schools_messaging_is_absent(self):
+        self.assertNotIn("Messaging", self.platform_labels())
+
+    def test_the_sender_id_roll_is_present_and_under_platform(self):
+        """Registering and approving a Sender ID is the platform's job; a school
+        only reads its own. So it sits beside Schools."""
+        sections = {
+            section.label: [item.label for item in section.items]
+            for section in nav_for(
+                Role.PLATFORM_OWNER, "/",
+                {c.value for c in capabilities_for(Role.PLATFORM_OWNER)}, ALL_KEYS,
+            )
+        }
+        self.assertIn("Sender IDs", sections["Platform"])
+        self.assertNotIn("Communication", sections)
+
+    def test_a_school_keeps_both_of_its_own(self):
+        for role in (Role.SCHOOL_OWNER, Role.PRINCIPAL):
+            with self.subTest(role=role):
+                labels = self.labels_for(role)
+                self.assertIn("Messaging", labels)
+                self.assertIn("Sender ID", labels)
+        self.assertIn("Messaging", self.labels_for(Role.BURSAR))
+
+    def test_a_school_keeps_its_admissions(self):
+        labels = self.labels_for(Role.SCHOOL_OWNER)
+        self.assertIn("Applications", labels)
+        self.assertIn("Admissions settings", labels)
+
+    def test_the_routes_are_still_reachable_for_support(self):
+        """The menu is scoped, not the permission. A platform owner opening a
+        school's pipeline to help them is not something to break."""
+        self.client.force_login(self.platform)
+        for url_name in ("admissions:pipeline", "messaging:index",
+                         "messaging:identity"):
+            with self.subTest(url=url_name):
+                self.assertEqual(
+                    self.client.get(reverse(url_name)).status_code, 200
+                )
+
+    def test_exactly_one_row_is_active_on_every_platform_screen(self):
+        """The reported bug: two rows highlighted at once. Their Dashboard and
+        their Schools entry both resolved to /platform/, and the tie-break
+        compares href lengths, so neither was cleared."""
+        caps = {c.value for c in capabilities_for(Role.PLATFORM_OWNER)}
+        for path in ("/platform/", "/platform/schools/1/", "/reports/",
+                     "/staff/", "/messaging/identity/", "/branches/"):
+            with self.subTest(path=path):
+                active = [
+                    item.label
+                    for section in nav_for(Role.PLATFORM_OWNER, path, caps, ALL_KEYS)
+                    for item in section.items
+                    if item.active
+                ]
+                self.assertEqual(len(active), 1, f"{path}: {active}")
+
+    def test_the_rendered_sidebar_highlights_one_row_per_copy(self):
+        """base.html renders the nav twice -- the desktop rail and the mobile
+        drawer -- so the page carries one active row per copy and no more."""
+        self.client.force_login(self.platform)
+        body = self.client.get(reverse("core:platform_overview")).content.decode()
+        self.assertEqual(body.count('aria-label="Main"'), 1)
+        self.assertEqual(body.count('aria-label="Mobile"'), 1)
+        self.assertEqual(body.count("nav-link-active"), 2)
+
+
+# ===========================================================================
+# The About page's content and links
+# ===========================================================================
+
+
+class AboutContentTests(UITestCase):
+    def body(self) -> str:
+        response = self.client.get(reverse("core:about"))
+        self.assertEqual(response.status_code, 200)
+        return " ".join(response.content.decode().split())
+
+    def test_the_who_we_are_copy_is_there(self):
+        body = self.body()
+        for sentence in (
+            "Running a school is hard enough without fees getting in the way.",
+            "We replace the notebooks, the scattered spreadsheets",
+            # A literal apostrophe: Django autoescapes variables, not the
+            # template's own text.
+            "Parents don't need to install anything.",
+            "Nothing is charged until you say so.",
+        ):
+            with self.subTest(sentence=sentence[:40]):
+                self.assertIn(sentence, body)
+
+    def test_nothing_is_still_marked_as_a_placeholder(self):
+        self.assertNotIn("data-placeholder", self.body())
+
+    def test_the_contact_addresses_are_the_real_ones(self):
+        from apps.core.branding import CONTACT_EMAIL, PRIVACY_EMAIL
+
+        body = self.body()
+        self.assertIn(f"mailto:{CONTACT_EMAIL}", body)
+        # The privacy address is still named, as this page's own aside -- but it
+        # is no longer what a general enquiry falls back to.
+        self.assertIn(f"mailto:{PRIVACY_EMAIL}", body)
+
+    def test_every_social_account_is_linked(self):
+        """Compared against the *escaped* URL: one of these carries a query string
+        with an `&` in it, which Django renders as `&amp;` in the href."""
+        from django.utils.html import escape
+
+        from apps.core.branding import SOCIAL_LINKS
+
+        body = self.body()
+        for account in SOCIAL_LINKS:
+            with self.subTest(account=account["label"]):
+                self.assertIn(escape(account["url"]), body)
+                self.assertIn(account["handle"], body)
+
+    def test_the_outbound_links_open_safely(self):
+        """`rel="noopener noreferrer"` on anything leaving the site."""
+        from django.utils.html import escape
+
+        from apps.core.branding import SOCIAL_LINKS
+
+        body = self.body()
+        for account in SOCIAL_LINKS:
+            if account["icon"] == "mail":
+                continue   # a mailto: opens a client, not a tab
+            with self.subTest(account=account["label"]):
+                url = escape(account["url"])
+                at = body.index(url)
+                self.assertIn('rel="noopener noreferrer"', body[at - 250: at + 350])
+
+    def test_it_carries_the_glass_and_reveal_treatment(self):
+        """Asserted because both are load-bearing for how the page reads, and
+        both degrade on their own -- glass drops its blur on low-end devices and
+        the reveal is skipped under prefers-reduced-motion."""
+        body = self.body()
+        self.assertIn("card-glass", body)
+        self.assertIn("glass-ground", body)
+        self.assertIn("reveal", body)
+        self.assertIn("data-reveal-group", body)
+
+
+class FooterAccountTests(UITestCase):
+    def footer(self) -> str:
+        body = self.client.get(reverse("core:landing")).content.decode()
+        return body[body.index("<footer"):]
+
+    def test_the_three_accounts_are_linked_with_their_real_addresses(self):
+        """The whole URL, share parameters included -- asserted on the escaped
+        form, since one of them has an `&` in its query string."""
+        from django.utils.html import escape
+
+        from apps.core.branding import SOCIAL_LINKS
+
+        footer = self.footer()
+        for account in SOCIAL_LINKS:
+            with self.subTest(account=account["label"]):
+                self.assertIn(f'href="{escape(account["url"])}"', footer)
+
+    def test_the_share_parameters_survive_into_the_href(self):
+        """They are the platform's own attribution; stripping them would quietly
+        drop whatever they report back."""
+        footer = self.footer()
+        self.assertIn("?s=11", footer)
+        self.assertIn("stkn=MWdxbmx3NXhxZXNhdg%3D%3D", footer)
+        self.assertIn("utm_source=qr", footer)
+
+    def test_no_social_icon_points_at_a_placeholder(self):
+        import re
+
+        footer = self.footer()
+        self.assertEqual(re.findall(r'footer-social[^>]*href="#"', footer), [])
+
+    def test_the_accounts_we_do_not_have_are_gone(self):
+        footer = self.footer().lower()
+        for absent in ("linkedin", "facebook", "whatsapp"):
+            with self.subTest(account=absent):
+                self.assertNotIn(absent, footer)
+
+    def test_it_is_driven_from_branding_rather_than_pasted_in(self):
+        """One list, read by the footer and the About page, so an account added
+        there cannot appear on one and not the other."""
+        from django.utils.html import escape
+
+        from apps.core.branding import SOCIAL_LINKS
+
+        footer = self.footer()
+        about = self.client.get(reverse("core:about")).content.decode()
+        for account in SOCIAL_LINKS:
+            with self.subTest(account=account["label"]):
+                self.assertIn(escape(account["url"]), footer)
+                self.assertIn(escape(account["url"]), about)
+
+
+# ===========================================================================
+# The branded email shell
+# ===========================================================================
+
+
+class SystemEmailTests(UITestCase):
+    """The password reset, which is also the invitation -- one message.
+
+    Checked on what actually leaves: a mail client is not going to be talked out
+    of a relative image path or an SVG.
+    """
+
+    def send(self):
+        from django.core import mail
+
+        mail.outbox.clear()
+        response = self.client.post(
+            reverse("password_reset"), {"email": "owner@example.com"}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        return mail.outbox[0]
+
+    def html(self) -> str:
+        message = self.send()
+        self.assertEqual(len(message.alternatives), 1)
+        content, mimetype = message.alternatives[0]
+        self.assertEqual(mimetype, "text/html")
+        return content
+
+    def test_it_is_multipart_with_a_plain_text_body(self):
+        """The HTML is the alternative; the text is the body. A client that
+        refuses HTML still gets a complete message."""
+        message = self.send()
+        self.assertTrue(message.body.strip())
+        self.assertIn("Somebody asked to set a password", message.body)
+        self.assertIn("SCHOOLCORD", message.body)
+        # No markup in the text half -- that is the point of it.
+        self.assertNotIn("<table", message.body)
+        self.assertEqual(message.alternatives[0][1], "text/html")
+
+    def test_the_sender_name_is_the_product(self):
+        self.assertIn("SCHOOLCORD", self.send().from_email)
+
+    def test_the_subject_reads_for_an_invitation_as_well_as_a_reset(self):
+        """The same message goes to a brand-new account, which has never had a
+        password to reset."""
+        self.assertEqual(
+            self.send().subject, "Choose a new SCHOOLCORD password"
+        )
+
+    def test_the_logo_is_a_png_at_an_absolute_url(self):
+        import re
+
+        html = self.html()
+        match = re.search(r'<img src="(?P<src>[^"]+)"', html)
+        self.assertIsNotNone(match, "no image in the email at all")
+        src = match.group("src")
+        self.assertTrue(src.startswith("http"), src)
+        self.assertTrue(src.endswith(".png"), src)
+        self.assertIn("schoolcord-logo", src)
+
+    def test_no_svg_reaches_a_mail_client(self):
+        self.assertNotIn(".svg", self.html())
+
+    def test_it_carries_the_brand(self):
+        html = self.html()
+        self.assertIn("#0f2547", html)   # the header band
+        self.assertIn("#1d3f79", html)   # the button
+        self.assertIn("SCHOOLCORD", html)
+
+    def test_a_blocked_image_still_leaves_the_brand_on_the_page(self):
+        """The wordmark is live text beside the logo, and the alt text names the
+        product rather than saying "logo"."""
+        html = self.html()
+        self.assertIn('alt="SCHOOLCORD"', html)
+
+    def test_it_reads_on_a_phone(self):
+        html = self.html()
+        self.assertIn("max-width:560px", html)
+        self.assertIn('name="viewport"', html)
+        # 16px body copy: anything smaller is zoomed by iOS Mail, which then
+        # reflows the table.
+        self.assertIn("font-size:16px", html)
+
+    def test_it_uses_tables_rather_than_flexbox(self):
+        html = self.html()
+        self.assertIn("<table", html)
+        self.assertNotIn("display:flex", html)
+        self.assertNotIn("display:grid", html)
+
+    def test_the_reset_link_is_absolute_and_in_both_halves(self):
+        import re
+
+        message = self.send()
+        html = message.alternatives[0][0]
+        links = set(re.findall(r'href="(https?://[^"]*/accounts/reset/[^"]+)"', html))
+        self.assertTrue(links, "no absolute reset link in the HTML")
+        self.assertTrue(any(link in message.body for link in links))
+
+    def test_the_footer_gives_a_real_address_to_write_to(self):
+        from apps.core.branding import CONTACT_EMAIL
+
+        html = self.html()
+        self.assertIn(CONTACT_EMAIL, html)
+        self.assertIn(CONTACT_EMAIL, self.send().body)
+
+    def test_it_never_asks_for_a_password(self):
+        """Said in the message, because it is the line that makes a phishing copy
+        of it easier to spot."""
+        self.assertIn("never ask for your password", self.html())
+
+    def test_the_branding_reaches_it_despite_there_being_no_request(self):
+        """A mail template renders with no request, so no context processor runs.
+        A blank product name here is not an error anywhere -- it just ships."""
+        html = self.html()
+        self.assertNotIn("Choose a new  password", html)
+        self.assertNotIn("{{", html)
+
+    def test_the_invitation_is_the_same_message(self):
+        """apps/accounts/invites reuses these three templates, so there is one
+        email to keep working rather than two that drift."""
+        from apps.core.views import BrandedPasswordResetView
+
+        self.assertEqual(
+            BrandedPasswordResetView.html_email_template_name,
+            "registration/password_reset_email_html.html",
+        )
+        self.assertIn("contact_email", BrandedPasswordResetView.extra_email_context)
+        self.assertIn("product_name", BrandedPasswordResetView.extra_email_context)

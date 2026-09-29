@@ -16,7 +16,8 @@ side, because they answer different questions and are frequently different.
         {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}
       {% else %}{{ user.username|first|upper }}{% endif %}
     </span>
-    <div class="sidebar-label min-w-0 flex-1">
+    {# `sidebar-grow`, not `flex-1` -- see the class in assets/app.css. #}
+    <div class="sidebar-label sidebar-grow">
       <div class="truncate text-sm font-medium text-panel-fg">{{ user.get_full_name|default:user.username }}</div>
       <div class="truncate text-xs text-panel-muted">
         {{ current_role_label }}{% if user.job_title %} &middot; {{ user.job_title }}{% endif %}

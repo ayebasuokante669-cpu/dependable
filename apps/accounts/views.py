@@ -31,7 +31,13 @@ from django.views.generic import FormView, ListView, TemplateView, View
 from django.urls import reverse, reverse_lazy
 
 from apps.core.navigation import home_url_for
-from apps.core.permissions import Capability, CapabilityRequiredMixin, capabilities_of
+from apps.core.permissions import (
+    Capability,
+    CapabilityRequiredMixin,
+    capabilities_of,
+    is_protected_account,
+    may_deactivate,
+)
 from apps.core.roles import Role, is_platform_role
 
 from .forms import (
@@ -225,6 +231,17 @@ class StaffListView(CapabilityRequiredMixin, ListView):
         context["can_deactivate"] = "deactivate_accounts" in {
             c.value for c in capabilities_of(self.request.user)
         }
+        # Decided per row rather than in the template, so the button is drawn in
+        # exactly the places the view would allow it -- one answer, not two that
+        # can drift. `object_list` is the page of accounts ListView resolved.
+        context["rows"] = [
+            {
+                "person": person,
+                "may_deactivate": may_deactivate(self.request.user, person),
+                "is_protected": is_protected_account(person),
+            }
+            for person in context["staff"]
+        ]
         context["role_labels"] = dict(Role.choices)
         return context
 
@@ -257,6 +274,17 @@ class StaffActivationView(DeactivateAccountsMixin, View):
             # switching off their own account would be locked out of the screen
             # that could switch it back on.
             messages.error(request, "You cannot deactivate your own account.")
+            return HttpResponseRedirect(reverse("staff:list"))
+
+        if is_protected_account(person):
+            # The one account out of reach of this, so the platform cannot be
+            # locked out of itself -- see permissions.is_protected_account.
+            messages.error(
+                request,
+                "That account cannot be deactivated. It is the platform's own "
+                "owner account, and locking it out would leave nobody able to "
+                "undo it.",
+            )
             return HttpResponseRedirect(reverse("staff:list"))
 
         if person.is_active == active:
