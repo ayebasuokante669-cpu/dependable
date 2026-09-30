@@ -38,6 +38,10 @@
 {% endblock %}
 
 {% block content %}
+  <div class="mb-5">
+    {% include "core/_next_step.html" with after="fees" %}
+  </div>
+
   {% if not selected_term %}
     <div class="card empty-state">
       <p class="text-base font-medium text-ink-700">No terms set up yet</p>

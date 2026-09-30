@@ -432,6 +432,94 @@
     });
   }
 
+  /* ======================================================================
+   * Buttons in flight
+   *
+   * A form submit is a page load away, and on a slow connection the only thing
+   * that happens when you press Save is nothing. So the button that fired it
+   * swaps its own glyph for a spinner and stops accepting clicks -- which is also
+   * what stops somebody pressing Save three times and creating three of a thing.
+   *
+   * One listener on the document, on `submit`. That covers every form on the app
+   * in one place: sign in, sign up, save, invite, record a payment, confirm,
+   * void -- and every form written after this, without anybody remembering to
+   * opt in.
+   *
+   * Three details that matter:
+   *
+   *   - `event.submitter` is the button that was pressed, which is the one to
+   *     mark. A form with Save and "Save and add another" must not light both;
+   *   - the button is **not** given the `disabled` attribute. Several submit
+   *     buttons here carry a name and value the view reads
+   *     (`save_and_add_another`, `action=import`), and a button disabled inside
+   *     its own submit handler can be dropped from the payload -- silently
+   *     changing what the form did. `pointer-events: none` via the class blocks
+   *     the second click and touches nothing that gets sent;
+   *   - nothing here calls `preventDefault`. If the browser is going to submit,
+   *     it submits; if HTML validation refuses, `submit` never fires and no
+   *     button is left spinning.
+   *
+   * Opt out with `data-no-loading` on the form or the button -- for a submit that
+   * does not navigate, where a spinner would never stop.
+   * ====================================================================== */
+  function initButtonLoading() {
+    document.addEventListener('submit', function (event) {
+      var form = event.target;
+      if (!form || form.tagName !== 'FORM') return;
+      if (form.hasAttribute('data-no-loading')) return;
+
+      // A form already in flight. Nothing to do -- and nothing to re-mark.
+      if (form.dataset.submitting === 'true') return;
+      form.dataset.submitting = 'true';
+
+      var button = event.submitter;
+      if (!button) {
+        // No submitter: an Enter press in a text field, or `form.submit()`.
+        // Mark the form's own default button so something still responds.
+        button = form.querySelector(
+          'button[type="submit"]:not([data-no-loading]), input[type="submit"]'
+        );
+      }
+      if (!button || button.hasAttribute('data-no-loading')) return;
+      if (button.tagName !== 'BUTTON') return;   // <input> has no ::after to spin
+
+      markLoading(button);
+    }, true);
+
+    // A navigation that never happened -- the back button, or a browser
+    // restoring a cached page -- must not leave a button spinning forever.
+    window.addEventListener('pageshow', clearAllLoading);
+  }
+
+  function markLoading(button) {
+    button.classList.add('is-loading');
+    button.setAttribute('aria-busy', 'true');
+    button.setAttribute('aria-disabled', 'true');
+  }
+
+  function clearAllLoading() {
+    var stuck = document.querySelectorAll('.is-loading');
+    for (var i = 0; i < stuck.length; i++) {
+      stuck[i].classList.remove('is-loading');
+      stuck[i].removeAttribute('aria-busy');
+      stuck[i].removeAttribute('aria-disabled');
+    }
+    var forms = document.querySelectorAll('form[data-submitting]');
+    for (var f = 0; f < forms.length; f++) delete forms[f].dataset.submitting;
+  }
+
+  /** Public, for anything doing its own async work. `ui.loading(button)`. */
+  function setLoading(button, on) {
+    if (!button) return;
+    if (on === false) {
+      button.classList.remove('is-loading');
+      button.removeAttribute('aria-busy');
+      button.removeAttribute('aria-disabled');
+    } else {
+      markLoading(button);
+    }
+  }
+
   function initSidebarScroll() {
     var panes = document.querySelectorAll('[data-sidebar-scroll]');
     if (!panes.length) return;
@@ -1250,6 +1338,9 @@
   }
 
   // Exposed before init so anything inline on a page can call it.
+  window.ui = window.ui || {};
+  window.ui.loading = setLoading;
+
   window.toast = showToast;
   window.toast.success = function (m) { return showToast(m, 'success'); };
   window.toast.error = function (m) { return showToast(m, 'error'); };
@@ -1277,6 +1368,7 @@
     for (var i = 0; i < repeats.length; i++) initRepeat(repeats[i]);
 
     initLogoInput();
+    initButtonLoading();
     initPresets();
     initTotals();
   }

@@ -32,6 +32,14 @@
 {% endblock %}
 
 {% block content %}
+  {% comment %}
+  The continuation. Finishing a step used to land you back here with nothing to
+  say what followed -- see templates/core/_next_step.html.
+  {% endcomment %}
+  <div class="mb-5">
+    {% include "core/_next_step.html" with after="academics" %}
+  </div>
+
   {% if level_groups %}
     <div class="space-y-6">
       {% for group in level_groups %}

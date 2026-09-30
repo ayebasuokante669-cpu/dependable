@@ -24,6 +24,30 @@ side, because they answer different questions and are frequently different.
       </div>
     </div>
   </div>
+  {% comment %}
+  Always here, whether or not the tour has been seen -- the point of it is that it
+  can be asked for again. A button rather than a link: it opens an overlay on this
+  page and navigates nowhere.
+
+  Ships visible and does nothing without static/js/tour.js, which is the one case
+  in this shell where that is acceptable: the script is deferred, not conditional,
+  so "nothing happens" means the page is still loading rather than that the control
+  is broken. It announces itself either way.
+  {% endcomment %}
+  <button type="button" class="nav-link mt-1 w-full text-left" data-tour-start
+          title="Take a tour">
+    <span class="nav-icon">
+      <svg class="size-[18px]" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172
+                 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45
+                 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+      </svg>
+    </span>
+    <span class="sidebar-label">Take a tour</span>
+  </button>
+
   <form method="post" action="{% url 'logout' %}" class="mt-1">
     {% csrf_token %}
     <button type="submit" class="nav-link w-full text-left" title="Sign out">

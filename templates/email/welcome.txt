@@ -1,0 +1,28 @@
+{% autoescape off %}Hello{% if owner.get_full_name %} {{ owner.get_full_name }}{% endif %},
+
+{{ school.name }} is set up on {{ product_name }}, with {{ branch.name }} as its
+first campus. Your account works now -- there is nothing to confirm and no link
+you have to click first.
+
+Four things to do, and each one can wait until you are ready:
+{% for step in steps %}
+  {{ forloop.counter }}. {{ step.label }}
+     {{ step.description }}
+{% endfor %}
+They run in that order because each one uses what the last set up: fees are
+priced per class, and a child is enrolled into one.
+
+Pick up where you left off:
+
+{{ onboarding_url }}
+
+Or sign in any time at {{ site_url }} with {{ owner.email }}.
+
+Bring the register you already keep -- the roster imports from a spreadsheet, and
+it tells you about every row it cannot read before it saves anything. Nothing is
+charged until you say so.
+
+Questions? Write to {{ contact_email }}. We never ask for your password by email.
+
+-- {{ product_name }} - {{ product_tagline }}
+{% endautoescape %}

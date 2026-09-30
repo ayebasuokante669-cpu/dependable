@@ -1,0 +1,92 @@
+{% extends "email/_base.html" %}{% comment %}
+The welcome, sent the moment a school signs itself up.
+
+**Not a verification step.** The account already works -- signup signs them in and
+lands them on the onboarding checklist -- and nothing in this message gates
+anything. It exists to put the four setup steps somewhere they can be found again
+from a phone, and to leave an address to reply to. A "confirm your email" mail that
+did not actually confirm anything would teach people to expect one that does.
+
+Signed by the platform, so it is on the SCHOOLCORD shell rather than the school's
+own -- the opposite of the admissions mail, which a parent receives and where we
+appear nowhere. See templates/email/_base.html.
+{% endcomment %}
+
+{% block subject %}Welcome to {{ product_name }}{% endblock %}
+
+{% block preheader %}
+  {{ school.name }} is set up. Four steps to go, in whatever order suits you.
+{% endblock %}
+
+{% block heading %}{{ school.name }} is set up{% endblock %}
+
+{% block body %}
+  <p style="margin:0 0 14px 0;">
+    Hello{% if owner.get_full_name %} {{ owner.get_full_name }}{% endif %},
+  </p>
+  <p style="margin:0 0 14px 0;">
+    Your school account is ready and you can sign in to it now — there is nothing
+    to confirm and no link you have to click first.
+    <strong style="color:#1c2432;">{{ branch.name }}</strong> is set up as your
+    first campus, and you can add more whenever you need them.
+  </p>
+  <p style="margin:0 0 6px 0;">
+    Four things to do, and each one can wait until you are ready:
+  </p>
+
+  {% comment %}
+  A table rather than an <ol>: list markers are one of the things mail clients
+  most reliably render differently, and a numbered step that renders as a bullet
+  in Outlook loses the order the steps actually depend on.
+  {% endcomment %}
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+         style="width:100%;margin:8px 0 4px;">
+    {% for step in steps %}
+      <tr>
+        <td style="vertical-align:top;padding:6px 10px 6px 0;width:26px;">
+          <span style="display:inline-block;width:22px;height:22px;line-height:22px;
+                       border-radius:11px;background-color:#eef3fb;color:#1d3f79;
+                       font-family:'Public Sans',-apple-system,'Segoe UI',Roboto,
+                       Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;
+                       text-align:center;">{{ forloop.counter }}</span>
+        </td>
+        <td style="vertical-align:top;padding:6px 0;
+                   font-family:'Public Sans',-apple-system,'Segoe UI',Roboto,
+                   Helvetica,Arial,sans-serif;font-size:15px;line-height:22px;
+                   color:#435065;">
+          <strong style="color:#1c2432;">{{ step.label }}</strong><br>
+          <span style="font-size:14px;color:#5a6b85;">{{ step.description }}</span>
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+
+  <p style="margin:14px 0 0 0;">
+    They run in that order because each one uses what the last set up: fees are
+    priced per class, and a child is enrolled into one.
+  </p>
+{% endblock %}
+
+{% block cta %}
+  {% include "email/_button.html" with url=onboarding_url label="Finish setting up" %}
+{% endblock %}
+
+{% block outro %}
+  <tr>
+    <td style="padding:12px 28px 24px 28px;
+               font-family:'Public Sans',-apple-system,'Segoe UI',Roboto,
+               Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;
+               color:#6b7891;">
+      <p style="margin:0 0 12px 0;">
+        Or sign in any time at
+        <a href="{{ site_url }}" style="color:#1d3f79;word-break:break-all;">{{ site_url }}</a>
+        with <strong style="color:#435065;">{{ owner.email }}</strong>.
+      </p>
+      <p style="margin:0;">
+        Bring the register you already keep — the roster imports from a
+        spreadsheet, and it tells you about every row it cannot read before it
+        saves anything. Nothing is charged until you say so.
+      </p>
+    </td>
+  </tr>
+{% endblock %}

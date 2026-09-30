@@ -22,9 +22,17 @@ background difference.
       {% for item in section.items %}
         <li>
           {% if item.available %}
+            {% comment %}
+            `data-tour` names the rows static/js/tour.js stops at. A name rather
+            than a class or a position, because a class is a styling decision and
+            moves -- this is a promise that a tour step depends on this row. A row
+            a role does not get simply is not there, and the tour drops that stop
+            rather than pointing at nothing.
+            {% endcomment %}
             <a href="{{ item.href }}"
                class="nav-link {% if item.active %}nav-link-active{% endif %}"
                title="{{ item.label }}"
+               {% if item.tour %}data-tour="{{ item.tour }}"{% endif %}
                {% if item.active %}aria-current="page"{% endif %}>
               <span class="nav-icon">
                 <svg class="size-[18px]" fill="none" viewBox="0 0 24 24"

@@ -1284,3 +1284,282 @@ class SystemEmailTests(UITestCase):
         )
         self.assertIn("contact_email", BrandedPasswordResetView.extra_email_context)
         self.assertIn("product_name", BrandedPasswordResetView.extra_email_context)
+
+
+# ===========================================================================
+# Buttons in flight
+# ===========================================================================
+
+
+class ButtonLoadingTests(TestCase):
+    """A form submit is a page load away, and on a slow connection the only thing
+    that happens when you press Save is nothing.
+
+    The behaviour itself needs a browser, so what is held here is the contract the
+    behaviour rests on -- and in particular the one decision that would silently
+    change what a form *does* if somebody "tidied" it.
+    """
+
+    CSS = pathlib.Path(settings.BASE_DIR) / "assets" / "app.css"
+    JS = pathlib.Path(settings.BASE_DIR) / "static" / "js" / "ui.js"
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.css = cls.CSS.read_text(encoding="utf-8")
+        cls.js = cls.JS.read_text(encoding="utf-8")
+
+    def handler(self) -> str:
+        """The body of initButtonLoading and its helpers."""
+        start = self.js.index("function initButtonLoading()")
+        return self.js[start: self.js.index("function initSidebarScroll()")]
+
+    def test_one_listener_covers_every_form(self):
+        """Sign in, sign up, save, invite, record a payment -- and every form
+        written after this, without anybody remembering to opt in."""
+        handler = self.handler()
+        self.assertIn("addEventListener('submit'", handler)
+        self.assertIn("document.addEventListener", handler)
+
+    def test_it_marks_the_button_that_was_pressed(self):
+        """A form with Save and "Save and add another" must not light both."""
+        self.assertIn("event.submitter", self.handler())
+
+    def test_it_never_sets_the_disabled_attribute(self):
+        """The decision that matters. Several submit buttons here carry a name and
+        value the view reads -- `save_and_add_another`, `action=import` -- and a
+        button disabled inside its own submit handler can be dropped from the
+        payload, silently changing what the form did."""
+        handler = self.handler()
+        self.assertNotIn("disabled = true", handler)
+        self.assertNotIn('setAttribute("disabled"', handler)
+        self.assertNotIn("setAttribute('disabled'", handler)
+        # What it does instead.
+        self.assertIn("pointer-events: none", self.css)
+        self.assertIn("aria-busy", handler)
+
+    def test_those_buttons_really_do_carry_a_name(self):
+        """Not a hypothetical: if this ever stops being true the rule above can be
+        revisited, and if it stays true the rule has to stay."""
+        root = pathlib.Path(settings.BASE_DIR) / "templates"
+        named = [
+            path.name
+            for path in root.rglob("*.html")
+            if re.search(r'<button[^>]*type="submit"[^>]*name=',
+                         path.read_text(encoding="utf-8"), re.S)
+        ]
+        self.assertTrue(named, "no submit button carries a name any more")
+
+    def test_it_never_prevents_the_submit(self):
+        """If the browser is going to submit, it submits; if HTML validation
+        refuses, `submit` never fires and no button is left spinning."""
+        self.assertNotIn("preventDefault", self.handler())
+
+    def test_a_restored_page_does_not_keep_spinning(self):
+        """The back button, or a browser restoring a cached page."""
+        handler = self.handler()
+        self.assertIn("pageshow", handler)
+        self.assertIn("clearAllLoading", handler)
+
+    def test_there_is_an_opt_out(self):
+        """For a submit that does not navigate, where a spinner would never stop."""
+        self.assertIn("data-no-loading", self.handler())
+
+    def test_the_spinner_replaces_the_buttons_own_glyph(self):
+        """"Swap the arrow for a spinner" -- so the arrow goes."""
+        self.assertIn(".btn.is-loading > svg", self.css)
+        self.assertIn("display: none", self.css)
+        self.assertIn("btn-spin", self.css)
+
+    def test_it_still_reads_as_busy_without_motion(self):
+        """The global reduced-motion rule freezes the ring, and a still ring is not
+        a spinner -- so the button leans on what is not motion."""
+        block = self.css[self.css.index("@media (prefers-reduced-motion: reduce) {\n    .btn.is-loading"):]
+        self.assertIn("opacity", block[:200])
+
+    def test_the_sign_in_and_sign_up_buttons_are_the_shape_it_expects(self):
+        """Both are a <button type=submit> with an svg inside, which is what the
+        CSS hides and the JS marks."""
+        root = pathlib.Path(settings.BASE_DIR) / "templates"
+        for path in ("registration/_panel_login.html", "core/_panel_signup.html"):
+            with self.subTest(panel=path):
+                source = (root / path).read_text(encoding="utf-8")
+                match = re.search(
+                    r'<button type="submit"[^>]*>(.*?)</button>', source, re.S
+                )
+                self.assertIsNotNone(match)
+                self.assertIn("<svg", match.group(1))
+
+
+# ===========================================================================
+# The password reveal
+# ===========================================================================
+
+
+class PasswordRevealTests(UITestCase):
+    JS = pathlib.Path(settings.BASE_DIR) / "static" / "js" / "password.js"
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.js = cls.JS.read_text(encoding="utf-8")
+
+    def test_the_reveal_is_offered_to_every_password_field(self):
+        """It used to be `[autocomplete=new-password]` only, so sign-in fields had
+        no eye -- and half the fields having one reads as a bug."""
+        self.assertIn(
+            "document.querySelectorAll('input[type=\"password\"]')", self.js
+        )
+
+    def test_generate_and_the_checklist_stay_on_the_choose_a_password_fields(self):
+        """Offering to generate a password into a *sign-in* box would be offering
+        to lock somebody out."""
+        self.assertIn("autocomplete') === 'new-password'", self.js)
+        init = self.js[self.js.index("function init()"):]
+        self.assertLess(init.index("addReveal"), init.index("addGenerate"))
+
+    def test_it_does_not_wrap_a_field_twice(self):
+        self.assertIn("closest('.password-wrap')", self.js)
+
+    def test_every_screen_with_a_password_gets_the_script(self):
+        """The reveal is injected, so the script has to be on the page. These are
+        the screens that have a password field on them."""
+        pages = [
+            (reverse("login"), None),
+            (reverse("core:signup"), None),
+            (reverse("accounts:settings"), self.owner),
+        ]
+        for url, who in pages:
+            with self.subTest(url=url):
+                if who:
+                    self.client.force_login(who)
+                response = self.client.get(url)
+                body = response.content.decode()
+                self.assertIn('type="password"', body)
+                self.assertIn("js/password.js", body)
+
+    def test_the_admin_add_user_form_is_covered_too(self):
+        """It carries its own stylesheet for exactly this -- see
+        static/css/password-controls.css."""
+        css = (
+            pathlib.Path(settings.BASE_DIR)
+            / "static" / "css" / "password-controls.css"
+        ).read_text(encoding="utf-8")
+        self.assertIn(".password-reveal", css)
+        self.assertIn(".password-wrap", css)
+
+
+# ===========================================================================
+# The toast's geometry
+# ===========================================================================
+
+
+class ToastGeometryTests(TestCase):
+    """The reported warp. The earlier fix faded the words before the collapse,
+    which stopped them *looking* crushed -- and left them still being laid out,
+    so the message went on reflowing into a narrow column, the toast grew tall to
+    fit it, and the pill distorted anyway."""
+
+    CSS = pathlib.Path(settings.BASE_DIR) / "assets" / "app.css"
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.css = cls.CSS.read_text(encoding="utf-8")
+
+    def rule(self, selector: str) -> str:
+        start = self.css.index(selector + " {")
+        return self.css[start: self.css.index("}", start)]
+
+    def test_the_icon_cannot_be_resized_by_the_row(self):
+        block = self.rule(".toast-icon")
+        self.assertIn("flex: 0 0 3rem", block)
+        self.assertIn("width: 3rem", block)
+        self.assertIn("height: 3rem", block)
+        self.assertIn("aspect-ratio: 1", block)
+
+    def test_the_glyph_inside_it_is_pinned_too(self):
+        """An <svg> is a replaced element: give it a flex context and no explicit
+        size and it will take the one it is handed."""
+        block = self.rule(".toast-icon > svg")
+        self.assertIn("flex: none", block)
+        self.assertIn("width: 1.5rem", block)
+        self.assertIn("height: 1.5rem", block)
+
+    def test_the_close_button_is_pinned(self):
+        block = self.rule(".toast-close")
+        self.assertIn("flex: none", block)
+
+    def test_the_message_does_not_reflow_while_the_track_moves(self):
+        block = self.rule(".toast-panel > div")
+        self.assertIn("white-space: nowrap", block)
+
+    def test_and_wraps_again_once_it_is_open(self):
+        """A long message still gets two lines -- just not while the width is
+        animating."""
+        block = self.rule(".toast.is-lit .toast-panel > div")
+        self.assertIn("white-space: normal", block)
+
+    def test_the_fade_still_comes_before_the_collapse(self):
+        """The earlier half of the fix, which is still load-bearing."""
+        js = (
+            pathlib.Path(settings.BASE_DIR) / "static" / "js" / "ui.js"
+        ).read_text(encoding="utf-8")
+        self.assertLess(
+            js.index("el.classList.remove('is-lit')"),
+            js.index("el.classList.remove('is-open')"),
+        )
+
+
+# ===========================================================================
+# The collapsed rail
+# ===========================================================================
+
+
+class CollapsedRailTests(TestCase):
+    CSS = pathlib.Path(settings.BASE_DIR) / "assets" / "app.css"
+    TEMPLATES = pathlib.Path(settings.BASE_DIR) / "templates" / "partials"
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.css = cls.CSS.read_text(encoding="utf-8")
+
+    def test_the_headers_vertical_spacing_is_controlled_from_css(self):
+        """It was `pt-5 pb-4` in the markup, which is a utility -- a later layer
+        than these rules, so the collapsed rail could not tighten it."""
+        self.assertIn(".sidebar-head", self.css)
+        header = (self.TEMPLATES / "_sidebar_header.html").read_text(encoding="utf-8")
+        self.assertIn("sidebar-head", header)
+        self.assertNotIn("sidebar-pad pt-5 pb-4", header)
+
+    def test_the_gap_above_the_first_glyph_is_tighter_when_collapsed(self):
+        collapsed = self.css[
+            self.css.index(':root[data-sidebar="collapsed"] .sidebar-head'):
+        ]
+        block = collapsed[: collapsed.index("}")]
+        self.assertIn("padding-bottom: 0.25rem", block)
+
+    def test_the_hamburger_row_sits_close_to_the_icons(self):
+        collapsed = self.css[
+            self.css.index(':root[data-sidebar="collapsed"] .sidebar-collapsed-only'):
+        ]
+        block = collapsed[: collapsed.index("}")]
+        self.assertIn("margin-top: 0.35rem", block)
+
+    def test_the_tenant_cards_margin_is_controlled_too(self):
+        header = (self.TEMPLATES / "_sidebar_header.html").read_text(encoding="utf-8")
+        self.assertNotIn("sidebar-card mt-5", header)
+        self.assertIn(":root[data-sidebar=\"collapsed\"] .sidebar-card", self.css)
+
+    def test_no_layout_utility_is_left_for_the_collapsed_rail_to_undo(self):
+        """`flex-1`, `ml-auto` and `mt-*` in the markup sit in a later layer than
+        these rules and win whatever their specificity -- which is how folded
+        labels went on expanding and pushing glyphs off centre."""
+        for name in ("_sidebar_header.html", "_sidebar_footer.html"):
+            source = (self.TEMPLATES / name).read_text(encoding="utf-8")
+            # Comments explain the history; only real class attributes count.
+            attrs = " ".join(re.findall(r'class="([^"]*)"', source))
+            with self.subTest(template=name):
+                for utility in ("ml-auto", "flex-1", "mt-5", "mt-3"):
+                    self.assertNotIn(utility, attrs.split(), f"{name}: {utility}")

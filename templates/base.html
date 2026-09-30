@@ -59,6 +59,22 @@
   <script src="{% static 'js/ui.js' %}" defer></script>
   {% include "partials/_password_policy.html" %}
 
+  {% comment %}
+  The guided tour, for signed-in screens only -- there is nothing to tour on the
+  landing page, and loading 28KB of it there would be 28KB spent on nobody.
+
+  Driver.js is vendored rather than pulled from a CDN: the app already works
+  offline behind whitenoise, and a tour that depends on a third party being up is
+  a tour that breaks on the day somebody's network blocks it. MIT, 25KB, no
+  dependencies of its own. Both files are deferred, so neither blocks paint.
+  {% endcomment %}
+  {% if user.is_authenticated %}
+    <link rel="stylesheet" href="{% static 'css/vendor/driver.css' %}">
+    <script src="{% static 'js/vendor/driver.js.iife.js' %}" defer></script>
+    <script src="{% static 'js/tour.js' %}" defer></script>
+    {% include "partials/_tour_config.html" %}
+  {% endif %}
+
   {% block extra_head %}{% endblock %}
 </head>
 <body class="h-full">
@@ -80,7 +96,7 @@
   navigation and leaves it alone while the content column changes, instead of
   cross-fading the whole window and flickering the sidebar on every click.
   {% endcomment %}
-  <aside id="app-sidebar"
+  <aside id="app-sidebar" data-tour="sidebar"
          class="app-sidebar vt-sidebar hidden lg:flex lg:shrink-0 lg:flex-col
                 bg-panel lg:fixed lg:inset-y-0 lg:left-0">
     {% include "partials/_sidebar_header.html" with collapsible=True %}
@@ -144,7 +160,9 @@
 
       <div class="flex shrink-0 items-center gap-2">
         {% block page_actions %}{% endblock %}
-        {% include "partials/_theme_toggle.html" %}
+        <span data-tour="theme-toggle">
+          {% include "partials/_theme_toggle.html" %}
+        </span>
       </div>
     </header>
 

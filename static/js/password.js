@@ -5,11 +5,20 @@
  * file is still rejected on submit -- the checklist cannot say "breached",
  * because answering that needs the network call the server makes.
  *
- * Fields are found by `input[type=password][autocomplete=new-password]`, which
- * is exactly the set of "choose a new password" inputs: signup, password reset,
- * password change, and the admin's add-user form. Sign-in fields are
- * `current-password` and are left alone. Nothing needs a class or a data
- * attribute, so no template has to know this file exists.
+ * Two different sets of fields, and the difference is the whole shape of init():
+ *
+ *   - **the reveal** goes on `input[type=password]`, all of them. Being unable to
+ *     see what you typed is the same problem on a sign-in form as on a signup
+ *     one, and half the fields having an eye and half not reads as a bug. That
+ *     includes `current-password` fields, which this file used to skip;
+ *   - **Generate and the live checklist** go only on
+ *     `[autocomplete=new-password]` -- the "choose a password" inputs. Offering to
+ *     generate a password into a *sign-in* box would be offering to lock somebody
+ *     out, and a policy checklist against a password you already have is noise.
+ *
+ * Nothing needs a class or a data attribute, so no template has to know this file
+ * exists -- which is what makes "every field" true of screens nobody has written
+ * yet.
  */
 (function () {
   'use strict';
@@ -223,24 +232,37 @@
 
   /* ---------------------------------------------------------------------- */
   function init() {
-    var inputs = Array.prototype.slice.call(
-      document.querySelectorAll('input[type="password"][autocomplete="new-password"]')
+    var all = Array.prototype.slice.call(
+      document.querySelectorAll('input[type="password"]')
     );
-    if (!inputs.length) return;
+    if (!all.length) return;
+
+    // Every field gets an eye. The wrapper the reveal builds is parked on the
+    // input so the pass below can find it rather than building a second one --
+    // an expando rather than a Map, to keep this file's ES5 shape.
+    all.forEach(function (input) {
+      // Idempotent: a field already wrapped is one this ran over before, which
+      // happens if a screen ever re-initialises.
+      if (input.closest('.password-wrap')) return;
+      input.passwordWrap = addReveal(input);
+    });
+
+    // Generate and the checklist, on the "choose a password" fields only.
+    var chosen = all.filter(function (input) {
+      return input.getAttribute('autocomplete') === 'new-password';
+    });
+    if (!chosen.length) return;
 
     // Where there are two -- a password and its confirmation -- the controls
     // belong on the first, and the second is filled and checked alongside it.
-    var primary = inputs[0];
-    var partner = inputs.length > 1 ? inputs[1] : null;
+    var primary = chosen[0];
+    var partner = chosen.length > 1 ? chosen[1] : null;
+    var wrap = primary.passwordWrap || primary.closest('.password-wrap');
+    if (!wrap) return;
 
-    inputs.forEach(function (input) {
-      var wrap = addReveal(input);
-      if (input === primary) {
-        addGenerate(wrap, primary, partner);
-        var status = wrap.parentNode.querySelector('.password-generate-status');
-        addChecklist(status || wrap, primary, partner);
-      }
-    });
+    addGenerate(wrap, primary, partner);
+    var status = wrap.parentNode.querySelector('.password-generate-status');
+    addChecklist(status || wrap, primary, partner);
   }
 
   if (document.readyState === 'loading') {

@@ -16,7 +16,7 @@ rotation, so the button is now still.
 has to drop its horizontal padding so every glyph in the sidebar sits on one
 vertical axis, and a utility class cannot be overridden from the components layer.
 {% endcomment %}
-<div class="sidebar-pad pt-5 pb-4">
+<div class="sidebar-pad sidebar-head">
   <div class="sidebar-row flex items-center gap-2.5">
     {% include "partials/_brand_mark.html" with tone="light" %}
     <span class="sidebar-label text-base font-semibold tracking-tight text-panel-fg">
@@ -55,7 +55,7 @@ vertical axis, and a utility class cannot be overridden from the components laye
     one above has folded away with the wordmark it sits beside. Only one of the
     two is ever on screen.
     {% endcomment %}
-    <div class="sidebar-collapsed-only mt-3 justify-center">
+    <div class="sidebar-collapsed-only justify-center">
       <button type="button" class="sidebar-toggle" data-sidebar-toggle
               aria-expanded="false" aria-controls="app-sidebar"
               title="Expand the sidebar">
@@ -79,7 +79,7 @@ vertical axis, and a utility class cannot be overridden from the components laye
     into a square the width of the logo instead of a box stretched across a rail
     with nothing in it -- which is what made the narrow state look broken.
     {% endcomment %}
-    <div class="sidebar-row sidebar-card mt-5 flex items-center gap-3">
+    <div class="sidebar-row sidebar-card flex items-center gap-3">
       {% include "partials/_school_logo.html" with school=current_school size="size-9" tone="light" %}
       <div class="sidebar-label min-w-0">
         <div class="truncate text-sm font-semibold text-panel-fg">{{ current_school.name }}</div>
@@ -95,7 +95,7 @@ vertical axis, and a utility class cannot be overridden from the components laye
     nothing left but an empty tinted box, so this one folds away entirely --
     `sidebar-label` on the box itself rather than on its contents.
     {% endcomment %}
-    <div class="sidebar-label sidebar-card mt-5">
+    <div class="sidebar-label sidebar-card">
       <div class="text-sm font-semibold text-panel-fg">Platform</div>
       <div class="mt-0.5 text-xs text-panel-muted">All schools</div>
     </div>

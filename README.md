@@ -73,6 +73,13 @@ the isolation hold.
 
 ### CSS
 
+> `static/css/vendor/` and `static/js/vendor/` hold Driver.js's built files, copied
+> from `node_modules` and committed. They are not part of the Tailwind build —
+> `driver.css` is loaded on its own and every one of its selectors is `.driver-*`
+> prefixed, so it resets nothing and collides with nothing of ours. The overrides
+> that put it on the design system are in `assets/app.css`.
+
+
 The compiled stylesheet is committed, so the project runs without Node. To
 change the design tokens, edit `assets/app.css` and rebuild:
 
@@ -120,6 +127,19 @@ exam while Primary and Senior sit it, that enrolment produces a Student in the
 right class and branch and keeps the link back, that admission fees and termly
 fees never touch, that a lapsed enquiry is closed rather than deleted, and that
 one school cannot see another's applicants.
+
+The `fix/bugs2` batch adds 79: that the welcome email sends on signup with its
+logo, its absolute links and its four steps — and that signup still succeeds when
+the mail backend throws or the site has no public address — that the loading state
+never reaches for the `disabled` attribute while submit buttons still carry a name
+the view reads, that the reveal is offered to every password field while Generate
+stays on the "choose a password" ones, that the toast's icon and message cannot be
+resized or reflowed by the collapse, that the tour's assets are vendored and
+deferred, that its config carries the role and account and holds back over a
+temporary password, that a "Take a tour" button is on every screen for every role,
+that every anchor a step asks for exists in some template, and that the
+continuation appears after its own step, names the next one, and goes when the
+checklist is done.
 
 This round adds 47 more: that one named account can never be deactivated while
 every platform owner still can deactivate anybody else, that the platform's sidebar
@@ -1051,6 +1071,84 @@ wall of red rather than adding a fourth colour beside them. Set a due date on
 the term (Django admin → Terms) and the overdue pill appears everywhere it
 should. The behaviour itself is covered by tests in
 `apps/payments/tests.py::OverdueTests`.
+
+## Guiding a new school
+
+Two things, and they answer the same question at different moments: *what do I do
+next?*
+
+### The continuation
+
+Finishing a setup step used to be a dead end. You added your classes, landed back
+on the class list, and the checklist you came from was two clicks behind you.
+
+`templates/core/_next_step.html` closes it. Each of the four onboarding
+destinations declares which step it *is*, and the prompt appears only when that
+step is now done and something else is not:
+
+| Screen | Declares |
+| --- | --- |
+| `/academics/classes/` | `after="academics"` |
+| `/fees/` | `after="fees"` |
+| `/students/` | `after="students"` |
+| `/staff/` | `after="staff"` |
+
+So it is never shown before the step it congratulates is finished, it names the
+next step by reading the checklist rather than by hardcoding an order, and it goes
+by itself once setup is complete rather than becoming a permanent strip of chrome
+on four screens.
+
+**Inline, not a modal.** Most visits to the class list are not the first one, and a
+dialog would interrupt somebody who came to do something else. The point is to
+offer a next step, not to insist on one.
+
+The checklist comes from `{% onboarding_progress as setup %}`
+(`apps/core/templatetags/onboarding.py`) rather than a context processor:
+`setup_progress` is half a dozen counts, and a processor would run them on every
+page in the app to serve four — including for a school that finished months ago.
+
+> **`pluralize` cannot pluralise "class".** It appends a letter, so the onboarding
+> page had been printing "2 classs" since it was written. Each step now carries a
+> `noun_plural` and `setup_progress` builds the phrase (`step.tally`) beside the
+> noun it belongs to, rather than three templates each assembling it with a filter.
+
+### The tour
+
+A guided walk through the shell, built on [Driver.js](https://driverjs.com) (MIT,
+25KB, no dependencies) — **vendored**, at `static/js/vendor/`, not pulled from a
+CDN. The rest of this app works offline behind whitenoise, and a tour that depends
+on a third party being up is a tour that breaks the day somebody's network blocks
+it. `npm install` keeps the source in `package.json`; the built file is committed.
+
+`static/js/tour.js` holds the stops. Two decisions in it are worth knowing:
+
+**Targets are `data-tour` names, never classes or positions.** A class is a styling
+decision and moves; `data-tour` is a promise that a step depends on that element.
+Nav rows get theirs from `NavItem.tour`, so **a row a role does not have carries no
+marker, and the tour drops that stop rather than pointing at nothing** — which is
+what makes one step list safe across four roles.
+
+**The tour is role-aware from one list, not four.** Each step declares its `roles`,
+and a couple vary their wording by role rather than existing twice. A bursar's tour
+stops at Payments and talks about recording money; a proprietor's stops at Fees and
+talks about pricing classes; the platform owner's skips both, because neither is
+their work.
+
+| When | How |
+| --- | --- |
+| Automatically, once | First time an account reaches the app, held back while they are still on a temporary password — a tour of a sidebar you cannot use yet is a tour of a locked door. |
+| On demand, always | **Take a tour** in the sidebar footer, on every screen. |
+
+"Seen it" lives in `localStorage`, keyed by account id so two people sharing an
+office computer each get their own first run. Deliberately not a column on the
+user: this is a UI preference of the same kind as the theme and the collapsed
+sidebar, both of which already live there. The cost is that clearing site data
+offers the tour again, which is a tour rather than a loss.
+
+The popover is re-pointed at the design tokens in `assets/app.css`, so a stop looks
+like the app it is describing and follows both themes. Driver.js paints its overlay
+onto an SVG mask rather than an element, so its colour is set in JS — and under
+`prefers-reduced-motion` it is told not to animate at all.
 
 ## Modules: what each school has
 
@@ -2150,6 +2248,29 @@ Every message stays **multipart** — the text half is the body, the HTML is the
 alternative — so a client that refuses HTML gets a complete message rather than a
 blank one. The sender name stays `SCHOOLCORD`.
 
+### The welcome email
+
+Sent on signup by `apps/core/emails.py`, on the same shell as the reset mail. It
+welcomes the owner, names their school and first campus, lists the four setup steps
+and links to `/welcome/` absolutely.
+
+**Not a verification step, and that is the whole design.** The account works the
+moment signup finishes — the owner is signed in before this is even called — and
+nothing in the message gates anything. A "confirm your email" mail that confirmed
+nothing would teach people to expect one that does.
+
+**Best effort.** The school exists, the owner is signed in, and the email is the
+least important thing that happened in that request. A backend that throws is
+logged with its traceback and swallowed; a deployment with no `PUBLIC_BASE_URL` is
+warned about and the message is *not* sent, because every link in it would be
+relative and a relative link in an email goes nowhere. Signup succeeds either way,
+and a test asserts it.
+
+The four steps are listed in `WELCOME_STEPS` rather than read from
+`onboarding_steps`, because that function counts rows to decide what is *done* and
+this message goes to a school that has none of them yet — it needs the ladder, not
+a progress report. A test asserts the two lists still describe the same four steps.
+
 ### The password-reset email
 
 Now multipart. The plain-text body Django has always sent is unchanged and
@@ -2290,6 +2411,20 @@ is both a utility and a CSS custom property.
   cards (`rounded-lg`), up to 32px (`rounded-2xl`). `.squircle` upgrades to a
   real superellipse where `corner-shape` is supported and stays a generous
   rounded rectangle everywhere else.
+- **Buttons in flight** — `.btn.is-loading` swaps the button's own glyph for a
+  spinner and stops it taking clicks. One `submit` listener on the document covers
+  every form in the app, including ones written later; `event.submitter` picks the
+  button that was actually pressed. It sets **`pointer-events: none`, never the
+  `disabled` attribute** — several submit buttons here carry a name and value the
+  view reads (`save_and_add_another`, `action=import`), and a button disabled inside
+  its own submit handler can be dropped from the payload, silently changing what the
+  form did. `aria-busy` carries the state; `data-no-loading` opts out. A `pageshow`
+  listener clears anything the back button left spinning.
+- **The password reveal** — on every `input[type=password]`, injected by
+  `static/js/password.js`, so no template has to know it exists and screens nobody
+  has written yet are covered. Generate and the live checklist stay on
+  `[autocomplete=new-password]` only: offering to generate a password into a
+  *sign-in* box would be offering to lock somebody out.
 - **The collapsed sidebar** — one `--sidebar-pad` token, dropped to zero when the
   rail narrows so every glyph sits on one vertical axis. Anything the collapsed
   state has to *undo* is declared in the components layer rather than as a utility
@@ -2304,7 +2439,13 @@ is both a utility and a CSS custom property.
   toast has to itself because it is the one thing on screen whose job is to be read
   before it goes. `ui.js` sequences the stages and names those tokens in its
   constants; a test asserts the two files have not drifted, since a stage cut short
-  is exactly the jank that was reported. One `prefers-reduced-motion` opt-out near
+  is exactly the jank that was reported. The icon, its glyph and the close button
+  are each pinned with an explicit `flex`, width and height — the toast is a flex
+  row whose own width animates, and an item sized only by its content gets
+  re-measured on every frame of that. The message is held `white-space: nowrap`
+  for the whole of both width animations: `opacity: 0` hides text but does not take
+  it out of layout, so it went on reflowing into a narrow column as the track
+  closed, the toast grew tall to fit it, and the pill distorted anyway. One `prefers-reduced-motion` opt-out near
   the top of the stylesheet covers every component, including the status-dot pulse
   — whose keyframes end transparent so the cut leaves no ring behind.
 - **Glass** — `--glass-bg`, `--glass-border`, `--glass-edge`, `--glass-blur`,

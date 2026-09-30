@@ -186,6 +186,12 @@ class NavItem:
     #: school's plan rather than by the account. Left blank, the entry is part of
     #: the product and always offered.
     module: str = ""
+    #: The name a guided-tour stop finds this row by, rendered as
+    #: ``data-tour="..."``. Declared here rather than as a class in the template
+    #: because it is a contract with static/js/tour.js, not a styling decision --
+    #: and because a row a role does not get then simply has no marker, which is
+    #: how the tour drops a stop instead of pointing at nothing.
+    tour: str = ""
 
 
 @dataclass(frozen=True)
@@ -203,6 +209,8 @@ class ResolvedItem:
     icon_paths: list[str] = field(default_factory=list)
     available: bool = True
     active: bool = False
+    #: Carried through from :class:`NavItem` -- see the note there.
+    tour: str = ""
 
 
 @dataclass(frozen=True)
@@ -237,8 +245,10 @@ NAVIGATION: tuple[NavSection, ...] = (
             # left neither cleared. One row per destination is the fix; the
             # tie-break below is the guard against it happening again.
             NavItem("Dashboard", HOME, "home",
-                    (Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR)),
-            NavItem("Reports", "reports:index", "chart", _LEADERSHIP + (Role.BURSAR,)),
+                    (Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR),
+                    tour="nav-home"),
+            NavItem("Reports", "reports:index", "chart", _LEADERSHIP + (Role.BURSAR,),
+                    tour="nav-reports"),
         ),
     ),
     NavSection(
@@ -249,7 +259,7 @@ NAVIGATION: tuple[NavSection, ...] = (
             # admin is neither tenant-aware nor the place to make a commercial
             # decision from.
             NavItem("Schools", "core:platform_overview", "building",
-                    (Role.PLATFORM_OWNER,)),
+                    (Role.PLATFORM_OWNER,), tour="nav-home"),
             # Platform work that happens to live under /messaging/: the platform
             # registers a school's Sender ID with the gateway and approves it, and
             # a school can only read its own. So it sits here rather than in
@@ -286,7 +296,8 @@ NAVIGATION: tuple[NavSection, ...] = (
             # A bursar reads the roster to record payments against it;
             # owner/principal level enrols and edits (Capability.MANAGE_STUDENTS),
             # so every role gets the link.
-            NavItem("Students", "students:student_list", "students", ALL_ROLES),
+            NavItem("Students", "students:student_list", "students", ALL_ROLES,
+                    tour="nav-students"),
         ),
     ),
     NavSection(
@@ -303,12 +314,14 @@ NAVIGATION: tuple[NavSection, ...] = (
         items=(
             # A bursar reads the fee structure; owner/principal level sets it
             # (see Capability.MANAGE_FEES), so every role gets the link.
-            NavItem("Fee Structures", "fees:structure_list", "money", ALL_ROLES),
+            NavItem("Fee Structures", "fees:structure_list", "money", ALL_ROLES,
+                    tour="nav-fees"),
             NavItem("Terms", "fees:term_list", "calendar", _LEADERSHIP),
             # A bursar records and confirms; owner and principal level also
             # view and void (see Capability.VOID_PAYMENTS), so every role gets
             # the link.
-            NavItem("Payments", "payments:index", "money", ALL_ROLES),
+            NavItem("Payments", "payments:index", "money", ALL_ROLES,
+                    tour="nav-payments"),
             NavItem("Outstanding", "payments:outstanding", "chart", ALL_ROLES),
         ),
     ),
@@ -390,6 +403,7 @@ def _resolve(item: NavItem, current_path: str, role: str | None = None) -> Resol
         icon_paths=ICONS.get(item.icon, []),
         available=available,
         active=active,
+        tour=item.tour,
     )
 
 

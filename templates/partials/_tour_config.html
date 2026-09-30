@@ -1,0 +1,19 @@
+{% comment %}
+What static/js/tour.js needs to know, as JSON rather than as attributes sprayed
+across the shell.
+
+`json_script` escapes the payload for embedding, so a school name or a role label
+can never break out of it -- the same mechanism templates/partials/_password_policy.html
+uses for the password policy.
+
+`autoStart` is false on the landing-adjacent screens and true inside the app. The
+account id is in here so the "seen it" flag is per account: two people sharing the
+office computer each get their own first run.
+
+Deliberately no server-side "has seen the tour" flag. This is a UI preference of
+the same kind as the collapsed sidebar and the chosen theme, both of which already
+live in localStorage, and a migration to remember that somebody pressed Done would
+be a heavier promise than the feature needs. The cost is that clearing site data
+offers the tour again, which is a tour rather than a loss.
+{% endcomment %}
+{{ tour_config|json_script:"tour-config" }}

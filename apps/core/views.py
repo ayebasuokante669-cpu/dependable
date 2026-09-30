@@ -42,6 +42,7 @@ from apps.schools.models import Branch, School, SchoolModule
 from apps.students.models import Student, StudentStatus
 
 from .branding import PRIVACY_EMAIL, PRODUCT_DESCRIPTION, branding
+from .emails import send_welcome_email
 # The money and payment-state derivations the dashboards and Reports share.
 # Re-exported by name so `from apps.core.views import status_breakdown` -- which
 # is how the dashboard tests reach it -- keeps working after the move.
@@ -295,6 +296,11 @@ class SignupView(FormView):
         # Nothing authenticated this user -- they were created a line ago -- so
         # the backend has to be named explicitly.
         login(self.request, owner, backend="apps.accounts.backends.EmailOrUsernameBackend")
+        # Informational, and deliberately not a gate: the account already works,
+        # and this line is below the login for exactly that reason. Best effort --
+        # a welcome that fails to send must not turn a completed signup into an
+        # error page. See apps.core.emails.
+        send_welcome_email(school, branch, owner)
         messages.success(
             self.request,
             f"{school.name} is set up, with {branch.name} as its first campus. "
@@ -796,6 +802,15 @@ def setup_progress(request) -> dict:
     without counting steps in the template.
     """
     steps = onboarding_steps(request)
+    for step in steps:
+        # "2 classes", not "2 classs". Django's `pluralize` appends a letter, and
+        # one of these four nouns does not pluralise that way -- so the phrase is
+        # built here, beside the noun it belongs to, rather than assembled by a
+        # filter in each of the three templates that prints it.
+        step["tally"] = "{} {}".format(
+            step["count"],
+            step["noun"] if step["count"] == 1 else step["noun_plural"],
+        )
     done = [step for step in steps if step["done"]]
     return {
         "steps": steps,
@@ -826,22 +841,30 @@ def onboarding_steps(request) -> list[dict]:
     User = get_user_model()
     return [
         {
+            # The key a screen names itself by when it renders the "what next"
+            # prompt -- see templates/core/_next_step.html. Stable and not the
+            # label, which is prose and may be reworded.
+            "key": "academics",
             "label": "Academic setup",
             "description": "The classes you run and the subjects taught in them.",
             "url": reverse("academics:class_list"),
             "done": Class.objects.exists(),
             "count": Class.objects.count(),
             "noun": "class",
+            "noun_plural": "classes",
         },
         {
+            "key": "fees",
             "label": "Finance setup",
             "description": "The current term, and what each class owes in it.",
             "url": reverse("fees:structure_list"),
             "done": FeeStructure.objects.exists() and Term.objects.exists(),
             "count": FeeStructure.objects.count(),
             "noun": "fee structure",
+            "noun_plural": "fee structures",
         },
         {
+            "key": "students",
             "label": "Import students",
             "description": "Bring your roster over from a spreadsheet, or add "
                            "students one at a time.",
@@ -849,8 +872,10 @@ def onboarding_steps(request) -> list[dict]:
             "done": Student.objects.exists(),
             "count": Student.objects.count(),
             "noun": "student",
+            "noun_plural": "students",
         },
         {
+            "key": "staff",
             "label": "Invite staff",
             "description": "Principals and bursars, each with their own access.",
             "url": reverse("admin:accounts_user_changelist"),
@@ -858,6 +883,7 @@ def onboarding_steps(request) -> list[dict]:
             "done": User.scoped.count() > 1,
             "count": max(User.scoped.count() - 1, 0),
             "noun": "colleague",
+            "noun_plural": "colleagues",
         },
     ]
 

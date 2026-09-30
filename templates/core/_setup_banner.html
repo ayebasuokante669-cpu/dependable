@@ -4,7 +4,7 @@ still unfinished. Takes `setup` -- the dict from views.setup_progress, which
 has already worked out what is left.
 {% endcomment %}
 {% if not setup.is_complete %}
-  <div class="card flex flex-col gap-3 border-brand-200 bg-brand-50 px-5 py-4
+  <div data-tour="setup-progress" class="card flex flex-col gap-3 border-brand-200 bg-brand-50 px-5 py-4
               sm:flex-row sm:items-center">
     <span class="icon-tile accent-brand hidden shrink-0 sm:grid">
       <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"

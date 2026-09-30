@@ -65,4 +65,16 @@ def tenancy(request):
         # Module keys, for the handful of places a template asks about a feature
         # rather than about an action -- {% if "messaging" in enabled_modules %}.
         "enabled_modules": modules,
+        # What the guided tour needs, as one dict for json_script. The role
+        # decides which stops it makes; the id keys the "already seen it" flag so
+        # two people sharing an office computer each get their own first run.
+        #
+        # Auto-start is held back until the account is past its temporary
+        # password -- that screen holds them there until they choose one, and a
+        # tour of a sidebar they cannot use yet would be a tour of a locked door.
+        "tour_config": {
+            "role": role or "",
+            "userId": user.pk,
+            "autoStart": not getattr(user, "must_change_password", False),
+        },
     }

@@ -35,6 +35,10 @@
 
 {% block content %}
 
+  <div class="mb-5">
+    {% include "core/_next_step.html" with after="students" %}
+  </div>
+
   {# ===== Search and filters ============================================== #}
   <form method="get" class="card mb-5 p-4 sm:p-5">
     <div class="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">

@@ -1,0 +1,65 @@
+{% load onboarding %}{% comment %}
+"That's done — here's what's next."
+
+The continuation that closes the dead end. A school that finished a setup step
+used to land back on a list with nothing to say what followed, and the onboarding
+checklist they came from was two clicks behind them.
+
+Takes `after` -- the key of the step this screen *is*, one of the step keys in
+views.onboarding_steps. The prompt appears only when that step is now done and
+something else is not, so:
+
+  * it is never shown before the step it congratulates has been finished;
+  * it goes by itself the moment the whole checklist is complete, rather than
+    becoming a permanent strip of chrome on four screens;
+  * it names the next step by reading the checklist rather than by hardcoding an
+    order here, so adding a step changes one list and not five templates.
+
+Inline rather than a modal. A modal would interrupt somebody who came to this
+screen to do something else -- most visits to the class list are not the first
+one -- and the whole point is to offer a next step, not to insist on it.
+{% endcomment %}
+{% onboarding_progress as setup %}
+
+{% if setup and not setup.is_complete and setup.next_step %}
+  {% for step in setup.steps %}
+    {% if step.key == after and step.done %}
+      <div class="card flex flex-col gap-4 border-paid/30 bg-paid-soft px-5 py-4
+                  sm:flex-row sm:items-center"
+           data-tour="next-step" role="status">
+        <span class="grid size-10 shrink-0 place-items-center rounded-md
+                     bg-paid text-white sm:size-11" aria-hidden="true">
+          <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="2.2"
+               stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="m4.5 12.75 6 6 9-13.5" />
+          </svg>
+        </span>
+
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold text-paid-strong">
+            {{ step.label }} done — {{ step.tally }} so far.
+          </p>
+          <p class="mt-0.5 text-sm text-ink-700">
+            Next: <span class="font-medium text-ink-900">{{ setup.next_step.label }}</span>.
+            {{ setup.next_step.description }}
+          </p>
+        </div>
+
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <a href="{{ setup.next_step.url }}" class="btn btn-primary text-sm">
+            {{ setup.next_step.label }}
+            <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                 stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+            </svg>
+          </a>
+          <a href="{{ setup.url }}" class="btn btn-ghost text-sm">
+            All {{ setup.done_count }}/{{ setup.total }} steps
+          </a>
+        </div>
+      </div>
+    {% endif %}
+  {% endfor %}
+{% endif %}

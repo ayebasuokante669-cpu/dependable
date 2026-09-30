@@ -706,6 +706,53 @@
     transform: translateY(1px);
   }
 
+  /* --- In flight ---------------------------------------------------------
+     A button that has fired a request says so: its own icon goes and a spinner
+     takes its place, and it stops accepting clicks.
+
+     `pointer-events: none` rather than the `disabled` attribute, and the reason
+     matters. Several submit buttons in this app carry a name and a value that the
+     view reads -- `save_and_add_another`, `action=import` -- and a button
+     disabled inside its own submit handler can be dropped from the payload,
+     which would silently change what the form did. This blocks the second click
+     without touching what the first one sends. `aria-busy` and `aria-disabled`
+     carry the state for assistive tech; ui.js sets both.
+
+     The spinner is `::after`, so it trails the label -- which is where the arrow
+     it replaces already was on the sign-in and sign-up buttons, and one position
+     everywhere reads as one pattern. */
+  .btn.is-loading {
+    pointer-events: none;
+    cursor: default;
+  }
+
+  /* The button's own glyph, whichever side it was on. */
+  .btn.is-loading > svg {
+    display: none;
+  }
+
+  .btn.is-loading::after {
+    content: "";
+    flex: none;
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 9999px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    opacity: 0.9;
+    animation: btn-spin 620ms linear infinite;
+  }
+
+  /* Under reduced motion the global opt-out freezes the ring. A still ring is not
+     a spinner, so the button leans on the two signals that are not motion: it
+     dims, and it keeps `aria-busy`. Nothing here is the only indication that
+     something is happening. */
+  @media (prefers-reduced-motion: reduce) {
+    .btn.is-loading {
+      opacity: 0.7;
+    }
+  }
+
   .btn-primary {
     @apply bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-active;
   }
@@ -997,12 +1044,41 @@
     transition: padding var(--duration-settle) var(--ease-out);
   }
 
+  /* The header's *vertical* padding, and the two margins under it.
+
+     In CSS rather than as `pt-5 pb-4` / `mt-3` / `mt-5` utilities in the markup,
+     for the reason the horizontal padding already is: utilities sit in a later
+     layer and win, so the collapsed rail could not tighten anything it had not
+     been given control of here. The collapsed values close the gap between the
+     hamburger and the first nav glyph, which was carrying the header's open
+     padding plus two margins and came to about 25px of nothing. */
+  .sidebar-head {
+    padding-top: 1.25rem;
+    padding-bottom: 1rem;
+    transition: padding var(--duration-settle) var(--ease-out);
+  }
+
+  :root[data-sidebar="collapsed"] .sidebar-head {
+    padding-top: 0.75rem;
+    padding-bottom: 0.25rem;
+  }
+
+  /* The tenant card under the wordmark. */
+  .sidebar-card {
+    margin-top: 1.25rem;
+  }
+
+  :root[data-sidebar="collapsed"] .sidebar-card {
+    margin-top: 0.5rem;
+  }
+
   /* The school / platform card in the header. Expanded it is a tinted box with
      the school's name in it; collapsed there is no name, so it becomes a square
      around the logo rather than a box stretched across an empty rail. */
   .sidebar-card {
     @apply rounded-md border border-white/10 bg-white/10 px-3 py-3;
-    transition: padding var(--duration-settle) var(--ease-out);
+    transition: padding var(--duration-settle) var(--ease-out),
+                margin var(--duration-settle) var(--ease-out);
   }
 
   :root[data-sidebar="collapsed"] .sidebar-card {
@@ -1103,7 +1179,7 @@
   :root[data-sidebar="collapsed"] .nav-section-label {
     height: 0;
     padding: 0;
-    margin: 0.5rem 0.7rem 0.4rem;
+    margin: 0.45rem 0.65rem 0.35rem;
     overflow: hidden;
     opacity: 0;
     border-top: 1px solid rgb(255 255 255 / 0.12);
@@ -1113,7 +1189,9 @@
      from but the school card, which has its own edge. */
   :root[data-sidebar="collapsed"] .nav-section-label:first-child {
     border-top: 0;
-    margin-top: 0.15rem;
+    /* Nothing above the first group but the hamburger, which now sits close. */
+    margin-top: 0;
+    margin-bottom: 0.2rem;
   }
 
   /* `gap: 0` as well as centring. A flex gap is drawn between items even when
@@ -1179,6 +1257,10 @@
 
   :root[data-sidebar="collapsed"] .sidebar-collapsed-only {
     display: flex;
+    /* Close to the glyphs it sits above. This row *is* the hamburger when the
+       rail is narrow, and it belongs with the icons rather than floating between
+       them and the wordmark that is no longer there. */
+    margin-top: 0.35rem;
   }
 
   /* The sidebar's own glyphs sit in a small tinted tile rather than floating
@@ -1192,6 +1274,118 @@
   .nav-link:hover .nav-icon,
   .nav-link-active .nav-icon {
     @apply bg-white/20;
+  }
+
+  /* --- The guided tour ---------------------------------------------------
+     Driver.js ships its own popover styling (static/css/vendor/driver.css); this
+     re-points it at the design tokens so a stop on the tour looks like the app it
+     is describing rather than like a third-party widget sitting on top of it.
+
+     Tokens rather than hex throughout, so both themes come free: the popover is
+     a `--color-surface` card with `--color-ink-*` text, exactly like every other
+     card, and it inverts with them.
+
+     The overlay's colour and opacity are set in JS, not here -- Driver.js paints
+     those onto an SVG mask rather than onto an element, so there is nothing for a
+     stylesheet to reach. See static/js/tour.js.
+     ====================================================================== */
+  .driver-popover.tour-popover {
+    background-color: var(--color-surface);
+    color: var(--color-ink-700);
+    border: 1px solid var(--color-ink-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-float);
+    max-width: 22rem;
+    padding: 1.25rem;
+  }
+
+  .driver-popover.tour-popover .driver-popover-title {
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-brand-900);
+  }
+
+  .driver-popover.tour-popover .driver-popover-description {
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: var(--color-ink-600);
+    margin-top: 0.4rem;
+  }
+
+  /* The little arrow that points at the highlighted thing. Driver.js draws it as
+     a bordered triangle per side, so each one takes the card's own colour. */
+  .driver-popover.tour-popover .driver-popover-arrow-side-left   { border-left-color: var(--color-surface); }
+  .driver-popover.tour-popover .driver-popover-arrow-side-right  { border-right-color: var(--color-surface); }
+  .driver-popover.tour-popover .driver-popover-arrow-side-top    { border-top-color: var(--color-surface); }
+  .driver-popover.tour-popover .driver-popover-arrow-side-bottom { border-bottom-color: var(--color-surface); }
+
+  .driver-popover.tour-popover .driver-popover-progress-text {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink-400);
+  }
+
+  .driver-popover.tour-popover .driver-popover-footer {
+    margin-top: 1rem;
+    gap: 0.5rem;
+  }
+
+  /* The footer buttons, on `.btn`'s geometry. Written out rather than `@apply`-ed
+     from `.btn`, because Driver.js's own reset gets in first and the properties
+     have to be stated to win. */
+  .driver-popover.tour-popover .driver-popover-footer button {
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    min-height: 2.25rem;
+    padding: 0 0.9rem;
+    border-radius: var(--radius-md);
+    text-shadow: none;
+    border: 1px solid var(--color-ink-200);
+    background-color: var(--color-surface);
+    color: var(--color-brand-800);
+    transition: background-color var(--duration-quick) var(--ease-out),
+                border-color var(--duration-quick) var(--ease-out);
+  }
+
+  .driver-popover.tour-popover .driver-popover-footer button:hover {
+    background-color: var(--color-ink-50);
+    border-color: var(--color-ink-300);
+  }
+
+  /* The one that moves you on carries the weight, the same way a primary button
+     does everywhere else. */
+  .driver-popover.tour-popover .driver-popover-next-btn {
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+
+  .driver-popover.tour-popover .driver-popover-next-btn:hover {
+    background-color: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
+  }
+
+  .driver-popover.tour-popover .driver-popover-close-btn {
+    color: var(--color-ink-400);
+    background: none;
+    border: 0;
+  }
+
+  .driver-popover.tour-popover .driver-popover-close-btn:hover {
+    color: var(--color-ink-700);
+    background: none;
+  }
+
+  /* The cut-out's edge. A brand ring rather than Driver's default, so the thing
+     being described is ringed in the same colour a focused control is. */
+  .driver-active-element {
+    border-radius: var(--radius-md);
+    outline: 2px solid var(--color-brand-500) !important;
+    outline-offset: 3px;
   }
 
   /* --- The About page ----------------------------------------------------
@@ -1563,8 +1757,30 @@
     opacity: 1;
   }
 
+  /* The icon. Never grows, never shrinks, always square.
+
+     `flex: 0 0 3rem` and an explicit width/height rather than relying on
+     `shrink-0` alone: the toast is a flex row whose *own* width animates, and a
+     flex item sized only by its content gets re-measured on every frame of that.
+     Pinning all three -- basis, width, height -- and adding `aspect-ratio` means
+     there is no frame on which the box can come out anything but 48x48.
+
+     The glyph inside is pinned the same way. An <svg> is a replaced element: give
+     it a flex context and no explicit size and it will take the one it is handed. */
   .toast-icon {
-    @apply grid size-12 shrink-0 place-items-center;
+    display: grid;
+    place-items: center;
+    flex: 0 0 3rem;
+    width: 3rem;
+    height: 3rem;
+    aspect-ratio: 1;
+  }
+
+  .toast-icon > svg {
+    display: block;
+    flex: none;
+    width: 1.5rem;
+    height: 1.5rem;
   }
 
   /* The track that opens. `min-width: 0` is what lets it actually reach zero;
@@ -1595,22 +1811,34 @@
      Driven by `is-lit`, which js/ui.js adds last and removes first. The
      server-rendered toast ships with it, so the message is readable with the
      script blocked. */
+  /* Everything that is not the icon lives in here, the dismiss button included --
+     a close button left outside the panel would not collapse with it, and the
+     closed state would be a lozenge rather than a circle. No padding on this box:
+     padding survives a zero-width track, so it would leave a stub beside the
+     circle. The padding is on its children.
+
+     Two properties here do the warping fix between them, and it took both.
+
+     `opacity` was the first half: the message used to be fully opaque while the
+     track collapsed, so the text was visibly crushed on the way out.
+
+     `white-space` is the half that was missing. `opacity: 0` hides text, it does
+     not take it out of layout -- so the message went on reflowing into an
+     ever-narrower column as the track closed, the toast grew tall to fit it, and
+     the pill distorted anyway, icon and all. Held on one line for the whole of
+     both width animations, and released to wrap only once `is-lit` lands, by
+     which point the track is at full width and the fade covers whatever rewrap a
+     two-line message needs. */
   .toast-panel > div {
+    @apply flex min-w-0 items-center overflow-hidden;
     opacity: 0;
+    white-space: nowrap;
     transition: opacity var(--toast-fade) var(--ease-out);
   }
 
   .toast.is-lit .toast-panel > div {
     opacity: 1;
-  }
-
-  /* Everything that is not the icon lives in here, the dismiss button
-     included -- a close button left outside the panel would not collapse with
-     it, and the closed state would be a lozenge rather than a circle.
-     No padding on this box: padding survives a zero-width track, so it would
-     leave a stub beside the circle. The padding is on its children. */
-  .toast-panel > div {
-    @apply flex min-w-0 items-center overflow-hidden;
+    white-space: normal;
   }
 
   .toast-message {
@@ -1618,8 +1846,12 @@
   }
 
   .toast-close {
-    @apply -ml-1 mr-2 grid size-8 shrink-0 place-items-center rounded-full
+    @apply -ml-1 mr-2 grid size-8 place-items-center rounded-full
            opacity-60 hover:opacity-100;
+    /* Pinned for the same reason the icon is -- see .toast-icon. */
+    flex: none;
+    width: 2rem;
+    height: 2rem;
     transition: opacity var(--duration-quick) var(--ease-out);
   }
 
@@ -2471,6 +2703,12 @@
   100% {
     transform: scale(2.6);
     opacity: 0;
+  }
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
