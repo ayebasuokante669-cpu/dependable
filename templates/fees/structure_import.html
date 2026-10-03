@@ -1,0 +1,49 @@
+{% extends "core/import_upload.html" %}
+
+{% comment %}
+The fee import's upload screen. The one thing a school has to understand before
+filling this in is the shape: long, not wide. One row per charge, so a class
+with four charges takes four rows -- which is why it is said in the hint, said
+again in the column note, and shown in the template's own example row.
+{% endcomment %}
+
+{% block download_hint %}
+  {% if class_count %}
+    The template lists the term's own campus's classes on a second tab, so the
+    Class column is picked from a drop-down rather than typed.
+  {% else %}
+    Set up your classes first — a fee is charged to a class, so there has to be
+    one to charge.
+  {% endif %}
+{% endblock %}
+
+{% block download_extra %}
+  {% if not class_count %}
+    <a href="{% url 'academics:class_list' %}" class="btn btn-ghost text-sm">
+      Set up classes
+    </a>
+  {% endif %}
+  <a href="{% url 'fees:structure_create' %}" class="btn btn-ghost text-sm">
+    Price one class by hand
+  </a>
+{% endblock %}
+
+{% block fill_heading %}One row per charge{% endblock %}
+
+{% block fill_hint %}
+  Columns are matched by their heading, so they can be in any order and spare
+  columns of your own are ignored. Up to {{ max_rows }} rows per file.
+{% endblock %}
+
+{% block column_note %}
+  A class with four charges takes four rows — the same class name on each, one
+  item and one amount per row. That is so your own fee item names come through
+  as they are; nothing here assumes a school charges Tuition and a Development
+  Levy. The grey example row is skipped whether you delete it or not.
+{% endblock %}
+
+{% block upload_hint %}
+  Every row is checked against the classes at that term's campus, and against
+  the fees already set for it. You will see each class's new total before
+  anything is saved.
+{% endblock %}

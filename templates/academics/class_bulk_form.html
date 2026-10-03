@@ -26,6 +26,9 @@ count -- which is why the "add another row" button and the preset chips ship
 {% endblock %}
 
 {% block page_actions %}
+  <a href="{% url 'academics:class_import' %}" class="btn btn-secondary text-sm">
+    <span class="hidden sm:inline">Import from</span> Excel
+  </a>
   <a href="{% url 'academics:class_create' %}" class="btn btn-secondary text-sm">
     <span class="hidden sm:inline">Add</span> one at a time
   </a>
@@ -81,6 +84,17 @@ count -- which is why the "add another row" button and the preset chips ship
       <p class="field-hint mt-0.5">
         Fills the rows below. Everything stays editable — rename, add a
         stream, or delete any row before saving.
+      </p>
+      {% comment %}
+      The escape hatch, said where the presets are: this ladder is the Nigerian
+      one, and a school that runs Grade 1 to Grade 12 should not be editing
+      nineteen pre-filled rows into thirty different ones.
+      {% endcomment %}
+      <p class="mt-1 text-xs text-ink-500">
+        Not your ladder?
+        <a href="{% url 'academics:class_import' %}"
+           class="font-medium text-brand-800 underline">Import your own list</a>
+        from a spreadsheet instead.
       </p>
       <div class="mt-4 flex flex-wrap gap-2">
         <button type="button" class="chip-button" hidden

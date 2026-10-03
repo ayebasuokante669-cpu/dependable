@@ -913,7 +913,9 @@ def onboarding_steps(request) -> list[dict]:
             # label, which is prose and may be reworded.
             "key": "academics",
             "label": "Academic setup",
-            "description": "The classes you run and the subjects taught in them.",
+            "description": "The classes you run and the subjects taught in "
+                           "them — the standard Nigerian set, or import your "
+                           "own list.",
             "url": reverse("academics:class_list"),
             "done": Class.objects.exists(),
             "count": Class.objects.count(),
@@ -923,7 +925,8 @@ def onboarding_steps(request) -> list[dict]:
         {
             "key": "fees",
             "label": "Finance setup",
-            "description": "The current term, and what each class owes in it.",
+            "description": "The current term, and what each class owes in it. "
+                           "Your fee schedule can be imported too.",
             "url": reverse("fees:structure_list"),
             "done": FeeStructure.objects.exists() and Term.objects.exists(),
             "count": FeeStructure.objects.count(),

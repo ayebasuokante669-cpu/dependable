@@ -10,6 +10,18 @@ urlpatterns = [
     path("terms/new/", views.TermCreateView.as_view(), name="term_create"),
     path("terms/<int:pk>/edit/", views.TermUpdateView.as_view(), name="term_update"),
     path("new/", views.FeeStructureCreateView.as_view(), name="structure_create"),
+    # Before the <int:pk> patterns, so "import" is never read as a structure id.
+    path("import/", views.FeeImportView.as_view(), name="structure_import"),
+    path(
+        "import/template.xlsx",
+        views.FeeImportTemplateView.as_view(),
+        name="structure_import_template",
+    ),
+    path(
+        "import/review/",
+        views.FeeImportReviewView.as_view(),
+        name="structure_import_review",
+    ),
     path(
         "<int:pk>/edit/",
         views.FeeStructureUpdateView.as_view(),

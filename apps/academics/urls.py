@@ -20,6 +20,22 @@ urlpatterns = [
         views.ClassEditAllView.as_view(),
         name="class_edit_all",
     ),
+    # Before the <int:pk> patterns, so "import" is never read as a class id.
+    path(
+        "classes/import/",
+        views.ClassImportView.as_view(),
+        name="class_import",
+    ),
+    path(
+        "classes/import/template.xlsx",
+        views.ClassImportTemplateView.as_view(),
+        name="class_import_template",
+    ),
+    path(
+        "classes/import/review/",
+        views.ClassImportReviewView.as_view(),
+        name="class_import_review",
+    ),
     path("classes/<int:pk>/edit/", views.ClassUpdateView.as_view(), name="class_update"),
     path(
         "classes/<int:pk>/delete/",
@@ -32,6 +48,21 @@ urlpatterns = [
         "subjects/add-many/",
         views.SubjectBulkCreateView.as_view(),
         name="subject_bulk_create",
+    ),
+    path(
+        "subjects/import/",
+        views.SubjectImportView.as_view(),
+        name="subject_import",
+    ),
+    path(
+        "subjects/import/template.xlsx",
+        views.SubjectImportTemplateView.as_view(),
+        name="subject_import_template",
+    ),
+    path(
+        "subjects/import/review/",
+        views.SubjectImportReviewView.as_view(),
+        name="subject_import_review",
     ),
     path(
         "subjects/<int:pk>/edit/",

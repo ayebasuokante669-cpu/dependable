@@ -22,28 +22,29 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.contrib import messages
-from django.db import IntegrityError
-from django.db.models import ProtectedError
-from django.db.models import Q
-from django.http import HttpResponse, HttpResponseRedirect
+from django.db.models import ProtectedError, Q
+from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     CreateView,
     DeleteView,
     DetailView,
-    FormView,
     ListView,
-    TemplateView,
     UpdateView,
-    View,
 )
 
 from apps.academics.models import Class
+from apps.core.import_flow import (
+    ImportFlow,
+    ImportReviewView,
+    ImportTemplateView,
+    ImportUploadView,
+)
 from apps.core.permissions import Capability, CapabilityRequiredMixin
 from apps.schools.models import Branch
 
 from . import fees, importer, workbook
-from .forms import StudentFilterForm, StudentForm, StudentImportForm
+from .forms import StudentFilterForm, StudentForm
 from .models import Student, StudentStatus
 
 
@@ -318,217 +319,62 @@ class StudentDeleteView(ManageStudentsMixin, DeleteView):
 # Excel import
 # ===========================================================================
 
-#: Where the parsed-but-unwritten rows wait between the report and the user
-#: confirming it. A session key rather than a database table: an import that is
-#: abandoned halfway should leave nothing behind to clean up, and the rows are
-#: plain strings that survive the round trip untouched.
-IMPORT_SESSION_KEY = "students.import"
+class StudentImportFlow(ImportFlow):
+    """The student import, declared against the shared machinery."""
 
-XLSX_CONTENT_TYPE = (
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+    sheet = importer.SHEET
+    capability = Capability.MANAGE_STUDENTS
+    session_key = "students.import"
 
+    url_template = "students:student_import_template"
+    url_upload = "students:student_import"
+    url_review = "students:student_import_review"
+    url_done = "students:student_list"
 
-class StudentImportTemplateView(ManageStudentsMixin, View):
-    """Download the blank template, built for the caller's own classes."""
+    upload_template_name = "students/student_import.html"
+    review_template_name = "students/student_import_review.html"
 
-    def get(self, request, *args, **kwargs):
-        branch = _requested_branch(request)
-        class_names = importer.ClassIndex(branch).names if branch else []
-        content = workbook.build_template(class_names)
+    heading = "Import students"
+    intro = (
+        "Bulk enrolment from a spreadsheet. Nothing is saved until you have "
+        "seen what the file contains."
+    )
+    scope_label = "Campus"
+    scope_help = "Every student in the file is enrolled at this branch."
+    scope_field_name = "branch"
+    no_scope_title = "No campus to import into"
+    no_scope_body = "A branch has to exist before students can be enrolled at it."
+    back_label = "roster"
 
-        response = HttpResponse(content, content_type=XLSX_CONTENT_TYPE)
-        response["Content-Disposition"] = (
-            f'attachment; filename="{workbook.TEMPLATE_FILENAME}"'
-        )
-        response["Content-Length"] = len(content)
-        return response
+    def scope_queryset(self):
+        return Branch.objects.filter(is_active=True)
 
+    def choices(self):
+        return workbook.choices()
 
-class StudentImportView(ManageStudentsMixin, FormView):
-    """Step one and two: the instructions, and the file itself.
+    def references(self, scope):
+        return workbook.references(importer.ClassIndex(scope).names)
 
-    A successful parse writes nothing -- it puts the rows in the session and
-    redirects to the report, so a refresh of the review screen does not re-post
-    the upload.
-    """
+    def validate(self, rows, scope, **parsed):
+        return importer.validate(rows, branch=scope, **parsed)
 
-    template_name = "students/student_import.html"
-    form_class = StudentImportForm
+    def commit(self, report, scope):
+        return importer.commit(report)
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["page_title"] = "Import students"
-        context["columns"] = importer.COLUMNS
-        context["max_rows"] = importer.MAX_ROWS
-        context["class_count"] = Class.objects.filter(is_active=True).count()
-
-        # One download per campus when there is more than one: the template
-        # carries that branch's class list, so "whichever branch came first"
-        # would hand a school owner the wrong drop-down.
-        branches = list(Branch.objects.filter(is_active=True))
-        context["branches"] = branches
-        context["template_links"] = [
-            {
-                "label": (
-                    f"Download template — {branch.name}"
-                    if len(branches) > 1 else "Download template (.xlsx)"
-                ),
-                "href": (
-                    f"{reverse('students:student_import_template')}"
-                    f"?branch={branch.pk}"
-                ),
-            }
-            for branch in branches
-        ]
-        return context
-
-    def form_valid(self, form):
-        branch = form.chosen_branch
-        if branch is None:
-            form.add_error(None, "Choose the campus these students belong to.")
-            return self.form_invalid(form)
-
-        try:
-            sheet = workbook.read_rows(form.cleaned_data["upload"])
-        except workbook.WorkbookError as exc:
-            # Everything the reader refuses arrives here as a sentence for the
-            # user. A malformed workbook is a normal Tuesday, not a 500.
-            form.add_error("upload", str(exc))
-            return self.form_invalid(form)
-
-        self.request.session[IMPORT_SESSION_KEY] = {
-            "branch_id": branch.pk,
-            "filename": form.cleaned_data["upload"].name,
-            "sheet_name": sheet.sheet_name,
-            "unknown_columns": sheet.unknown_columns,
-            "absent_columns": sheet.absent_columns,
-            "rows": [row.as_dict() for row in sheet.rows],
-        }
-        return HttpResponseRedirect(reverse("students:student_import_review"))
+    def upload_context(self, request):
+        # Drives the "set up your classes first" nudge: every student has to be
+        # placed in a class that already exists, so an empty class list is the
+        # one prerequisite worth saying out loud before the download.
+        return {"class_count": Class.objects.filter(is_active=True).count()}
 
 
-class StudentImportReviewView(ManageStudentsMixin, TemplateView):
-    """Step three: the per-row verdict, and the button that writes it.
-
-    Validation runs on GET *and* again on POST. Doing it twice is deliberate:
-    the report the user is looking at was true when it was drawn, and the only
-    way to be sure it is still true is to ask again with the writes about to
-    happen.
-    """
-
-    template_name = "students/student_import_review.html"
-
-    def get(self, request, *args, **kwargs):
-        # Loaded here rather than in dispatch() so the capability check runs
-        # first: a bursar gets the 403 they are owed, not a redirect.
-        bounce = self._load_pending(request)
-        return bounce or super().get(request, *args, **kwargs)
-
-    def _load_pending(self, request):
-        """Rehydrate the session payload, or bounce back to the upload screen."""
-        payload = request.session.get(IMPORT_SESSION_KEY)
-        if not payload:
-            messages.info(request, "Upload a file to import students from.")
-            return HttpResponseRedirect(reverse("students:student_import"))
-
-        # Re-fetched through the scoped manager, so a session carried to another
-        # account or a branch since removed cannot be imported into.
-        branch = Branch.objects.filter(pk=payload["branch_id"]).first()
-        if branch is None:
-            del request.session[IMPORT_SESSION_KEY]
-            messages.error(
-                request, "That campus is no longer available. Start the import again."
-            )
-            return HttpResponseRedirect(reverse("students:student_import"))
-
-        self.payload = payload
-        self.branch = branch
-        self.source_rows = [
-            importer.SourceRow.from_dict(row) for row in payload["rows"]
-        ]
-        return None
-
-    def build_report(self) -> importer.ImportReport:
-        return importer.validate(
-            self.source_rows,
-            branch=self.branch,
-            sheet_name=self.payload.get("sheet_name", ""),
-            unknown_columns=self.payload.get("unknown_columns", []),
-            absent_columns=self.payload.get("absent_columns", []),
-        )
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        report = kwargs.get("report") or self.build_report()
-        context["report"] = report
-        context["branch"] = self.branch
-        context["filename"] = self.payload.get("filename", "")
-        context["page_title"] = "Check the import"
-        context["show_branch"] = Branch.objects.count() > 1
-        return context
-
-    def post(self, request, *args, **kwargs):
-        bounce = self._load_pending(request)
-        if bounce is not None:
-            return bounce
-
-        if request.POST.get("action") == "discard":
-            del request.session[IMPORT_SESSION_KEY]
-            messages.info(request, "That file was discarded. Nothing was imported.")
-            return HttpResponseRedirect(reverse("students:student_import"))
-
-        report = self.build_report()
-        if not report.has_anything_to_import:
-            messages.error(
-                request,
-                "There is nothing to import — every row in that file still needs "
-                "correcting.",
-            )
-            return self.render_to_response(self.get_context_data(report=report))
-
-        try:
-            created = importer.commit(report)
-        except IntegrityError:
-            # The roster moved under us between validating and writing. The
-            # transaction rolled the whole batch back, so the file is still
-            # exactly as it was and re-running the report is safe.
-            messages.error(
-                request,
-                "The roster changed while that file was open, so nothing was "
-                "imported. Check the report below and try again.",
-            )
-            return self.render_to_response(self.get_context_data())
-
-        del request.session[IMPORT_SESSION_KEY]
-
-        skipped = report.failed_count
-        note = (
-            f" {skipped} row{'' if skipped == 1 else 's'} "
-            f"{'was' if skipped == 1 else 'were'} skipped and still "
-            f"{'needs' if skipped == 1 else 'need'} correcting."
-            if skipped else ""
-        )
-        messages.success(
-            request,
-            f"{len(created)} student{'' if len(created) == 1 else 's'} imported "
-            f"into {self.branch.name}.{note}",
-        )
-        return HttpResponseRedirect(reverse("students:student_list"))
+class StudentImportTemplateView(ImportTemplateView):
+    flow_class = StudentImportFlow
 
 
-def _requested_branch(request) -> Branch | None:
-    """The branch a template download is for.
+class StudentImportView(ImportUploadView):
+    flow_class = StudentImportFlow
 
-    ``?branch=`` when the account can see several and picked one on the upload
-    screen; otherwise the only one it can see. Always resolved through the
-    scoped manager, so a guessed id gets the caller's own branch and not
-    somebody else's class list.
-    """
-    branches = Branch.objects.filter(is_active=True)
-    requested = request.GET.get("branch")
-    if requested:
-        branch = branches.filter(pk=requested).first()
-        if branch is not None:
-            return branch
-    return branches.first()
+
+class StudentImportReviewView(ImportReviewView):
+    flow_class = StudentImportFlow

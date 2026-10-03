@@ -1,0 +1,44 @@
+{% extends "core/import_upload.html" %}
+
+{% comment %}
+The subject import's upload screen. The thing worth explaining here is the one
+cell that holds a list -- Taught In -- because it is the only place in any of
+these templates where a single cell carries several values.
+{% endcomment %}
+
+{% block download_hint %}
+  {% if class_count %}
+    The template lists this campus's classes on a second tab, so Taught In can
+    be copied from rather than typed. Leave it blank and the subject is created
+    unassigned, ready to attach to classes later.
+  {% else %}
+    You can import subjects before your classes exist — leave Taught In blank
+    and assign them afterwards. Setting the classes up first lets the template
+    list them for you.
+  {% endif %}
+{% endblock %}
+
+{% block download_extra %}
+  {% if not class_count %}
+    <a href="{% url 'academics:class_list' %}" class="btn btn-ghost text-sm">
+      Set up classes
+    </a>
+  {% endif %}
+  <a href="{% url 'academics:subject_bulk_create' %}" class="btn btn-ghost text-sm">
+    Type a few in instead
+  </a>
+{% endblock %}
+
+{% block fill_hint %}
+  Columns are matched by their heading, so they can be in any order and spare
+  columns of your own are ignored. Up to {{ max_rows }} subjects per file.
+{% endblock %}
+
+{% block column_note %}
+  One row per subject, however many classes it is taught in: Mathematics runs
+  from Primary 1 to SSS 3 as one row, with
+  <span class="font-medium text-ink-700">Primary; Junior Secondary; Senior Secondary</span>
+  in Taught In. Separate the names with semicolons — a level name or
+  <span class="font-medium text-ink-700">All</span> works too. The grey example
+  row is skipped whether you delete it or not.
+{% endblock %}

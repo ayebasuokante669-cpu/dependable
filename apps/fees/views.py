@@ -16,9 +16,18 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
+from apps.academics.lookup import ClassIndex
 from apps.academics.models import Class, Level
+from apps.core.import_flow import (
+    ImportFlow,
+    ImportReviewView,
+    ImportTemplateView,
+    ImportUploadView,
+)
 from apps.core.permissions import Capability, CapabilityRequiredMixin
+from apps.core.spreadsheets import Reference
 
+from . import importers
 from .forms import (
     FeeComponentFormSet,
     FeeStructureForm,
@@ -284,3 +293,169 @@ class TermUpdateView(ManageFeesMixin, UpdateView):
         messages.success(self.request, f"{self.object.name} updated.")
         return response
 
+
+
+# ---------------------------------------------------------------------------
+# Excel import
+#
+# Pricing nineteen classes by hand is nineteen trips through the structure form,
+# each with its own line-item formset. A school that already keeps its fee
+# schedule in a spreadsheet -- which is all of them -- should be able to hand it
+# over instead.
+#
+# The term is chosen on the upload screen rather than per row. Fees are priced
+# per class per term, and a file that could name three terms would also be a
+# file that could price next year's fees by accident.
+# ---------------------------------------------------------------------------
+
+
+class FeeImportFlow(ImportFlow):
+    sheet = importers.SHEET
+    capability = Capability.MANAGE_FEES
+    session_key = "fees.import"
+
+    url_template = "fees:structure_import_template"
+    url_upload = "fees:structure_import"
+    url_review = "fees:structure_import_review"
+    url_done = "fees:structure_list"
+
+    upload_template_name = "fees/structure_import.html"
+    review_template_name = "fees/structure_import_review.html"
+
+    heading = "Import fee structures"
+    intro = (
+        "Your fee schedule from a spreadsheet — one row per charge. Nothing is "
+        "saved until you have seen what the file contains."
+    )
+    scope_label = "Term"
+    scope_help = "Every fee in the file is priced for this term."
+    scope_field_name = "term"
+    no_scope_title = "No term to price"
+    no_scope_body = (
+        "Fees belong to a term. Set the term up first and the import will have "
+        "somewhere to put them."
+    )
+    back_label = "fees"
+
+    def scope_queryset(self):
+        return Term.objects.select_related("branch")
+
+    def requested_scope(self, request):
+        """The term a download is for, defaulting to the one the school is in.
+
+        ``Term.objects`` orders newest year first, so without this a school
+        mid-session would be handed last year's third term -- the shared
+        implementation takes the first row, and for terms that is not the
+        obvious one.
+        """
+        scope = super().requested_scope(request)
+        if request.GET.get(self.scope_field_name):
+            return scope
+        return self.scope_queryset().filter(is_current=True).first() or scope
+
+    def template_links(self, request) -> list[dict]:
+        """One download per campus, not per term.
+
+        The shared implementation offers one link per scope, which is right when
+        the scope is a campus and wrong here: the only thing a term changes
+        about the template is which campus's classes are listed on the reference
+        tab, and a school in its third year would have been handed nine
+        identical buttons.
+        """
+        base = reverse(self.url_template)
+        terms = list(self.scope_queryset())
+        # The current term for each campus, falling back to its newest.
+        per_branch = {}
+        for term in terms:
+            if term.branch_id not in per_branch or term.is_current:
+                per_branch[term.branch_id] = term
+        chosen = list(per_branch.values())
+        if len(chosen) <= 1:
+            return [{"label": "Download template (.xlsx)", "href": base}]
+        return [
+            {
+                "label": f"Download template — {term.branch.name}",
+                "href": f"{base}?{self.scope_field_name}={term.pk}",
+            }
+            for term in sorted(chosen, key=lambda t: t.branch.name)
+        ]
+
+    def done_url(self, scope=None) -> str:
+        # The fee list is driven by ?term=, so land on the term just imported
+        # into rather than on whichever the selector would have defaulted to.
+        base = reverse(self.url_done)
+        return f"{base}?term={scope.pk}" if scope is not None else base
+
+    def references(self, scope):
+        """The term's own campus's classes, as a drop-down on the Class column.
+
+        Unlike the subject sheet, one cell names one class here, so the
+        drop-down is the right control and it is the cheapest place to stop the
+        error this import would otherwise produce most.
+        """
+        names = ClassIndex(scope.branch).names
+        if not names:
+            return ()
+        return (
+            Reference(
+                name="Classes",
+                title=(
+                    f"Classes at {scope.branch.name} — use one of these in the "
+                    f"Class column"
+                ),
+                values=tuple(names),
+                column="school_class",
+                error=(
+                    "That class does not exist at this campus. Pick one from the "
+                    "list, or set the class up in SCHOOLCORD first."
+                ),
+                error_title="Unknown class",
+            ),
+        )
+
+    def validate(self, rows, scope, **parsed):
+        return importers.validate(rows, term=scope, **parsed)
+
+    def commit(self, report, scope):
+        return importers.commit(report, scope)
+
+    def success_message(self, created, report, scope):
+        total = sum((c.amount for c in created), Decimal("0"))
+        classes = len({c.fee_structure_id for c in created})
+        skipped = report.failed_count
+        note = (
+            f" {skipped} row{'' if skipped == 1 else 's'} "
+            f"{'was' if skipped == 1 else 'were'} skipped and still "
+            f"{'needs' if skipped == 1 else 'need'} correcting."
+            if skipped else ""
+        )
+        return (
+            f"{len(created)} fee{'' if len(created) == 1 else 's'} imported — "
+            f"{classes} class{'' if classes == 1 else 'es'} priced for "
+            f"{scope.name}, ₦{total:,.0f} in total.{note}"
+        )
+
+    def upload_context(self, request):
+        return {"class_count": Class.objects.filter(is_active=True).count()}
+
+    def review_context(self, report, scope):
+        # Grouped by class with a subtotal, because "what will Primary 1 cost?"
+        # is the question somebody checks this screen to answer, and a flat list
+        # of line items in sheet order does not answer it.
+        groups = importers.grouped_ready(report)
+        return {
+            "class_groups": groups,
+            "grand_total": sum((g["total"] for g in groups), Decimal("0")),
+        }
+
+
+class FeeImportTemplateView(ImportTemplateView):
+    flow_class = FeeImportFlow
+
+
+class FeeImportView(ImportUploadView):
+    flow_class = FeeImportFlow
+
+
+class FeeImportReviewView(ImportReviewView):
+    flow_class = FeeImportFlow

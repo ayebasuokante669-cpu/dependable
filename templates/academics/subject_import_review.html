@@ -1,0 +1,44 @@
+{% extends "core/import_review.html" %}
+
+{% comment %}
+The subject import's report. The classes column is the point of it: "Primary"
+in one cell became six classes, and a school is entitled to see which six before
+the row is written.
+{% endcomment %}
+
+{% block ready_rows %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="table-head">
+        <tr>
+          <th scope="col" class="px-5 py-3 font-semibold">Row</th>
+          <th scope="col" class="px-5 py-3 font-semibold">Subject</th>
+          <th scope="col" class="px-5 py-3 font-semibold">Code</th>
+          <th scope="col" class="px-5 py-3 font-semibold">Taught in</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-ink-200">
+        {% for row in report.ready %}
+          <tr>
+            <td class="numeric px-5 py-2.5 text-ink-500">{{ row.number }}</td>
+            <td class="px-5 py-2.5 font-medium text-ink-800">{{ row.record.name }}</td>
+            <td class="px-5 py-2.5 text-ink-700">{{ row.record.code|default:"—" }}</td>
+            <td class="px-5 py-2.5">
+              {% with chosen=row.extra.classes %}
+                {% if chosen %}
+                  <span class="flex flex-wrap gap-1">
+                    {% for klass in chosen %}
+                      <span class="chip">{{ klass.display_name }}</span>
+                    {% endfor %}
+                  </span>
+                {% else %}
+                  <span class="text-xs text-partial-strong">Not yet assigned</span>
+                {% endif %}
+              {% endwith %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

@@ -18,10 +18,19 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView
 
+from apps.core.import_flow import (
+    ImportFlow,
+    ImportReviewView,
+    ImportTemplateView,
+    ImportUploadView,
+)
 from apps.core.permissions import Capability, CapabilityRequiredMixin
+from apps.core.spreadsheets import Choice, Reference
 from apps.schools.models import Branch
 
+from . import importers
 from .curriculum import ladder_presets, subject_presets
+from .lookup import ClassIndex, level_names
 from .forms import (
     BranchChoiceForm,
     ClassEditFormSet,
@@ -419,3 +428,142 @@ class SubjectDeleteView(ManageAcademicsMixin, DeleteView):
     def form_valid(self, form):
         messages.success(self.request, f"Subject {self.object} deleted.")
         return super().form_valid(form)
+
+
+# ---------------------------------------------------------------------------
+# Excel import
+#
+# The third way in, beside the standard ladder and one-at-a-time. A school that
+# runs Grade 1 to Grade 12, or names its classes after houses, cannot use the
+# presets at all -- the ladder on the bulk screen is the Nigerian one -- and
+# typing thirty rows into a web form is the back-and-forth those screens were
+# built to remove. So the classes themselves can arrive by spreadsheet, and
+# then so can the subjects.
+#
+# Everything about how an import behaves is in apps/core/import_flow.py. These
+# two classes are the declarations.
+# ---------------------------------------------------------------------------
+
+
+class ClassImportFlow(ImportFlow):
+    sheet = importers.CLASS_SHEET
+    capability = Capability.MANAGE_ACADEMICS
+    session_key = "academics.class_import"
+
+    url_template = "academics:class_import_template"
+    url_upload = "academics:class_import"
+    url_review = "academics:class_import_review"
+    url_done = "academics:class_list"
+
+    upload_template_name = "academics/class_import.html"
+    review_template_name = "academics/class_import_review.html"
+
+    heading = "Import classes"
+    intro = (
+        "Your own class list from a spreadsheet. Nothing is saved until you "
+        "have seen what the file contains."
+    )
+    scope_help = "Every class in the file is created at this campus."
+    no_scope_title = "No campus to import into"
+    no_scope_body = "A branch has to exist before classes can be set up at it."
+    back_label = "classes"
+
+    def scope_queryset(self):
+        return Branch.objects.filter(is_active=True)
+
+    def choices(self):
+        # A drop-down rather than free text, because the four bands are ours and
+        # a school cannot be expected to guess their spelling. Still optional:
+        # blank is read off the class name.
+        return (Choice("level", tuple(level_names())),)
+
+    def validate(self, rows, scope, **parsed):
+        return importers.validate_classes(rows, branch=scope, **parsed)
+
+    def commit(self, report, scope):
+        return importers.commit_classes(report)
+
+
+class SubjectImportFlow(ImportFlow):
+    sheet = importers.SUBJECT_SHEET
+    capability = Capability.MANAGE_ACADEMICS
+    session_key = "academics.subject_import"
+
+    url_template = "academics:subject_import_template"
+    url_upload = "academics:subject_import"
+    url_review = "academics:subject_import_review"
+    url_done = "academics:subject_list"
+
+    upload_template_name = "academics/subject_import.html"
+    review_template_name = "academics/subject_import_review.html"
+
+    heading = "Import subjects"
+    intro = (
+        "Your own subject list from a spreadsheet, with the classes each one is "
+        "taught in. Nothing is saved until you have seen what the file contains."
+    )
+    scope_help = "Every subject in the file is created at this campus."
+    no_scope_title = "No campus to import into"
+    no_scope_body = "A branch has to exist before subjects can be set up at it."
+    back_label = "subjects"
+
+    def scope_queryset(self):
+        return Branch.objects.filter(is_active=True)
+
+    def references(self, scope):
+        """The campus's classes, listed but without a drop-down.
+
+        A drop-down would be wrong here: Taught In holds a *list*, and Excel's
+        list validation accepts one value per cell. So the names go on a tab the
+        school can read and copy from, and the validation happens on our side
+        where it can say which of the three names it did not recognise.
+        """
+        index = ClassIndex(scope)
+        names = index.names
+        if not names:
+            return ()
+        return (
+            Reference(
+                name="Classes",
+                title=(
+                    "Classes at this campus — copy these into Taught In, "
+                    "separated by semicolons. A level name (Primary, Junior "
+                    "Secondary) or All also works."
+                ),
+                values=tuple(level_names()) + tuple(names),
+                width=64,
+            ),
+        )
+
+    def validate(self, rows, scope, **parsed):
+        return importers.validate_subjects(rows, branch=scope, **parsed)
+
+    def commit(self, report, scope):
+        return importers.commit_subjects(report)
+
+    def upload_context(self, request):
+        return {"class_count": Class.objects.filter(is_active=True).count()}
+
+
+class ClassImportTemplateView(ImportTemplateView):
+    flow_class = ClassImportFlow
+
+
+class ClassImportView(ImportUploadView):
+    flow_class = ClassImportFlow
+
+
+class ClassImportReviewView(ImportReviewView):
+    flow_class = ClassImportFlow
+
+
+class SubjectImportTemplateView(ImportTemplateView):
+    flow_class = SubjectImportFlow
+
+
+class SubjectImportView(ImportUploadView):
+    flow_class = SubjectImportFlow
+
+
+class SubjectImportReviewView(ImportReviewView):
+    flow_class = SubjectImportFlow

@@ -20,56 +20,32 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.utils import IntegrityError
 from django.urls import reverse
 from django.utils import timezone
-from openpyxl import Workbook, load_workbook
+from openpyxl import load_workbook
 
 from apps.academics.models import Class, Level
+from apps.core.import_testing import build_workbook
+from apps.core.import_testing import upload as _upload
 
 from . import importer, workbook
 from .models import Student, StudentStatus
 from .tests import StudentTestCase
 
-XLSX_TYPE = (
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
-
 
 def build_xlsx(rows, *, headers=None, guidance_row=False, title_row=False) -> bytes:
-    """A workbook shaped like something a school would actually upload.
-
-    ``rows`` are dicts keyed by column key. ``headers`` overrides the order and
-    the spelling of the header row, which is how the reordered-columns and
-    header-alias cases are exercised.
-    """
-    keys = headers or [column.key for column in importer.COLUMNS]
-    labels = [
-        importer.COLUMNS_BY_KEY[key].label if key in importer.COLUMNS_BY_KEY else key
-        for key in keys
-    ]
-
-    book = Workbook()
-    sheet = book.active
-    if title_row:
-        sheet.append(["Fulfilled Academy — student list 2025/2026"])
-        sheet.append([])
-    sheet.append(labels)
-    if guidance_row:
-        # The real thing, marker and all -- a file that left the template's
-        # example row in place is the case being exercised.
-        sheet.append([
-            importer.guidance_for(importer.COLUMNS_BY_KEY[key])
-            if key in importer.COLUMNS_BY_KEY else ""
-            for key in keys
-        ])
-    for row in rows:
-        sheet.append([row.get(key, "") for key in keys])
-
-    buffer = BytesIO()
-    book.save(buffer)
-    return buffer.getvalue()
+    """A student workbook shaped like something a school would actually upload."""
+    return build_workbook(
+        importer.SHEET,
+        rows,
+        headers=headers,
+        guidance_row=guidance_row,
+        title_row=(
+            "Fulfilled Academy — student list 2025/2026" if title_row else ""
+        ),
+    )
 
 
 def upload(content: bytes, name: str = "students.xlsx") -> SimpleUploadedFile:
-    return SimpleUploadedFile(name, content, content_type=XLSX_TYPE)
+    return _upload(content, name)
 
 
 def import_row(**overrides) -> dict:

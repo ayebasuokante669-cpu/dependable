@@ -1,0 +1,48 @@
+{% extends "core/import_review.html" %}
+
+{% comment %}
+The class import's report. The accepted rows are shown with the band and year
+they were *worked out* as, not just the name that was typed -- that inference is
+the one thing on this screen the school did not write itself, so it is the one
+thing they need to see before pressing the button.
+{% endcomment %}
+
+{% block ready_rows %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="table-head">
+        <tr>
+          <th scope="col" class="px-5 py-3 font-semibold">Row</th>
+          <th scope="col" class="px-5 py-3 font-semibold">Class</th>
+          <th scope="col" class="px-5 py-3 font-semibold">Stream</th>
+          <th scope="col" class="px-5 py-3 font-semibold">Level</th>
+          <th scope="col" class="px-5 py-3 font-semibold">Year</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-ink-200">
+        {% for row in report.ready %}
+          <tr>
+            <td class="numeric px-5 py-2.5 text-ink-500">{{ row.number }}</td>
+            <td class="px-5 py-2.5 font-medium text-ink-800">
+              {{ row.record.display_name }}
+            </td>
+            <td class="px-5 py-2.5 text-ink-700">
+              {{ row.record.stream|default:"—" }}
+            </td>
+            <td class="whitespace-nowrap px-5 py-2.5 text-ink-700">
+              {{ row.record.get_level_display }}
+            </td>
+            <td class="numeric px-5 py-2.5 text-ink-700">
+              {{ row.record.year_in_level }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="border-t border-ink-200 px-5 py-3 text-xs text-ink-500">
+    Level and Year decide the order classes are listed in. Where you left them
+    blank they were read off the class name — check them here, and correct any
+    that look wrong on the Classes screen afterwards.
+  </p>
+{% endblock %}

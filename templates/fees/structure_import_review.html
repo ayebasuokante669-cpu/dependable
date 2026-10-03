@@ -1,0 +1,62 @@
+{% extends "core/import_review.html" %}
+{% load money %}
+
+{% comment %}
+The fee import's report.
+
+The accepted rows are grouped by class with a subtotal rather than listed in
+sheet order, because the question somebody opens this screen to answer is "what
+will Primary 1 cost?" -- and twenty line items in the order they happened to be
+typed does not answer it. The grand total is there for the same reason the fee
+list carries one: it is the number a proprietor checks.
+{% endcomment %}
+
+{% block verdict_note %}
+  {% if grand_total %}
+    <p class="mt-2 text-sm text-ink-600">
+      <span class="numeric font-semibold text-ink-900">{{ grand_total|naira }}</span>
+      across {{ class_groups|length }} class{{ class_groups|length|pluralize:"es" }}
+      for {{ scope_label }}.
+      {% if report.failed_count %}
+        A class with a failed row is priced for its other rows only — its total
+        below is what it will actually be.
+      {% endif %}
+    </p>
+  {% endif %}
+{% endblock %}
+
+{% block ready_rows %}
+  <div class="divide-y divide-ink-200">
+    {% for group in class_groups %}
+      <div>
+        <div class="flex flex-wrap items-center justify-between gap-2 bg-ink-50
+                    px-5 py-2.5">
+          <h3 class="text-sm font-semibold text-ink-900">
+            {{ group.school_class.display_name }}
+          </h3>
+          <span class="numeric text-sm font-semibold text-ink-900">
+            {{ group.total|naira }}
+          </span>
+        </div>
+        <table class="w-full text-sm">
+          <tbody class="divide-y divide-ink-200">
+            {% for row in group.items %}
+              <tr>
+                <td class="numeric w-16 px-5 py-2 text-ink-500">{{ row.number }}</td>
+                <td class="px-5 py-2 text-ink-800">{{ row.record.name }}</td>
+                <td class="numeric px-5 py-2 text-right text-ink-700">
+                  {{ row.record.amount|naira }}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endfor %}
+  </div>
+  <p class="border-t border-ink-200 px-5 py-3 text-xs text-ink-500">
+    A class that already has a fee structure for {{ scope_label }} keeps it —
+    these items are added to it. An item it is already charged is refused rather
+    than doubled, and appears above as a row to correct.
+  </p>
+{% endblock %}

@@ -177,8 +177,9 @@ fallback initial has been showing in the meantime rather than a broken image.
 python manage.py test apps
 ```
 
-656 tests, covering the parts that must never regress: what each role can see,
-what each role may change, that a fee total always equals its live line items,
+1,397 tests in all. The first of them cover the parts that must never regress:
+what each role can see, what each role may change,
+that a fee total always equals its live line items,
 that a student's expected fee is always read from their class rather than stored
 on them, that each senior arm carries exactly the subjects the school named,
 that a spreadsheet import reports every bad row, imports the good ones, and
@@ -203,6 +204,22 @@ to the filesystem while static files stay on whitenoise, that each deployment ch
 fires only when it should, that `mailcheck` reports and sends and fails loudly when
 the welcome would be skipped, and that the date picker reaches every date field,
 leaves the real input alone and bows out on touch.
+
+Extending the import to classes, subjects and fee structures adds 124, and the
+three that matter most are structural: that every column key on every sheet is a
+field on the model it feeds (the check that caught the fee sheet keying its item
+column `component` while the field is `name`), that every guidance marker sits in
+a required column so the template's own example row is always recognised on the
+way back in, and that every template reads back through our own reader. Then per
+sheet: that a class name with no band in it is refused rather than filed under a
+guess while "Basic 7" and "Grade 4" are read correctly, that a subject's
+`Taught In` cell turns a level name into that level's classes and reports every
+name it could not resolve rather than the first, that an amount is refused rather
+than coerced — words, negatives and accounting parentheses alike — that a charge
+a class already has for the term is refused rather than doubled, that a class
+whose only row failed gets no empty fee structure, that each import stamps its
+records to the campus it was given and ignores a forged one, and that a bursar
+reaches none of the twelve screens.
 
 The `fix/bugs2` batch adds 79: that the welcome email sends on signup with its
 logo, its absolute links and its four steps — and that signup still succeeds when
@@ -479,6 +496,20 @@ Single-record forms that people fill several of in a row (a class, a subject, a
 term, one staff account) carry **Save and add another**, which returns to a
 blank form instead of the list. The record written is identical either way.
 
+### The third route: bring your own ladder
+
+The presets are the Nigerian ladder, and that fits most schools here and some
+not at all. A school running Grade 1 to Grade 12, or Basic 1 to Basic 9, or
+classes named after houses, would otherwise be editing nineteen pre-filled rows
+into thirty different ones.
+
+So classes and subjects can arrive by spreadsheet instead — see [Bulk import
+from a spreadsheet](#bulk-import-from-a-spreadsheet). The choice is put where
+the decision is made rather than hidden behind a menu: a school with no classes
+yet is shown two cards on `/academics/classes/`, "the standard Nigerian set" and
+"import your own list", and the bulk-add screen carries the escape hatch next to
+its preset buttons. A school that cannot find the import gives up and types.
+
 ### Seeding
 
 `seed_academics` builds the ladder and subject list from
@@ -565,8 +596,13 @@ transaction, so a bad line can't leave a structure behind with no components.
 
 The list is grouped by level with per-level subtotals, defaults to the current
 term, and ends with a "not yet priced" section — the question a school owner
-actually has during onboarding. Terms themselves are managed in the Django
-admin; say the word if they should get first-class screens too.
+actually has during onboarding. Terms have screens of their own at
+`/fees/terms/`, gated on the same fee capabilities as the structures priced
+against them.
+
+A whole fee schedule can also arrive by spreadsheet — `Class | Fee Item |
+Amount`, one row per charge, with the term chosen on the upload screen. See
+[Bulk import from a spreadsheet](#bulk-import-from-a-spreadsheet).
 
 ### Seeding
 
@@ -646,7 +682,10 @@ reassured by.
   "mark withdrawn" first, because deleting throws away the record that a payment
   will later need to hang off.
 - **Import** — the bulk path for a school arriving with a roster already in a
-  spreadsheet. Template, per-row validation report, then the write. See below.
+  spreadsheet. Template, per-row validation report, then the write. See below,
+  and [Bulk import from a
+  spreadsheet](#bulk-import-from-a-spreadsheet) for the machinery it shares with
+  the class, subject and fee imports.
 
 Parent phone numbers are validated as Nigerian mobiles and stored in one
 canonical form (`08034129876`), whichever of `0803 412 4567`, `+234 803 …` or
@@ -655,53 +694,19 @@ canonical form (`08034129876`), whichever of `0803 412 4567`, `+234 803 …` or
 ### Excel import
 
 At `/students/import/`, owner- and principal-level only (`MANAGE_STUDENTS`, so a
-bursar gets a 403). Three screens, because the middle one is the product:
+bursar gets a 403). The shape of it is shared with the class, subject and fee
+imports and is written up under [Bulk import from a
+spreadsheet](#bulk-import-from-a-spreadsheet) — this was the first of the four
+and set the pattern.
 
-1. **Download** — `apps/students/workbook.py` builds an `.xlsx` from the column
-   spec in `importer.py`: a header row, a guidance row showing the format of
-   every field, drop-downs for Sex and Status, and a second sheet listing *that
-   branch's* classes with the Class column validated against it. A school owner
-   is offered one template per campus, because the class list differs.
-2. **Upload and check** — every row is parsed and judged before anything is
-   written. Nothing at all is saved by this step.
-3. **Confirm** — the valid rows are written in one transaction.
+What is specific to students: thirteen columns with the aliases a school's own
+roster uses (`Adm No`, `Surname`, `D.O.B.`, `Guardian`, `Phone`); drop-downs for
+Sex and Status written into the file; a reference tab listing *that branch's*
+classes with the Class column validated against it; the admission number checked
+against the roster and the rest of the file at once; and a phone column Excel
+turned numeric (`8031122334`) getting its leading zero back — not a typo the
+school made and not one they can see.
 
-**A bad row is not a bad file.** All-or-nothing sends the user back to fix one
-cell at a time, so failure is per row: the report names the spreadsheet's own
-row number, the column, and the reason — *"Row 14 — Admission Number
-'FA/2025/001' already belongs to Chinaza Okonkwo; Class 'JS1' is not a class at
-North"* — and the rows that passed can still be imported while the rest are
-corrected. A row reports *all* of its problems at once, including the ones the
-model finds, so the trip back to the spreadsheet happens once.
-
-What is validated: the required fields (admission number, first and last name,
-class, parent name and phone); the admission number against the branch's
-existing roster *and* against the other rows of the same file, case-insensitively
-like the constraint; the class against the branch's active classes, with
-separate messages for unknown, inactive and ambiguous (`JSS 3` where the branch
-runs `JSS 3A` and `JSS 3B`); sex, status and dates by parsing; and then the
-model's own `full_clean` for phone format, email, lengths and the
-born-after-admission rule, which are not restated here.
-
-The realistic mess is handled rather than reported: columns are matched **by
-heading, never by position**, with aliases (`Adm No`, `Surname`, `DOB`,
-`Guardian`, `Phone`), so a school's own sheet imports; a title row above the
-headings is found; whitespace is trimmed; blank rows anywhere are skipped;
-columns we have no field for are ignored and listed; and a phone column Excel
-turned numeric (`8031122334`) gets its leading zero back. A file that is not a
-workbook, is not the template, or has no rows under its headings produces a
-sentence on the form, never a 500.
-
-Two things worth knowing about the shape of it:
-
-- **`importer.py` never touches openpyxl; `workbook.py` never validates.** The
-  reader hands over plain strings — dates as ISO — so validation is testable
-  without building a workbook, and so the parsed rows survive the session.
-- **The rows wait in the session, not a table.** An abandoned import leaves
-  nothing to clean up. Validation then runs *twice*: once to draw the report,
-  and again on confirm, because the roster can move while the report is on
-  screen. A test covers exactly that race, and another asserts that a failure on
-  the third student of a batch leaves the first two unwritten.
 
 ### Seeding
 
@@ -719,6 +724,126 @@ numbers carry their year of admission (so the same `001` recurs each year and
 across branches), dates of birth match the class, two Okonkwo siblings sit in
 Primary 1 and KG 2 sharing one guardian, and one student is withdrawn and one
 inactive so the status filter has something real to filter.
+
+## Bulk import from a spreadsheet
+
+Four things arrive by spreadsheet — students, classes, subjects and fee
+structures — and they arrive the same way, because they are the same job:
+
+| What | Where | Capability | Columns declared in |
+| --- | --- | --- | --- |
+| Students | `/students/import/` | `MANAGE_STUDENTS` | `apps/students/importer.py` |
+| Classes | `/academics/classes/import/` | `MANAGE_ACADEMICS` | `apps/academics/importers.py` |
+| Subjects | `/academics/subjects/import/` | `MANAGE_ACADEMICS` | `apps/academics/importers.py` |
+| Fee structures | `/fees/import/` | `MANAGE_FEES` | `apps/fees/importers.py` |
+
+Three screens each — download the template, upload and see the verdict, confirm
+— and the middle one is the product.
+
+### The template is the contract
+
+A school fills in **our** columns. Nothing here tries to work out the structure
+of a document it was handed, because a guess about which column held the amount
+is a guess about money. What *is* forgiving is everything around that: columns
+are matched by heading rather than position, with aliases, so a reordered sheet
+or a school's own spelling still reads; a title row above the headings is found;
+blank rows anywhere are skipped; headings we have no field for are ignored and
+listed back.
+
+### Three modules, one set of rails
+
+- **`apps/core/imports.py`** — the contract and the verdict. `Column`, `Sheet`,
+  `SourceRow`, `FieldError`, `RowResult`, `ImportReport`, `Judgement`, and the
+  cell parsers (`parse_date`, `parse_amount`, `parse_list`). Knows nothing about
+  openpyxl and nothing about any particular model.
+- **`apps/core/spreadsheets.py`** — the openpyxl boundary. Takes a `Sheet` and
+  returns `.xlsx` bytes, or takes an upload and returns plain strings. Knows
+  nothing about validation.
+- **`apps/core/import_flow.py`** — the three screens, the upload form and the
+  session hand-off. An `ImportFlow` subclass per entity says which sheet, what
+  the file belongs to, and how to build, validate and write.
+
+Each entity's own module holds only what is true of it. The student importer is
+the thirteen columns, the admission number and the phone-number repair; it is no
+longer where the machinery lives.
+
+### What the file belongs to
+
+Asked once, at the top, and only when there is a choice: a principal has one
+campus and is not made to confirm it. The field is **left out** rather than
+hidden, so a forged POST cannot name something the account cannot see. Students,
+classes and subjects are scoped by campus; fee structures by **term**, which
+settles the campus too, because a term belongs to one branch.
+
+A school owner is offered one template per campus, because the class list on the
+reference tab differs. The fee import offers one per *campus* rather than per
+term for the same reason — a school in its third year would otherwise get nine
+identical buttons.
+
+### A bad row is not a bad file
+
+All-or-nothing sends the user back to fix one cell at a time, so failure is per
+row. The report names the spreadsheet's own row number, the column, and the
+reason — *"Row 14 — Admission Number 'FA/2025/001' already belongs to Chinaza
+Okonkwo; Class 'JS1' is not a class at North"* — and the rows that passed can
+still be imported while the rest are corrected.
+
+A row reports **all** of its problems at once, including the ones the model
+finds, so the trip back to the spreadsheet happens once. `Judgement.refuse()` is
+what makes that safe: it records the error *and* marks the field as spoken for,
+and `ask_the_model()` excludes exactly those fields from `full_clean`, so the
+user is never told about one cell twice in two different voices.
+
+That pairing has a sharp edge, and it has already drawn blood: a column key that
+is not the model's field name silently stops the exclusion working. The fee sheet
+keyed its item column `component` while the field is `name`, and an empty cell
+was refused twice — once in the sheet's words and once in the model's.
+`apps/core/tests_imports.py` now walks every sheet and asserts that every column
+key is a field on the model it feeds.
+
+### What each sheet checks
+
+- **Students** — required fields; the admission number against the branch's
+  roster *and* the other rows of the same file, case-insensitively like the
+  constraint; the class against the branch's active classes, with separate
+  messages for unknown, inactive and ambiguous; sex, status and dates by parsing.
+- **Classes** — `Level` and `Year` are **optional**, and read off the name:
+  "Grade 4" is year four, "Basic 7" is junior secondary. A name with no band in
+  it ("Reception", "Alpha Class") is **refused** with the four band names in the
+  message, never filed under a guess. Duplicates are caught on the name and arm
+  as a person reads them, so "Primary 1" and "primary 1" cannot both be created.
+- **Subjects** — one cell, `Taught In`, holds a *list*: class names, a band name
+  ("Primary" means the six primary classes), or `All`. That is the one place a
+  fixed template cannot give each value a column of its own, because the number
+  of them differs per school. Every unresolved name is reported, not just the
+  first. Blank is allowed — a school importing subjects before classes has not
+  made a mistake.
+- **Fee structures** — `Class | Fee Item | Amount`, one row per charge, so a
+  class with four charges takes four rows. Fixed columns per charge would mean us
+  deciding what a school calls its fee items, and no two agree. The amount is
+  parsed from `₦45,000`, `NGN 45000` or `45000`; accounting parentheses are read
+  as negative so a credit is *refused* rather than silently charged; words are
+  refused rather than coerced to zero. A charge the class already has for that
+  term is refused rather than doubled. A structure is created **only** when
+  something is going into it, so a file whose Primary 1 rows all failed leaves no
+  empty structure reading ₦0 behind — the fee list would show that as "priced"
+  and bill nobody.
+
+### Two things worth knowing about the shape
+
+- **Validation never touches openpyxl; the reader never validates.** The reader
+  hands over plain strings — dates as ISO, whole floats without their `.0` — so
+  validation is testable without building a workbook, and so the parsed rows
+  survive the session.
+- **The rows wait in the session, not a table.** An abandoned import leaves
+  nothing to clean up. Validation then runs *twice*: once to draw the report, and
+  again on confirm, because the data can move while the report is on screen.
+  Tests cover exactly that race for each import, and that a failure partway
+  through a batch leaves the earlier rows unwritten.
+
+A file that is not a workbook, is not the template, or has no rows under its
+headings produces a sentence on the form, never a 500.
+
 
 ## Parent messaging
 

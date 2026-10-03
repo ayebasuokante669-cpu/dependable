@@ -26,6 +26,9 @@
     </form>
   {% endif %}
   {% if "manage_fees" in capabilities and selected_term %}
+    <a href="{% url 'fees:structure_import' %}" class="btn btn-secondary text-sm">
+      <span class="hidden sm:inline">Import from</span> Excel
+    </a>
     <a href="{% url 'fees:structure_create' %}?term={{ selected_term.pk }}"
        class="btn btn-primary text-sm">
       <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
