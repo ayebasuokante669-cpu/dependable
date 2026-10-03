@@ -4,6 +4,11 @@ Django==5.2.17
 django-anymail[resend]==15.2
 gunicorn==23.0.0
 openpyxl==3.1.5
+# Uploaded files -- school logos and payment receipts -- live in an
+# S3-compatible bucket rather than on the container's own disk, which on Railway
+# is both unserved and ephemeral. The [s3] extra brings boto3. See
+# config/settings/base.py.
+django-storages[s3]==1.14.6
 psycopg[binary]==3.3.4
 pwned-passwords-django==5.2.0
 python-dotenv==1.2.2

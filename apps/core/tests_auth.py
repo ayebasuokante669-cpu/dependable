@@ -478,12 +478,18 @@ class DashboardScopingTests(SeededRoleTestCase):
         self.assertNotContains(report, "West Campus")
 
     def test_a_platform_owner_sees_every_school(self):
-        """The overview is cards now rather than a table, so the context is one
-        row per card -- each carrying the school and its module chips."""
+        """The cards are their own screen now -- /platform/ is the dashboard and
+        /platform/schools/ is the grid, because the two sharing a URL was what lit
+        both sidebar rows at once."""
         self.client.force_login(User.objects.get(username="platform.owner"))
-        response = self.client.get(reverse("core:platform_overview"))
+        response = self.client.get(reverse("core:platform_schools"))
         names = {card["school"].name for card in response.context["cards"]}
         self.assertEqual(names, {"Fulfilled Academy", "Rival College"})
+        self.assertEqual(response.context["school_count"], 2)
+
+    def test_their_dashboard_counts_every_school_too(self):
+        self.client.force_login(User.objects.get(username="platform.owner"))
+        response = self.client.get(reverse("core:platform_overview"))
         self.assertEqual(response.context["school_count"], 2)
 
     def test_a_principal_sees_only_their_own_branch(self):

@@ -35,6 +35,12 @@ Pages fill `heading`, `intro` and `body`.
         href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <script src="{% static 'js/ui.js' %}" defer></script>
+  {% comment %}
+  The calendar, for the date of birth this page asks a parent for -- the one field
+  the native picker is worst at, and the one audience least likely to persevere
+  with it. See static/js/datepicker.js.
+  {% endcomment %}
+  <script src="{% static 'js/datepicker.js' %}" defer></script>
 </head>
 <body class="h-full">
 

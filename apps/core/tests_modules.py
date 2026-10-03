@@ -292,7 +292,7 @@ class WhoMayToggleTests(ModuleTestCase):
                 if role == Role.PLATFORM_OWNER:
                     self.assertIn("Schools", entries)
                     self.assertEqual(
-                        entries["Schools"].href, reverse("core:platform_overview")
+                        entries["Schools"].href, reverse("core:platform_schools")
                     )
                 else:
                     self.assertNotIn("Schools", entries)
@@ -700,7 +700,7 @@ class IsolationTests(ModuleTestCase):
         self.as_platform()
         SchoolModule.set_state(self.alpha, "messaging", True)
 
-        overview = self.client.get(reverse("core:platform_overview"))
+        overview = self.client.get(reverse("core:platform_schools"))
         by_name = {
             card["school"].name: {m["key"]: m["enabled"] for m in card["modules"]}
             for card in overview.context["cards"]

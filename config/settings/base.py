@@ -77,6 +77,10 @@ INSTALLED_APPS = [
     "apps.messaging",
     # Money received, recorded against a student. Balances derive from here.
     "apps.payments",
+    # Object storage for uploads. Installed in every environment so its checks
+    # run locally too, though a machine with no MEDIA_BUCKET_NAME still writes to
+    # the filesystem -- see STORAGES below.
+    "storages",
     # Paid add-on: the enquiry-to-enrolment pipeline. Last, because it converts
     # an applicant into a student and prices the intake against an academics
     # class -- it depends on those apps, and nothing depends on it.
@@ -268,11 +272,96 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
+# ---------------------------------------------------------------------------
+# Uploaded files
+# ---------------------------------------------------------------------------
+# What a school uploads -- its logo, and a parent's payment receipt -- used to be
+# written to ``BASE_DIR / "media"`` and served by nothing. Two separate faults came
+# out of that, and both of them are the reason this section exists:
+#
+#   * **nothing served it.** ``config/urls.py`` only routes ``/media/`` when DEBUG
+#     is on, because Django refuses to serve uploads in production and whitenoise
+#     deliberately covers ``static/`` only. So in production every uploaded file
+#     404'd -- which is why a logo looked fine locally and was missing on the live
+#     platform screens;
+#   * **nothing kept it.** The container's filesystem on Railway is ephemeral. Even
+#     with a route, every logo and every receipt vanished on the next deploy.
+#
+# So uploads go to object storage, and the bucket serves them. Static files are
+# untouched: whitenoise does that job well, they are versioned by the manifest, and
+# moving them would buy nothing.
+#
+# Any S3-compatible bucket works. Supabase Storage is the one configured, because
+# the database is already there -- one vendor, one bill, one place credentials live.
+# See the README for the Railway variables.
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+#: Reading this as set is what switches uploads over to the bucket. Left blank --
+#: a developer's machine, the test suite, CI -- the filesystem backend stays, so
+#: nobody needs credentials to run this project.
+AWS_STORAGE_BUCKET_NAME = os.environ.get("MEDIA_BUCKET_NAME", "").strip()
+USE_OBJECT_STORAGE = bool(AWS_STORAGE_BUCKET_NAME)
+
+if USE_OBJECT_STORAGE:
+    AWS_S3_ENDPOINT_URL = os.environ.get("MEDIA_S3_ENDPOINT_URL", "").strip()
+    AWS_ACCESS_KEY_ID = os.environ.get("MEDIA_ACCESS_KEY_ID", "").strip()
+    AWS_SECRET_ACCESS_KEY = os.environ.get("MEDIA_SECRET_ACCESS_KEY", "").strip()
+    AWS_S3_REGION_NAME = os.environ.get("MEDIA_S3_REGION", "us-east-1").strip()
+
+    #: Supabase Storage needs path-style addressing. The virtual-host style AWS
+    #: prefers -- ``https://bucket.endpoint/key`` -- is not how Supabase routes,
+    #: and boto3 defaults to it, so this has to be said.
+    AWS_S3_ADDRESSING_STYLE = "path"
+
+    #: Never overwrite. Two schools uploading ``logo.png`` must not become one
+    #: school's logo on both of their receipts, and Django's own suffixing only
+    #: happens when the storage says a name is taken.
+    AWS_S3_FILE_OVERWRITE = False
+
+    #: No ACL header. Supabase rejects requests that carry one, and bucket-level
+    #: public/private is how it decides access anyway.
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = env_bool("MEDIA_PRIVATE_BUCKET", False)
+
+    #: A year. Every stored name is unique -- see AWS_S3_FILE_OVERWRITE -- so a
+    #: cached file can never be the wrong one.
+    AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "public, max-age=31536000, immutable"}
+
+    #: Where a browser is sent for the file. Supabase serves a *public* bucket at
+    #: ``/storage/v1/object/public/<bucket>/<key>``, which is not a path boto3
+    #: would construct, so it is given explicitly. Unset for a non-Supabase
+    #: bucket and django-storages builds the usual S3 URL.
+    #:
+    #: Ignored for a private bucket, and that is not an oversight: a signed URL
+    #: carries its signature in the query string and is only valid against the
+    #: endpoint that signed it, so pinning a custom domain would produce links
+    #: that look right and 403. A private bucket gets signed endpoint URLs, which
+    #: is the only thing that can work.
+    _public_base = os.environ.get("MEDIA_PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if _public_base and not AWS_QUERYSTRING_AUTH:
+        AWS_S3_CUSTOM_DOMAIN = _public_base.split("://", 1)[-1]
+        AWS_S3_URL_PROTOCOL = _public_base.split("://", 1)[0] + ":"
+
 STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "default": (
+        {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            # Empty by default: the bucket is for uploads, so its root is the
+            # media root and a stored key reads `logos/<school>/crest.png`.
+            #
+            # Set MEDIA_PREFIX to share the bucket with something else -- and then
+            # leave the prefix *out* of MEDIA_PUBLIC_BASE_URL, because
+            # django-storages appends it. Putting it in both is how the URL comes
+            # out with the prefix twice.
+            "OPTIONS": {"location": os.environ.get("MEDIA_PREFIX", "").strip("/")},
+        }
+        if USE_OBJECT_STORAGE
+        else {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+    ),
+    # Unchanged, and deliberately. Whitenoise serves these from the container,
+    # the manifest versions them, and they are built at deploy time rather than
+    # uploaded by anybody.
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
     },

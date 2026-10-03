@@ -141,14 +141,32 @@ class OwnerCreatesStaffTests(StaffProvisioningTestCase):
         )
         self.assertEqual(self.created("p2@example.com").role, Role.PRINCIPAL)
 
-    def test_a_school_wide_owner_account_keeps_no_campus(self):
-        self.client.post(
+    def test_a_second_owner_cannot_be_invited_at_all(self):
+        """This used to create one, and check it was stored without a campus.
+
+        It is refused now. There is one proprietor per school, and an owner who
+        could invite a second would be handing over the only role that can invite
+        and the only one that can deactivate an account -- with no way to take it
+        back from this screen. "Can I add another owner?" is a conversation with
+        the platform rather than a dropdown.
+
+        Refused in `clean_role` as well as absent from the choices, which is what
+        this posts past: a `<select>` is a suggestion and a POST is not.
+        """
+        response = self.client.post(
             CREATE_URL,
             form_data(email="co@example.com", role=Role.SCHOOL_OWNER,
                       branch=self.branch.id),
         )
-        # An owner sees every campus, so storing one would be noise.
-        self.assertIsNone(self.created("co@example.com").branch_id)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(User.objects.filter(email="co@example.com").exists())
+
+    def test_the_dropdown_offers_a_principal_and_a_bursar_and_nothing_else(self):
+        response = self.client.get(CREATE_URL)
+        offered = {
+            value for value, _ in response.context["form"].fields["role"].choices
+        }
+        self.assertEqual(offered, {Role.PRINCIPAL, Role.BURSAR})
 
     def test_a_branch_role_without_a_campus_is_refused(self):
         response = self.client.post(CREATE_URL, form_data(branch=""))

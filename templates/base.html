@@ -57,6 +57,14 @@
     })();
   </script>
   <script src="{% static 'js/ui.js' %}" defer></script>
+  {% comment %}
+  The calendar. Unconditional rather than signed-in-only: the public enquiry page
+  asks a parent for a date of birth, which is the field the native picker is worst
+  at. It enhances `<input type="date">` and does nothing where there is none, so a
+  page without a date field pays only for the request -- and nothing for it on a
+  touch device, where the native wheel is better and it bows out.
+  {% endcomment %}
+  <script src="{% static 'js/datepicker.js' %}" defer></script>
   {% include "partials/_password_policy.html" %}
 
   {% comment %}

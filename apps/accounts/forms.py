@@ -143,11 +143,23 @@ class StaffAccountForm(StyledFormMixin, forms.Form):
     password would know it, and the colleague could never be sure they didn't.
     """
 
-    #: Roles a school may hand out. PLATFORM_OWNER is absent on purpose and is
-    #: validated for below as well: platform staff are made with the
-    #: create_platform_owner command, by somebody with a shell, never from a
-    #: tenant's own screen.
-    ASSIGNABLE_ROLES = (Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR)
+    #: Roles a school may hand out, and the two that are absent are absent for
+    #: different reasons.
+    #:
+    #: ``PLATFORM_OWNER`` is not a school's to give at all: platform staff are
+    #: made with the ``create_platform_owner`` command, by somebody with a shell.
+    #:
+    #: ``SCHOOL_OWNER`` is not offered either, and that is the newer rule. There
+    #: is one proprietor per school for now, and an owner who could invite a
+    #: second one would be handing over the only role that can invite -- and the
+    #: only one that can switch an account off -- with no way to take it back
+    #: from this screen. Until there is a reason to have two, the answer to "can
+    #: I add another owner?" is "ask the platform", which is a conversation
+    #: rather than a dropdown.
+    #:
+    #: Both are refused in ``clean_role`` as well, not just left out of the
+    #: choices, because a ``<select>`` is a suggestion and a POST is not.
+    ASSIGNABLE_ROLES = (Role.PRINCIPAL, Role.BURSAR)
 
     full_name = forms.CharField(
         label="Full name", max_length=150,

@@ -236,17 +236,15 @@ NAVIGATION: tuple[NavSection, ...] = (
     NavSection(
         label="Overview",
         items=(
-            # Resolves per role -- see HOME and ROLE_HOME above.
+            # Resolves per role -- see HOME and ROLE_HOME above. Every role,
+            # the platform owner included: their dashboard is /platform/ and the
+            # schools grid is /platform/schools/, two screens with a URL each.
             #
-            # Not the platform owner. Their home *is* Platform > Schools, so a
-            # Dashboard row beside it was a second row pointing at one page --
-            # and because both resolved to the same href, both lit up at once:
+            # They briefly shared one, which is what made both rows light up --
             # `_keep_only_the_closest_match` compares href *lengths*, so a tie
-            # left neither cleared. One row per destination is the fix; the
-            # tie-break below is the guard against it happening again.
-            NavItem("Dashboard", HOME, "home",
-                    (Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.BURSAR),
-                    tour="nav-home"),
+            # cleared neither. The split is the fix; the tie-break is the guard
+            # against a future pair doing it again.
+            NavItem("Dashboard", HOME, "home", ALL_ROLES, tour="nav-home"),
             NavItem("Reports", "reports:index", "chart", _LEADERSHIP + (Role.BURSAR,),
                     tour="nav-reports"),
         ),
@@ -258,8 +256,8 @@ NAVIGATION: tuple[NavSection, ...] = (
             # platform owner opens a school and switches its modules, and the
             # admin is neither tenant-aware nor the place to make a commercial
             # decision from.
-            NavItem("Schools", "core:platform_overview", "building",
-                    (Role.PLATFORM_OWNER,), tour="nav-home"),
+            NavItem("Schools", "core:platform_schools", "building",
+                    (Role.PLATFORM_OWNER,), tour="nav-schools"),
             # Platform work that happens to live under /messaging/: the platform
             # registers a school's Sender ID with the gateway and approves it, and
             # a school can only read its own. So it sits here rather than in

@@ -106,6 +106,71 @@ Settings live in `config/settings/`: `base.py`, then `dev.py` (the default) and
 `prod.py`. `manage.py` defaults to `config.settings.dev`; `wsgi.py`/`asgi.py`
 default to `config.settings.prod`.
 
+### Uploaded files
+
+School logos and payment receipts go to an **S3-compatible bucket**, not to the
+container's disk. Static files are untouched and stay on whitenoise.
+
+That split is not a preference. Uploads on local disk failed twice over, and both
+failures were silent:
+
+- **nothing served them.** `config/urls.py` routes `/media/` only when `DEBUG` is
+  on, because Django refuses to serve uploads in production and whitenoise covers
+  `static/` by design. So in production every uploaded file 404'd — which is why a
+  logo looked right on a developer's machine and was missing from the live platform
+  screens. The templates were never wrong;
+- **nothing kept them.** Railway's container filesystem is ephemeral. Even with a
+  route, every logo and receipt vanished on the next deploy.
+
+One variable decides which backend is used, so a half-configured deployment cannot
+end up writing to a bucket it has no credentials for:
+
+```python
+AWS_STORAGE_BUCKET_NAME = os.environ.get("MEDIA_BUCKET_NAME", "").strip()
+USE_OBJECT_STORAGE = bool(AWS_STORAGE_BUCKET_NAME)
+```
+
+Leave it unset and uploads write to `./media` as before — right for a developer's
+machine and for the test suite, and it means **nobody needs credentials to run this
+project**.
+
+#### What to set in Railway
+
+| Variable | Value |
+| --- | --- |
+| `MEDIA_BUCKET_NAME` | `media` |
+| `MEDIA_S3_ENDPOINT_URL` | `https://<project-ref>.supabase.co/storage/v1/s3` |
+| `MEDIA_ACCESS_KEY_ID` | from Supabase → Project Settings → Storage → S3 access keys |
+| `MEDIA_SECRET_ACCESS_KEY` | the secret from that same pair |
+| `MEDIA_S3_REGION` | `us-east-1` (Supabase ignores it; boto3 insists on one) |
+| `MEDIA_PUBLIC_BASE_URL` | `https://<project-ref>.supabase.co/storage/v1/object/public/media` |
+
+In Supabase first: **Storage → New bucket**, named `media`, marked **public**.
+
+Two optional ones. `MEDIA_PRIVATE_BUCKET=true` serves signed, expiring URLs
+instead — correct if receipts should not be hotlinkable, and then
+`MEDIA_PUBLIC_BASE_URL` is left unset. `MEDIA_PREFIX` puts uploads under a prefix
+so the bucket can be shared; leave the prefix *out* of the public base URL if you
+set it, because django-storages appends it.
+
+#### Three settings that are not boto3's defaults
+
+Each one is a thing Supabase does differently, and each one fails confusingly if
+left alone:
+
+- `AWS_S3_ADDRESSING_STYLE = "path"` — boto3 prefers virtual-host URLs
+  (`https://bucket.endpoint/key`), which is not how Supabase routes;
+- `AWS_DEFAULT_ACL = None` — Supabase rejects a request carrying an ACL header,
+  and bucket-level public/private is how it decides access anyway;
+- `AWS_S3_FILE_OVERWRITE = False` — two schools uploading `logo.png` must not
+  become one school's logo on both of their receipts.
+
+#### Migrating what is already there
+
+Nothing to migrate: every file previously written to the container is already gone.
+A school that uploaded a logo before this change needs to upload it again, and the
+fallback initial has been showing in the meantime rather than a broken image.
+
 ## Tests
 
 ```bash
@@ -127,6 +192,17 @@ exam while Primary and Senior sit it, that enrolment produces a Student in the
 right class and branch and keeps the link back, that admission fees and termly
 fees never touch, that a lapsed enquiry is closed rather than deleted, and that
 one school cannot see another's applicants.
+
+The `fix/bugs3` batch adds 55: that no onboarding step points at the Django admin
+and that the owner can follow every one of them to a 200, that only the proprietor
+and the platform may invite and that neither "School Owner" nor "Platform Owner"
+can be assigned — from the dropdown or by a hand-made POST — that the platform's
+Dashboard and Schools are two screens with exactly one active row between them, that
+an uploaded logo renders on all five screens that reference it, that uploads default
+to the filesystem while static files stay on whitenoise, that each deployment check
+fires only when it should, that `mailcheck` reports and sends and fails loudly when
+the welcome would be skipped, and that the date picker reaches every date field,
+leaves the real input alone and bows out on touch.
 
 The `fix/bugs2` batch adds 79: that the welcome email sends on signup with its
 logo, its absolute links and its four steps — and that signup still succeeds when
@@ -299,6 +375,27 @@ The mixin raises 403 for a signed-in account that lacks the capability (rendered
 by `templates/403.html`) and redirects anyone signed out to the login page.
 Hiding a button is presentation; the mixin is the enforcement, and it blocks POST
 as well as GET.
+
+### Who may invite, and as what
+
+`MANAGE_STAFF` is in `_SCHOOL_ADMIN`, so **the proprietor and the platform invite;
+a principal and a bursar do not.** A principal still reads the list — they need to
+know who works there — and the screens agree with the capability, so the sidebar
+never offers them a button that would 403.
+
+The role dropdown offers **Principal and Bursar only**. Two roles are absent for
+different reasons:
+
+- `PLATFORM_OWNER` was never a school's to give. Platform staff are made with
+  `create_platform_owner`, by somebody with a shell;
+- `SCHOOL_OWNER` is the newer rule. There is one proprietor per school, and an
+  owner who could invite a second would be handing over the only role that can
+  invite and the only one that can deactivate an account — with no way to take it
+  back from that screen. Until there is a reason for two, "can I add another
+  owner?" is a conversation rather than a dropdown.
+
+Both are refused in `clean_role` as well as left out of the choices, because a
+`<select>` is a suggestion and a POST is not.
 
 ### Permission role vs. job title
 
@@ -1251,16 +1348,25 @@ detail screen — including for their own school — and from the toggle endpoin
 
 | URL | What it is |
 | --- | --- |
-| `/platform/` | Every school as a card: its own logo, its plan and status, its counts, and a chip per switchable module showing on *or* off. The whole card is the link. |
+| `/platform/` | Their dashboard: the size of the platform, and the schools that need a look — a campus with no current term, a school with no students, a suspended account. |
+| `/platform/schools/` | Every school as a card: its own logo, its plan and status, its counts, and a chip per switchable module showing on *or* off. The whole card is the link. |
 | `/platform/schools/<id>/` | One school: identity, figures, the module switches, its campuses and their current terms, who can sign in, and a link to its collections report. |
 | `/platform/schools/<id>/modules/` | POST only. Switches one module. |
 | `/platform/schools/<id>/profile/` | POST only. The school's name, office contacts and logo — the same `SchoolProfileForm` a proprietor uses. A rejected form comes back on the whole detail page, not a stub. |
 | `/staff/` | **Users** at platform scope: every account, with its school, and a deactivate control. |
 | `/staff/<id>/activation/` | POST only. Switches an account off, or back on. |
 
-`/platform/` used to be a table of counts, which was the wrong shape for the job:
-the platform owner does not arrive to read numbers, they arrive to pick a school and
-do something to it. **Schools** in the sidebar points here now rather than at the
+**Those are two URLs on purpose.** They were one for a while, which gave the
+platform sidebar a Dashboard row and a Schools row both resolving to `/platform/` —
+and `_keep_only_the_closest_match` compares href *lengths*, so a tie cleared
+neither and both rows stayed lit. The first attempt at that was to drop the
+Dashboard row; splitting the screens is the better fix, because the two genuinely
+answer different questions. A test asserts exactly one row is active on every
+platform screen.
+
+`/platform/schools/` used to be a table of counts, which was the wrong shape for
+the job: the platform owner does not arrive to read numbers, they arrive to pick a
+school and do something to it. **Schools** in the sidebar points here now rather than at the
 Django admin changelist — the admin is neither tenant-aware nor the place to make a
 commercial decision from, though `SchoolModule` is registered there for the question
 the admin is good at: when did this change, and who changed it.
@@ -1804,6 +1910,14 @@ the failure mode of the whole effect is "no animation", never "no content".
 
 ### Branches, Staff and Terms are screens, not admin links
 
+> **This happened a third time.** Onboarding step 4 — "Invite staff" — still
+> pointed at `admin:accounts_user_changelist`, so a proprietor following their own
+> setup was asked to authorise, on a site they were already signed in to. It points
+> at `/staff/` now, which is capability-gated, so a role that may not invite gets a
+> 403 with a toast rather than a login form. `tests_bugs3.OnboardingStepFourTests`
+> walks every step as the owner and asserts each one answers 200.
+
+
 These three sat in the sidebar as Django admin URLs, which meant the proprietor
 — whose account is deliberately **not** `is_staff` — followed a link in their
 own sidebar to the admin login page. Granting `is_staff` would have been worse:
@@ -2248,6 +2362,47 @@ Every message stays **multipart** — the text half is the body, the HTML is the
 alternative — so a client that refuses HTML gets a complete message rather than a
 blank one. The sender name stays `SCHOOLCORD`.
 
+### When mail does not arrive
+
+The welcome email is best effort by design — a failed send must not turn a
+completed signup into an error page — and the first version of that was a mistake:
+"best effort" came to mean the misconfiguration stayed hidden too. Two things fixed
+that.
+
+**`apps/core/checks.py`** turns the silent cases into deploy-time warnings, run by
+`manage.py check --deploy` and by every `manage.py` command:
+
+| Check | Fires when |
+| --- | --- |
+| `schoolcord.W001` | `PUBLIC_BASE_URL` is unset, so mail cannot build links — and the welcome email is skipped entirely |
+| `schoolcord.W002` | the backend is Anymail/Resend but `RESEND_API_KEY` is empty |
+| `schoolcord.W003` | `DEFAULT_FROM_EMAIL` has no address in it |
+| `schoolcord.W004` | uploads are going to local disk in production |
+
+All warnings, never errors: none of them stops the app serving pages, and a check
+that refused to boot over an unsendable email would be a worse failure than the one
+it reports.
+
+**`manage.py mailcheck`** answers the question from the machine that was supposed
+to send:
+
+```bash
+python manage.py mailcheck                              # what is configured
+python manage.py mailcheck --to you@example.com         # send a plain test
+python manage.py mailcheck --to you@example.com --welcome   # send the real thing
+```
+
+It prints the backend, the key, the sender domain and the base URL, then — with
+`--to` — sends through the real backend with `fail_silently` off, so the
+provider's own error surfaces instead of a swallowed one. `--welcome` renders the
+genuine welcome email against an unsaved school, so what lands in the inbox is what
+a new owner gets and nothing is left in the database.
+
+**The three things that actually stop it arriving**, in the order they turn up:
+`PUBLIC_BASE_URL` not set on the host; `RESEND_API_KEY` not set; and the sender
+domain not verified with Resend, which refuses the send outright. The spam folder
+is worth checking before any of them.
+
 ### The welcome email
 
 Sent on signup by `apps/core/emails.py`, on the same shell as the reset mail. It
@@ -2411,6 +2566,18 @@ is both a utility and a CSS custom property.
   cards (`rounded-lg`), up to 32px (`rounded-2xl`). `.squircle` upgrades to a
   real superellipse where `corner-shape` is supported and stays a generous
   rounded rectangle everywhere else.
+- **The date picker** — `static/js/datepicker.js` draws a calendar over the real
+  `<input type="date">`, which keeps its name, its value and its validation; the
+  type is never switched to `text`, so the browser's own checks and its mobile
+  keyboard survive. The shape is **day → month → year**: press the "October 2026"
+  header for twelve months, press the year for twelve years, so two presses cross a
+  decade. That is the whole design, and it answers the actual complaint — a child's
+  date of birth is years back and the native picker steps a month at a time. It
+  respects the field's own `min`/`max`, supports arrows, PageUp/PageDown, Home/End,
+  Enter and Escape, and renders as a `role="grid"` table so a screen reader reads a
+  calendar rather than forty-two buttons. **On touch it does nothing at all**: a
+  phone's own date wheel is better than any popover, it is what people there expect,
+  and it does not take the viewport. Opt out per field with `data-no-datepicker`.
 - **Buttons in flight** — `.btn.is-loading` swaps the button's own glyph for a
   spinner and stops it taking clicks. One `submit` listener on the document covers
   every form in the app, including ones written later; `event.submitter` picks the

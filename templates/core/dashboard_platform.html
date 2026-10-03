@@ -1,30 +1,28 @@
 {% extends "base.html" %}
 
 {% comment %}
-The platform owner's front page: every school as a card you open.
+The platform owner's dashboard.
 
-This used to be a table of counts, which was the wrong shape for the job. The
-platform owner does not arrive here to read numbers; they arrive to pick a school
-and do something to it -- change a plan, switch a module on, see why a campus has
-no term. So the school is the unit, the whole card is the target, and the counts
-that were the page are now a strip above it.
+Theirs again, and a screen of its own. For a while it and the schools grid shared
+`/platform/`, which gave their sidebar a Dashboard row and a Schools row pointing
+at one page -- so both lit up at once, and clicking either left the other
+highlighted. Two URLs is the fix.
 
-Each card carries the school's own logo and name. It also carries a chip per
-switchable module, on and off both shown, because "which schools are paying for
-admissions?" is a question this screen should answer without opening anything.
+What belongs here rather than on the grid: the size of the platform, and the
+schools that need a look. Thirty cards do not tell you which school has no current
+term; this does. Everything else is one click away.
 {% endcomment %}
 
 {% block page_subtitle %}
   <p class="truncate text-sm text-ink-600">
-    {{ school_count }} school{{ school_count|pluralize }} on the platform
-    &middot; {{ role_label }}
+    {{ school_count }} school{{ school_count|pluralize }}
+    &middot; {{ active_student_count }} student{{ active_student_count|pluralize }} enrolled
   </p>
 {% endblock %}
 
 {% block page_actions %}
-  <a href="{% url 'admin:schools_school_changelist' %}"
-     class="btn btn-secondary text-sm">
-    <span class="hidden sm:inline">Django</span> admin
+  <a href="{% url 'core:platform_schools' %}" class="btn btn-primary text-sm">
+    <span class="hidden sm:inline">All</span> schools
   </a>
 {% endblock %}
 
@@ -32,8 +30,8 @@ admissions?" is a question this screen should answer without opening anything.
 <div class="space-y-5">
 
   {% comment %}
-  The product's own mark, not a tenant's: this is the one screen where the
-  reader works for SCHOOLCORD rather than for a school.
+  The product's own mark, not a tenant's: this is the one screen where the reader
+  works for SCHOOLCORD rather than for a school.
   {% endcomment %}
   <div class="card flex items-center gap-4 px-5 py-4">
     {% include "partials/_brand_mark.html" with size="size-12" %}
@@ -44,100 +42,152 @@ admissions?" is a question this screen should answer without opening anything.
   </div>
 
   <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-    <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Schools</div>
+    <a href="{% url 'core:platform_schools' %}" class="card card-interactive group p-5">
+      <div class="flex items-center gap-1.5 text-sm font-medium text-ink-600">
+        Schools
+        {% include "partials/_tile_arrow.html" %}
+      </div>
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ school_count }}</div>
-    </div>
+    </a>
     <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Branches</div>
+      <div class="text-sm font-medium text-ink-600">Campuses</div>
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ branch_count }}</div>
     </div>
     <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Students</div>
-      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ student_count }}</div>
+      <div class="text-sm font-medium text-ink-600">Students enrolled</div>
+      <div class="numeric mt-2 text-3xl font-semibold text-brand-900">
+        {{ active_student_count }}
+      </div>
+      {% if student_count != active_student_count %}
+        <div class="mt-1 text-xs text-ink-500">
+          {{ student_count }} on the roll, including withdrawn
+        </div>
+      {% endif %}
     </div>
-    <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Accounts</div>
+    <a href="{% url 'staff:list' %}" class="card card-interactive group p-5">
+      <div class="flex items-center gap-1.5 text-sm font-medium text-ink-600">
+        Accounts
+        {% include "partials/_tile_arrow.html" %}
+      </div>
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ user_count }}</div>
-    </div>
+    </a>
   </div>
 
-  <div class="flex items-baseline justify-between gap-3 pt-1">
-    <h2 class="text-sm font-semibold text-ink-900">Schools</h2>
-    <p class="text-xs text-ink-500">Open a school to change its plan or its features</p>
-  </div>
-
-  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-    {% for card in cards %}
-      <a href="{% url 'core:platform_school' card.school.pk %}"
-         class="card card-interactive group flex flex-col p-5">
-        <div class="flex items-start gap-3">
-          {% include "partials/_school_logo.html" with school=card.school size="size-12" %}
-          <div class="min-w-0 flex-1">
-            <p class="flex items-center gap-1.5 text-base font-semibold text-ink-900">
-              <span class="truncate">{{ card.school.name }}</span>
-              {% include "partials/_tile_arrow.html" %}
-            </p>
-            <p class="numeric truncate text-xs text-ink-500">/{{ card.school.slug }}/</p>
-          </div>
-        </div>
-
-        <div class="mt-4 flex flex-wrap items-center gap-2">
-          <span class="chip">{{ card.school.get_plan_display }}</span>
-          <span class="status-pill
-                       {% if card.school.is_active %}status-paid{% else %}status-overdue{% endif %}">
-            {{ card.school.get_status_display }}
-          </span>
-        </div>
-
-        <dl class="mt-4 grid grid-cols-3 gap-3 border-t border-ink-200 pt-3">
-          <div>
-            <dt class="text-xs text-ink-500">Campuses</dt>
-            <dd class="numeric text-lg font-semibold text-brand-900">
-              {{ card.school.branches_count }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs text-ink-500">Students</dt>
-            <dd class="numeric text-lg font-semibold text-brand-900">
-              {{ card.school.students_count }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs text-ink-500">Accounts</dt>
-            <dd class="numeric text-lg font-semibold text-brand-900">
-              {{ card.school.staff_count }}
-            </dd>
-          </div>
-        </dl>
-
-        {% comment %}
-        On and off are both shown, and each is labelled. A card that listed only
-        what was on would leave the reader unable to tell a school without
-        admissions from a school whose chips had not loaded -- and the dot is
-        paired with the word, never the only signal.
-        {% endcomment %}
-        <div class="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-ink-200 pt-3">
-          {% for module in card.modules %}
-            <span class="flex items-center gap-1.5 text-xs
-                         {% if module.enabled %}text-ink-700{% else %}text-ink-400{% endif %}">
-              <span class="status-dot {% if module.enabled %}status-dot-paid{% else %}bg-ink-300{% endif %}"
-                    aria-hidden="true"></span>
-              {{ module.label }}
-              <span class="font-semibold">{% if module.enabled %}on{% else %}off{% endif %}</span>
-            </span>
-          {% endfor %}
-        </div>
-      </a>
-    {% empty %}
-      <div class="card empty-state sm:col-span-2 xl:col-span-3">
-        <p class="text-base font-medium text-ink-700">No schools on the platform yet</p>
-        <p class="mx-auto mt-1 max-w-md text-sm">
-          A school appears here the moment somebody signs one up.
+  {# ===== What needs a look ============================================== #}
+  <section class="card overflow-hidden">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b
+                border-ink-200 px-5 py-4">
+      <div>
+        <h2 class="text-sm font-semibold text-ink-900">Needs a look</h2>
+        <p class="mt-0.5 text-xs text-ink-500">
+          A campus with no current term cannot be billed, and a school with no
+          students has not finished setting up.
         </p>
       </div>
-    {% endfor %}
-  </div>
+      {% if needs_attention %}
+        <span class="status-pill status-partial">
+          {{ needs_attention|length }} of {{ school_count }}
+        </span>
+      {% else %}
+        <span class="status-pill status-paid">
+          <span class="status-dot status-dot-paid" aria-hidden="true"></span>
+          All settled
+        </span>
+      {% endif %}
+    </div>
+
+    {% if needs_attention %}
+      <ul class="divide-y divide-ink-200">
+        {% for row in needs_attention %}
+          <li>
+            <a href="{% url 'core:platform_school' row.school.pk %}"
+               class="group flex flex-wrap items-center gap-4 px-5 py-4
+                      transition-colors hover:bg-ink-50">
+              {% include "partials/_school_logo.html" with school=row.school size="size-10" %}
+              <div class="min-w-0 flex-1">
+                <p class="flex items-center gap-1.5 truncate text-sm font-semibold
+                          text-ink-900">
+                  {{ row.school.name }}
+                  {% include "partials/_tile_arrow.html" %}
+                </p>
+                <p class="mt-1 flex flex-wrap items-center gap-1.5">
+                  {% if row.is_suspended %}
+                    <span class="status-pill status-overdue">
+                      {{ row.school.get_status_display }}
+                    </span>
+                  {% endif %}
+                  {% if row.campuses_without_a_term %}
+                    <span class="status-pill status-partial">
+                      {{ row.campuses_without_a_term }}
+                      campus{{ row.campuses_without_a_term|pluralize:"es" }}
+                      with no current term
+                    </span>
+                  {% endif %}
+                  {% if row.has_no_students %}
+                    <span class="status-pill status-unpaid">No students yet</span>
+                  {% endif %}
+                </p>
+              </div>
+              <div class="shrink-0 text-right">
+                <div class="numeric text-sm font-semibold text-ink-900">
+                  {{ row.school.students_count }}
+                </div>
+                <div class="text-xs text-ink-500">students</div>
+              </div>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="px-5 py-8 text-center text-sm text-ink-500">
+        {% if school_count %}
+          Every school has a current term at every campus and students on its
+          roster. Nothing here needs you.
+        {% else %}
+          No schools on the platform yet. One appears the moment somebody signs
+          one up.
+        {% endif %}
+      </p>
+    {% endif %}
+  </section>
+
+  {# ===== Newest ========================================================= #}
+  {% if recent_schools %}
+    <section class="card overflow-hidden">
+      <div class="flex items-center justify-between gap-3 border-b border-ink-200
+                  px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink-900">Most recently signed up</h2>
+        <a href="{% url 'core:platform_schools' %}" class="btn btn-secondary text-xs">
+          All schools
+        </a>
+      </div>
+      <ul class="divide-y divide-ink-200">
+        {% for school in recent_schools %}
+          <li>
+            <a href="{% url 'core:platform_school' school.pk %}"
+               class="group flex items-center gap-4 px-5 py-3 transition-colors
+                      hover:bg-ink-50">
+              {% include "partials/_school_logo.html" with school=school size="size-9" %}
+              <div class="min-w-0 flex-1">
+                <p class="flex items-center gap-1.5 truncate text-sm font-medium
+                          text-ink-900">
+                  {{ school.name }}
+                  {% include "partials/_tile_arrow.html" %}
+                </p>
+                <p class="text-xs text-ink-500">
+                  Joined {{ school.created_at|date:"j F Y" }}
+                  &middot; {{ school.get_plan_display }}
+                </p>
+              </div>
+              <span class="numeric shrink-0 text-xs text-ink-500">
+                {{ school.branches_count }} campus{{ school.branches_count|pluralize:"es" }}
+              </span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
 
 </div>
 {% endblock %}

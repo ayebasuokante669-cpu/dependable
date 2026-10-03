@@ -1276,6 +1276,170 @@
     @apply bg-white/20;
   }
 
+  /* --- The date picker ---------------------------------------------------
+     Drawn by static/js/datepicker.js over the real `<input type="date">`, which
+     keeps its name, its value and its validation. Everything here is tokens, so
+     it follows both themes for the same reason a card does.
+
+     The shape is day -> month -> year, two presses to cross a decade, because
+     the complaint it answers was about getting *back* -- a date of birth is
+     years away and the native picker steps a month at a time.
+     ====================================================================== */
+  .dp-wrap {
+    @apply relative block;
+  }
+
+  /* Room for the trigger, so a long value does not run under it. The native
+     indicator goes: two calendar glyphs on one field is a question about which
+     one does what. */
+  .dp-input {
+    padding-right: 2.75rem;
+  }
+
+  .dp-input::-webkit-calendar-picker-indicator {
+    display: none;
+  }
+
+  .dp-trigger {
+    @apply absolute inset-y-0 right-0 grid w-11 place-items-center rounded-md
+           text-ink-400 hover:text-ink-700;
+    transition: color var(--duration-quick) var(--ease-out);
+  }
+
+  .dp-trigger:focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: -2px;
+  }
+
+  .dp-panel {
+    @apply absolute left-0 z-40 mt-1.5 w-[19rem] rounded-lg border border-ink-200
+           bg-surface p-3;
+    top: 100%;
+    box-shadow: var(--shadow-float);
+    animation: dp-in var(--duration-quick) var(--ease-out);
+  }
+
+  /* Flipped when there is no room below, and pinned right for a field near the
+     edge -- both set by the script from a measurement, because CSS cannot know. */
+  .dp-panel-above {
+    top: auto;
+    bottom: 100%;
+    @apply mb-1.5 mt-0;
+  }
+
+  .dp-panel-right {
+    @apply left-auto right-0;
+  }
+
+  .dp-head {
+    @apply mb-2 flex items-center gap-1;
+  }
+
+  .dp-step {
+    @apply grid size-9 shrink-0 place-items-center rounded-md text-ink-500
+           hover:bg-ink-100 hover:text-ink-900;
+    transition: background-color var(--duration-quick) var(--ease-out),
+                color var(--duration-quick) var(--ease-out);
+  }
+
+  /* The label *is* the way out. It is a button, it looks like one on hover, and
+     pressing it zooms from days to months to years. */
+  .dp-zoom {
+    @apply flex-1 rounded-md px-2 py-1.5 text-sm font-semibold text-brand-900
+           hover:bg-ink-100;
+    transition: background-color var(--duration-quick) var(--ease-out);
+  }
+
+  .dp-zoom:disabled {
+    @apply hover:bg-transparent;
+    cursor: default;
+  }
+
+  .dp-step:focus-visible,
+  .dp-zoom:focus-visible,
+  .dp-cell:focus-visible,
+  .dp-foot-btn:focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 1px;
+  }
+
+  .dp-grid {
+    @apply w-full border-collapse;
+  }
+
+  .dp-dow {
+    @apply pb-1 text-center text-[11px] font-semibold uppercase text-ink-400;
+  }
+
+  .dp-day-cell {
+    @apply p-0 text-center;
+  }
+
+  .dp-cell {
+    @apply grid place-items-center rounded-md text-sm text-ink-800;
+    transition: background-color var(--duration-quick) var(--ease-out),
+                color var(--duration-quick) var(--ease-out);
+  }
+
+  .dp-day {
+    @apply mx-auto size-9 tabular-nums;
+  }
+
+  .dp-cell:hover:not(:disabled) {
+    @apply bg-ink-100;
+  }
+
+  .dp-cell:disabled {
+    @apply text-ink-300;
+    cursor: default;
+  }
+
+  /* A day from the month either side. Dimmed rather than blank: the week it
+     completes is a real week, and an empty cell reads as a gap in the calendar. */
+  .dp-outside {
+    @apply text-ink-400;
+  }
+
+  /* Today, marked with a ring rather than a fill, so it cannot be mistaken for
+     the selection. */
+  .dp-today:not(.dp-selected) {
+    box-shadow: inset 0 0 0 1.5px var(--color-brand-300);
+    @apply font-semibold text-brand-800;
+  }
+
+  .dp-cell.dp-selected {
+    @apply bg-accent font-semibold text-on-accent;
+  }
+
+  .dp-cell.dp-selected:hover {
+    @apply bg-accent-hover;
+  }
+
+  /* The month and year grids: three across, which is the shape both use so the
+     eye does not have to relearn it between them. */
+  .dp-chunks {
+    @apply grid grid-cols-3 gap-1.5 py-1;
+  }
+
+  .dp-chunk {
+    @apply h-10 tabular-nums;
+  }
+
+  .dp-foot {
+    @apply mt-2 flex items-center justify-between gap-2 border-t border-ink-200 pt-2;
+  }
+
+  .dp-foot-btn {
+    @apply rounded-md px-2.5 py-1.5 text-xs font-semibold text-brand-700
+           hover:bg-ink-100;
+    transition: background-color var(--duration-quick) var(--ease-out);
+  }
+
+  .dp-foot-btn:disabled {
+    @apply text-ink-300 hover:bg-transparent;
+    cursor: default;
+  }
+
   /* --- The guided tour ---------------------------------------------------
      Driver.js ships its own popover styling (static/css/vendor/driver.css); this
      re-points it at the design tokens so a stop on the tour looks like the app it
@@ -2703,6 +2867,19 @@
   100% {
     transform: scale(2.6);
     opacity: 0;
+  }
+}
+
+/* The panel arriving. Short, because it is a popover rather than a page, and it
+   is cut entirely by the global reduced-motion rule near the top of this file. */
+@keyframes dp-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

@@ -16,6 +16,14 @@ urlpatterns = [
 
     # One per role -- see navigation.ROLE_HOME, which decides who lands where.
     path("platform/", views.PlatformOverviewView.as_view(), name="platform_overview"),
+    # The grid, on a URL of its own. It shared /platform/ with the dashboard
+    # above for a while, which gave the sidebar two rows pointing at one screen
+    # and lit both of them -- see PlatformOverviewView.
+    path(
+        "platform/schools/",
+        views.PlatformSchoolListView.as_view(),
+        name="platform_schools",
+    ),
     # The platform owner opens a school from the cards above. Both are gated on
     # MANAGE_SCHOOL_MODULES rather than on the role, so a proprietor typing either
     # gets a 403 -- see PlatformSchoolView.

@@ -355,16 +355,22 @@ class RoleDashboardMixin(LoginRequiredMixin):
 
 
 class PlatformOverviewView(RoleDashboardMixin, TemplateView):
-    """Every school on the platform, as a card you open.
+    """The platform owner's dashboard: the size of the platform, and what needs a look.
 
-    The platform owner's job is not reading a table of counts; it is picking a
-    school and doing something to it. So each school is a card with its own logo
-    and name, and the card is the link -- into :class:`PlatformSchoolView`, where
-    the plan, the campuses and the module switches are.
+    Theirs again, and a screen of its own. It was briefly folded into the schools
+    grid, because for a while the two were one URL -- and that was the bug: their
+    sidebar carried a Dashboard row and a Schools row both resolving to
+    ``/platform/``, so both lit up at once and clicking one left the other
+    highlighted. Two screens with two URLs is the fix; one row each, and nothing
+    for the tie-break to guess at.
+
+    What belongs here rather than on the grid: the four counts, and the schools
+    that need attention. A list of thirty cards does not tell you which one has no
+    current term; this does, and the grid is one click away for everything else.
 
     Platform scope means the managers here filter nothing, which is the question
-    this screen asks. It is also why every count below is a plain
-    ``.count()`` and still right.
+    this screen asks, and is why every count below is a plain ``.count()`` and
+    still right.
     """
 
     template_name = "core/dashboard_platform.html"
@@ -378,6 +384,66 @@ class PlatformOverviewView(RoleDashboardMixin, TemplateView):
         context["branch_count"] = Branch.objects.count()
         context["user_count"] = User.objects.count()
         context["student_count"] = Student.objects.count()
+        context["active_student_count"] = Student.objects.filter(
+            status=StudentStatus.ACTIVE
+        ).count()
+
+        schools = list(
+            School.objects.annotate(
+                branches_count=Count("branches", distinct=True),
+                students_count=Count(
+                    "students_student_set",
+                    filter=Q(students_student_set__status=StudentStatus.ACTIVE),
+                    distinct=True,
+                ),
+            ).order_by("name")
+        )
+
+        # Which campuses have a current term, in one query rather than one per
+        # school. A campus without one cannot be billed, which is the single most
+        # useful thing this screen can surface.
+        priced_branches = set(
+            Term.objects.filter(is_current=True).values_list("branch_id", flat=True)
+        )
+        unpriced: dict[int, int] = {}
+        for branch_id, school_id in Branch.objects.values_list("id", "school_id"):
+            if branch_id not in priced_branches:
+                unpriced[school_id] = unpriced.get(school_id, 0) + 1
+
+        context["needs_attention"] = [
+            {
+                "school": school,
+                "campuses_without_a_term": unpriced.get(school.pk, 0),
+                "has_no_students": school.students_count == 0,
+                "is_suspended": not school.is_active,
+            }
+            for school in schools
+            if unpriced.get(school.pk)
+            or school.students_count == 0
+            or not school.is_active
+        ]
+        context["settled_count"] = len(schools) - len(context["needs_attention"])
+        context["recent_schools"] = sorted(
+            schools, key=lambda s: s.created_at, reverse=True
+        )[:5]
+        context["page_title"] = "Platform overview"
+        return context
+
+
+class PlatformSchoolListView(RoleDashboardMixin, TemplateView):
+    """Every school on the platform, as a card you open.
+
+    Split out of the dashboard above so each has a URL of its own -- see the note
+    there. ``RoleDashboardMixin`` rather than a capability: this is the platform's
+    own screen and no school role should land on it, which is the mixin's job.
+    """
+
+    template_name = "core/platform_schools.html"
+    home_url_name = "core:platform_overview"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        User = get_user_model()
 
         schools = list(
             School.objects.annotate(
@@ -402,6 +468,7 @@ class PlatformOverviewView(RoleDashboardMixin, TemplateView):
             {"school": school, "modules": _module_chips(decided.get(school.pk, {}))}
             for school in schools
         ]
+        context["school_count"] = len(schools)
         context["page_title"] = "Schools"
         return context
 
@@ -878,7 +945,21 @@ def onboarding_steps(request) -> list[dict]:
             "key": "staff",
             "label": "Invite staff",
             "description": "Principals and bursars, each with their own access.",
-            "url": reverse("admin:accounts_user_changelist"),
+            # The school's own screen, not the Django admin.
+            #
+            # This was the last admin URL left in a place a school user would
+            # click, and it failed the same way Branches, Staff and Terms did
+            # before them: a proprietor's account is deliberately not
+            # ``is_staff``, so step 4 of their own setup sent them to the admin
+            # login -- being asked to authorise, on a site they were already
+            # signed in to, to finish setting up their own school. Letting them
+            # into the admin would have been worse: it is not tenant-scoped.
+            #
+            # /staff/ is capability-gated instead, so a role that may not invite
+            # gets a 403 with a toast rather than a login form. See
+            # apps/core/tests_role_access.py, which exists because of that class
+            # of bug.
+            "url": reverse("staff:list"),
             # The owner themselves does not count as having invited anybody.
             "done": User.scoped.count() > 1,
             "count": max(User.scoped.count() - 1, 0),
