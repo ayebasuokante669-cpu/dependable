@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from django.contrib.auth import get_user_model
 from django.db import connection, models
+from django.db.models.signals import post_migrate
 from django.test import TestCase
 
 from apps.core.models import TenantScopedModel
@@ -23,7 +24,7 @@ class ScopedThing(TenantScopedModel):
     """A stand-in for a real feature model (student, invoice, message).
 
     Declared here rather than shipped in ``models.py`` so the scaffold carries
-    no junk table, with its table created and dropped around the test run.
+    no junk table and no migration.
     """
 
     name = models.CharField(max_length=50)
@@ -33,22 +34,36 @@ class ScopedThing(TenantScopedModel):
         abstract = False
 
 
+def _create_the_stand_in_table(sender, **kwargs):
+    """Give ``ScopedThing`` a table for the whole test run, once.
+
+    It used to be created in ``TenancyTestCase.setUpClass`` and dropped in
+    ``tearDownClass``, which was fine for the tests in this file and a landmine
+    for everyone else: defining the model registers a ``school`` foreign key, so
+    *any* ``School`` cascade anywhere in the suite walks into this table, and
+    outside this one test case it did not exist. Nothing had ever deleted a
+    school, so nothing had found out -- see apps/schools/tests_teardown.py,
+    which does.
+
+    Hooked on ``post_migrate``, which the test runner fires when it builds the
+    test database, after the test modules have been imported. In production this
+    module is never imported, so the receiver is never connected and no junk
+    table is created -- which was the point of declaring the model here in the
+    first place.
+    """
+    if sender.label != "core":
+        return
+    if ScopedThing._meta.db_table in connection.introspection.table_names():
+        return
+    with connection.schema_editor() as editor:
+        editor.create_model(ScopedThing)
+
+
+post_migrate.connect(_create_the_stand_in_table)
+
+
 class TenancyTestCase(TestCase):
     """Two schools, three branches, one user per role."""
-
-    @classmethod
-    def setUpClass(cls):
-        # Before super(), which opens the class-level atomic and runs
-        # setUpTestData -- both of which need the table to already exist.
-        with connection.schema_editor() as editor:
-            editor.create_model(ScopedThing)
-        super().setUpClass()
-
-    @classmethod
-    def tearDownClass(cls):
-        super().tearDownClass()
-        with connection.schema_editor() as editor:
-            editor.delete_model(ScopedThing)
 
     @classmethod
     def setUpTestData(cls):

@@ -153,6 +153,25 @@ instead — correct if receipts should not be hotlinkable, and then
 so the bucket can be shared; leave the prefix *out* of the public base URL if you
 set it, because django-storages appends it.
 
+#### Every one of them is read at runtime, never at build time
+
+`MEDIA_BUCKET_NAME` is read once, in `config/settings/base.py`, with
+`os.environ.get(..., "")` — so an absent variable is not an error, it is the
+filesystem backend. Nothing in `railpack.json`, `nixpacks.toml` or the `Procfile`
+asks for it: the build installs dependencies and nothing else, and `collectstatic`
+runs in the start command rather than at build time (see the `Procfile`'s own note
+on why).
+
+That matters because of how it fails. If a Railway build stops with **`secret
+MEDIA_BUCKET_NAME not found`**, nothing in this repository caused it and nothing
+here can fix it — the builder is handed the service's variables, and one of them
+cannot be resolved. In the Railway dashboard, under the service's **Variables**,
+look for `MEDIA_*` entries whose value is a *reference* (`${{shared.…}}`,
+`${{SomeService.…}}`) pointing at a shared variable or service that does not exist
+in that environment. Replace the reference with the literal value from the table
+above, or delete the entry and re-add it. A variable that is simply unset is
+harmless; a variable that is set to an unresolvable reference is not.
+
 #### Three settings that are not boto3's defaults
 
 Each one is a thing Supabase does differently, and each one fails confusingly if
@@ -177,7 +196,7 @@ fallback initial has been showing in the meantime rather than a broken image.
 python manage.py test apps
 ```
 
-1,397 tests in all. The first of them cover the parts that must never regress:
+1,421 tests in all. The first of them cover the parts that must never regress:
 what each role can see, what each role may change,
 that a fee total always equals its live line items,
 that a student's expected fee is always read from their class rather than stored
@@ -204,6 +223,19 @@ to the filesystem while static files stay on whitenoise, that each deployment ch
 fires only when it should, that `mailcheck` reports and sends and fails loudly when
 the welcome would be skipped, and that the date picker reaches every date field,
 leaves the real input alone and bows out on touch.
+
+Closing a school from the admin adds 24, and the ones that matter are the
+negatives: that every `PROTECT` is still a `PROTECT` -- a class with students on
+it, a student with payments, a term with payments and a plain `School.delete()`
+are all still refused -- that a teardown which cannot finish leaves the school
+and its payments exactly as they were, that one school's teardown cannot reach
+another's rows, that a staff account without delete permission on payments is
+refused the page *and* the POST, and that a school owner cannot reach the delete
+view at all. Writing them turned up a landmine: the tenancy suite registers a
+stand-in model with a `school` foreign key and used to create its table for the
+length of one test case, so any `School` cascade elsewhere in the suite walked
+into a table that did not exist. Nothing had ever deleted a school, so nothing
+had found out.
 
 Extending the import to classes, subjects and fee structures adds 124, and the
 three that matter most are structural: that every column key on every sheet is a
@@ -2974,6 +3006,48 @@ Schools, branches and users are editable at `/admin/` immediately.
 `TenantScopedAdminMixin` narrows both the changelists and the foreign-key
 dropdowns, so a school owner cannot see — or reassign a row to — another tenant.
 Django superusers bypass it.
+
+### Deleting a school is one confirmation, not forty
+
+Four foreign keys in this codebase are `PROTECT`, and each is right: a student
+with payments against their name must not vanish from under the money, a term
+with payments against it is history, a class with students on it must not
+disappear from under them, and a WhatsApp template that has carried messages is
+retired by status rather than deleted.
+
+Those rules made deleting a *school* unusable. Django's delete view walks the
+graph, meets the first `PROTECT`, lists the rows and offers **no button** — so
+the only way through was to go and empty the payments by hand, then the students,
+then the classes, one changelist at a time.
+
+Closing a tenant is a different decision from tidying one, so the exception lives
+in `apps/schools/teardown.py` and nowhere near the models:
+
+- **The question is asked once.** `SchoolAdmin.get_deleted_objects` returns
+  counts and an empty `protected`, so the page confirms instead of refusing. It
+  counts rather than lists, because a school with four hundred students and two
+  thousand payments turns "are you sure" into a page nobody reads to the bottom
+  of.
+- **The order is read off the database, not written down here.**
+  `ProtectedError` names exactly which rows stood in the way, so the teardown
+  deletes those and tries again. A fifth `PROTECT` added next year is handled
+  without anybody remembering this file — which is the failure being fixed, so
+  it is the one worth designing out rather than re-creating one list further
+  down.
+- **All or nothing**, in one transaction. A school half closed — students alive
+  with no school to belong to — is worse than either outcome. A bounded pass
+  count means a cycle fails loudly and changes nothing.
+- **`School.delete()` itself is untouched**, and still raises `ProtectedError`.
+  Only the teardown goes through, so nothing that calls `delete()` by accident
+  takes a tenant with it.
+- **No new power.** `perms_needed` is still computed Django's way, so a staff
+  account that may not delete payments does not acquire that right by going
+  through a school. And `bootstrap_tenant` grants a school owner `view` and
+  `change` on their own school, never `delete` — the teardown is the platform's.
+
+The confirmation page points at the reversible alternative, because the screen
+people reach by accident is this one: setting a school's **status** to Cancelled
+or Suspended keeps every record.
 
 ## Layout of the code
 

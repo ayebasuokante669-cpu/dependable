@@ -1,8 +1,12 @@
+from collections import Counter
+
 from django.contrib import admin
+from django.db import transaction
 from django.utils.html import format_html
 
 from apps.core.admin import TenantScopedAdminMixin
 
+from . import teardown
 from .models import Branch, School, SchoolModule, SchoolStatus
 
 _STATUS_COLOURS = {
@@ -57,6 +61,73 @@ class SchoolAdmin(TenantScopedAdminMixin):
     @admin.display(description="Users")
     def user_count(self, obj):
         return obj.users.count()
+
+    # -- deletion ----------------------------------------------------------
+    #
+    # Deleting a school is closing a tenant, and the four PROTECT foreign keys
+    # in this codebase made that impossible from here: Django's delete view met
+    # the first one, listed the protected rows, and offered no button. The way
+    # through was to empty the payments by hand, then the students, then the
+    # classes, one changelist at a time.
+    #
+    # So the question is asked once and the whole school goes. The PROTECTs stay
+    # exactly as they are on the models, where they guard the everyday case of
+    # somebody tidying one class; apps/schools/teardown.py explains why that is
+    # the right place for them and this is the right place for the exception.
+
+    def get_deleted_objects(self, objs, request):
+        """Counts and one button, instead of a refusal and a list.
+
+        The stock implementation walks the graph and puts every PROTECTed row in
+        ``protected``, which is what makes the template hide the confirm button.
+        Nothing is protected *from this operation* -- the teardown removes those
+        rows deliberately, in the order the database asks for -- so ``protected``
+        comes back empty and the page can be confirmed.
+
+        ``perms_needed`` is still computed the way Django computes it. A staff
+        account that may not delete payments must not acquire that power by
+        going through a school, and dropping the check to simplify this would
+        have been a quiet privilege escalation.
+        """
+        counts: dict[str, int] = {}
+        perms_needed: set[str] = set()
+
+        for school in objs:
+            for label, count in teardown.summarise(school):
+                counts[label] = counts.get(label, 0) + count
+
+        for relation, model in teardown.countable_relations():
+            opts = model._meta
+            if request.user.has_perm(f"{opts.app_label}.delete_{opts.model_name}"):
+                continue
+            if any(
+                model._base_manager.filter(
+                    **{relation.field.name: school}
+                ).exists()
+                for school in objs
+            ):
+                perms_needed.add(str(opts.verbose_name))
+
+        return [str(school) for school in objs], counts, perms_needed, []
+
+    def delete_model(self, request, obj):
+        removed = teardown.remove(obj)
+        # Said out loud, because the admin's own "was deleted successfully"
+        # names only the school. Whoever closes a tenant should be able to see
+        # from the message log what went with it.
+        self.message_user(request, teardown.describe(removed))
+
+    def delete_queryset(self, request, queryset):
+        # One transaction across the whole selection, for the same reason a
+        # single teardown is atomic: three schools closed and the fourth refused
+        # is the state hardest to reason about afterwards.
+        removed: Counter = Counter()
+        with transaction.atomic():
+            # Resolved to a list first: the rows are about to be deleted from
+            # under the queryset that found them.
+            for school in list(queryset):
+                removed.update(teardown.remove(school))
+        self.message_user(request, teardown.describe(removed))
 
 
 @admin.register(Branch)

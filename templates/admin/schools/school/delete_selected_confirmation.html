@@ -1,0 +1,55 @@
+{% extends "admin/delete_selected_confirmation.html" %}
+{% load i18n l10n %}
+
+{% comment %}
+The same question for several schools at once.
+
+The stock template keeps its whole body in one `content` block with no inner
+hook, so this replaces `content` rather than a part of it. The permission branch
+is carried over unchanged; the protected branch is gone because
+SchoolAdmin.get_deleted_objects never returns anything protected — the teardown
+removes those rows deliberately.
+{% endcomment %}
+
+{% block content %}
+{% if perms_lacking %}
+  <p>{% blocktranslate %}Deleting the selected {{ objects_name }} would result in deleting related objects, but your account doesn't have permission to delete the following types of objects:{% endblocktranslate %}</p>
+  <ul>{{ perms_lacking|unordered_list }}</ul>
+{% else %}
+  <p>Delete these schools and everything belonging to them?</p>
+
+  <ul id="deleted-objects">
+    {% for school in queryset %}<li>{{ school }}</li>{% endfor %}
+  </ul>
+
+  <p style="max-width:46em">
+    This closes each tenant. Their campuses, classes, subjects, terms, fee
+    structures, students, <strong>payment records</strong>, messages and staff
+    accounts all go with them, in one step — you will not be asked about them
+    individually.
+  </p>
+
+  <ul class="messagelist" style="margin-left:0">
+    <li class="warning" style="list-style:none">
+      This cannot be undone, and the payment history is not recoverable from
+      anywhere else. If a school is only leaving for now, set its
+      <strong>status</strong> to Cancelled or Suspended instead — that keeps
+      every record and can be reversed.
+    </li>
+  </ul>
+
+  {% include "admin/includes/object_delete_summary.html" %}
+
+  <form method="post">{% csrf_token %}
+    <div>
+      {% for obj in queryset %}
+        <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk|unlocalize }}">
+      {% endfor %}
+      <input type="hidden" name="action" value="delete_selected">
+      <input type="hidden" name="post" value="yes">
+      <input type="submit" value="{% translate 'Yes, delete them and all of their records' %}">
+      <a href="#" class="button cancel-link">{% translate "No, take me back" %}</a>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

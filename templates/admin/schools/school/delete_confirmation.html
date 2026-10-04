@@ -1,0 +1,52 @@
+{% extends "admin/delete_confirmation.html" %}
+{% load i18n %}
+
+{% comment %}
+Closing a tenant, asked once.
+
+The stock page is written for deleting a record, and it has two problems here.
+It refused outright, because four foreign keys in this codebase are PROTECT and
+Django's delete view will not offer a button past one — see
+apps/schools/teardown.py for why those PROTECTs are right and why this is the
+exception. And when it did not refuse, it listed every object by name, which for
+a real school is thousands of lines and turns the only question being asked into
+a page nobody reads to the bottom of.
+
+So: one sentence about what this means, the counts, and the button. Only the
+`delete_confirm` block is replaced; the permission and protected branches above
+it are the stock ones, untouched, because nothing about them is wrong.
+{% endcomment %}
+
+{% block delete_confirm %}
+  <p>
+    {% blocktranslate with escaped_object=object %}Delete the school "{{ escaped_object }}" and everything belonging to it?{% endblocktranslate %}
+  </p>
+
+  <p style="max-width:46em">
+    This closes the tenant. Its campuses, classes, subjects, terms, fee
+    structures, students, <strong>payment records</strong>, messages and staff
+    accounts all go with it, in one step — you will not be asked about them
+    individually.
+  </p>
+
+  <ul class="messagelist" style="margin-left:0">
+    <li class="warning" style="list-style:none">
+      This cannot be undone, and the payment history is not recoverable from
+      anywhere else. If the school is only leaving for now, set its
+      <strong>status</strong> to Cancelled or Suspended instead — that keeps
+      every record and can be reversed.
+    </li>
+  </ul>
+
+  {% include "admin/includes/object_delete_summary.html" %}
+
+  <form method="post">{% csrf_token %}
+    <div>
+      <input type="hidden" name="post" value="yes">
+      {% if is_popup %}<input type="hidden" name="{{ is_popup_var }}" value="1">{% endif %}
+      {% if to_field %}<input type="hidden" name="{{ to_field_var }}" value="{{ to_field }}">{% endif %}
+      <input type="submit" value="{% translate 'Yes, delete the school and all of it' %}">
+      <a href="#" class="button cancel-link">{% translate "No, take me back" %}</a>
+    </div>
+  </form>
+{% endblock %}
