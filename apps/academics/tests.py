@@ -1,7 +1,8 @@
 """Tests for the academic-setup layer.
 
 Two things must hold: a user only ever sees their own branch's classes and
-subjects, and only owner/principal-level roles can change them.
+subjects, and only the school owner (and the platform) can change them. A
+principal reads them; so does a bursar.
 """
 
 from __future__ import annotations
@@ -144,10 +145,15 @@ class CapabilityTests(TestCase):
     # An unsaved User instance already reports is_authenticated == True, so
     # these need no database and no login.
 
-    def test_owner_and_principal_can_manage_academics(self):
-        for role in (Role.PLATFORM_OWNER, Role.SCHOOL_OWNER, Role.PRINCIPAL):
+    def test_only_owners_can_manage_academics(self):
+        for role in (Role.PLATFORM_OWNER, Role.SCHOOL_OWNER):
             user = User(role=role, is_active=True)
             self.assertTrue(has_capability(user, Capability.MANAGE_ACADEMICS), role)
+
+    def test_principal_may_view_but_not_manage(self):
+        user = User(role=Role.PRINCIPAL)
+        self.assertTrue(has_capability(user, Capability.VIEW_ACADEMICS))
+        self.assertFalse(has_capability(user, Capability.MANAGE_ACADEMICS))
 
     def test_bursar_may_view_but_not_manage(self):
         user = User(role=Role.BURSAR)
@@ -177,13 +183,15 @@ class ViewScopingTests(AcademicsTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["classes"]), [self.north_jss1])
 
-    def test_editing_another_branchs_class_is_a_404_not_a_403(self):
-        """The row is invisible, so it must look absent rather than forbidden."""
+    def test_a_principal_cannot_edit_any_class(self):
+        """Refused on the capability before the row is looked up, so their own
+        campus's class and another's get the same 403."""
         self.client.force_login(self.north_principal)
-        response = self.client.get(
-            reverse("academics:class_update", args=[self.south_jss1.pk])
-        )
-        self.assertEqual(response.status_code, 404)
+        for klass in (self.north_jss1, self.south_jss1):
+            response = self.client.get(
+                reverse("academics:class_update", args=[klass.pk])
+            )
+            self.assertEqual(response.status_code, 403)
 
     def test_editing_another_schools_class_is_a_404(self):
         self.client.force_login(self.alpha_owner)
@@ -193,10 +201,10 @@ class ViewScopingTests(AcademicsTestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_subject_form_only_offers_classes_in_scope(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         response = self.client.get(reverse("academics:subject_create"))
         offered = set(response.context["form"].fields["classes"].queryset)
-        self.assertEqual(offered, {self.north_jss1})
+        self.assertEqual(offered, {self.north_jss1, self.south_jss1})
 
 
 class ViewPermissionTests(AcademicsTestCase):
@@ -240,22 +248,42 @@ class ViewPermissionTests(AcademicsTestCase):
         body = self.client.get(reverse("academics:class_list")).content.decode()
         self.assertNotIn("New class", body)
 
-    def test_principal_sees_the_edit_controls(self):
+    def test_owner_sees_the_edit_controls(self):
         """Asserted by destination rather than by button label.
 
         The list now offers three ways in -- add many, add one, edit all -- and
         their wording is a copy decision that should be free to change. What
-        must hold is that a principal is offered the screens their capability
+        must hold is that the owner is offered the screens their capability
         allows, which is what the URLs say.
         """
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         body = self.client.get(reverse("academics:class_list")).content.decode()
         self.assertIn(reverse("academics:class_create"), body)
         self.assertIn(reverse("academics:class_bulk_create"), body)
         self.assertIn(reverse("academics:class_edit_all"), body)
 
-    def test_principal_can_create_a_class(self):
+    def test_principal_reads_the_list_without_the_edit_controls(self):
         self.client.force_login(self.north_principal)
+        response = self.client.get(reverse("academics:class_list"))
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertNotIn(reverse("academics:class_create"), body)
+        self.assertNotIn(reverse("academics:class_bulk_create"), body)
+        self.assertNotIn(reverse("academics:class_edit_all"), body)
+
+    def test_principal_cannot_create_a_class(self):
+        self.client.force_login(self.north_principal)
+        before = Class.all_objects.count()
+        response = self.client.post(
+            reverse("academics:class_create"),
+            {"branch": self.north.pk, "name": "Primary 4", "level": Level.PRIMARY,
+             "year_in_level": 4, "stream": "", "is_active": "on"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Class.all_objects.count(), before)
+
+    def test_owner_can_create_a_class(self):
+        self.client.force_login(self.alpha_owner)
         response = self.client.post(
             reverse("academics:class_create"),
             {"branch": self.north.pk, "name": "Primary 4", "level": Level.PRIMARY,
@@ -539,8 +567,8 @@ class ClassBulkCreateTests(AcademicsTestCase):
                 data[f"{prefix}-{index}-{field}"] = entry.get(field, "")
         return data
 
-    def test_the_principal_can_add_several_classes_in_one_post(self):
-        self.client.force_login(self.north_principal)
+    def test_the_owner_can_add_several_classes_in_one_post(self):
+        self.client.force_login(self.alpha_owner)
         before = Class.all_objects.filter(branch=self.north).count()
 
         response = self.client.post(
@@ -561,7 +589,7 @@ class ClassBulkCreateTests(AcademicsTestCase):
         )
 
     def test_the_level_and_year_are_filled_in_from_the_name(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         self.client.post(
             reverse(self.url),
             {"branch": str(self.north.pk), **self.rows({"name": "Primary 5"})},
@@ -572,7 +600,7 @@ class ClassBulkCreateTests(AcademicsTestCase):
 
     def test_a_typed_level_beats_the_guess(self):
         """The inference is a default, so an explicit choice must win."""
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         self.client.post(
             reverse(self.url),
             {
@@ -586,7 +614,7 @@ class ClassBulkCreateTests(AcademicsTestCase):
         self.assertEqual(klass.level, Level.JUNIOR_SECONDARY)
 
     def test_blank_rows_are_ignored_rather_than_rejected(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         response = self.client.post(
             reverse(self.url),
             {
@@ -602,7 +630,7 @@ class ClassBulkCreateTests(AcademicsTestCase):
         )
 
     def test_a_name_that_cannot_be_read_asks_for_the_level(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         response = self.client.post(
             reverse(self.url),
             {"branch": str(self.north.pk), **self.rows({"name": "Butterfly Group"})},
@@ -614,7 +642,7 @@ class ClassBulkCreateTests(AcademicsTestCase):
         self.assertIn("level", response.context["formset"].forms[0].errors)
 
     def test_two_rows_naming_the_same_class_is_a_row_error(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         response = self.client.post(
             reverse(self.url),
             {
@@ -628,7 +656,7 @@ class ClassBulkCreateTests(AcademicsTestCase):
 
     def test_a_row_clashing_with_an_existing_class_is_caught(self):
         """The branch is not a row field, so only the formset can see this."""
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         response = self.client.post(
             reverse(self.url),
             {"branch": str(self.north.pk), **self.rows({"name": "JSS 1"})},
@@ -641,7 +669,7 @@ class ClassBulkCreateTests(AcademicsTestCase):
 
     def test_nothing_is_written_when_one_row_is_bad(self):
         """One transaction: nine of nineteen saved is worse than none."""
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         before = Class.all_objects.count()
         self.client.post(
             reverse(self.url),
@@ -653,7 +681,7 @@ class ClassBulkCreateTests(AcademicsTestCase):
         self.assertEqual(Class.all_objects.count(), before)
 
     def test_save_and_add_more_comes_back_to_the_table(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         url = reverse(self.url)
         response = self.client.post(
             url,
@@ -665,17 +693,21 @@ class ClassBulkCreateTests(AcademicsTestCase):
         )
         self.assertRedirects(response, url)
 
-    def test_a_principal_cannot_add_to_another_campus(self):
-        """The campus select is a scoped queryset, so South is not a choice."""
-        self.client.force_login(self.north_principal)
+    def test_an_owner_cannot_add_to_another_schools_campus(self):
+        """The campus select is a scoped queryset, so Beta's is not a choice."""
+        self.client.force_login(self.alpha_owner)
         response = self.client.post(
             reverse(self.url),
-            {"branch": str(self.south.pk), **self.rows({"name": "Primary 1"})},
+            {"branch": str(self.beta_main.pk), **self.rows({"name": "Primary 1"})},
         )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(
-            Class.all_objects.filter(branch=self.south, name="Primary 1").exists()
+            Class.all_objects.filter(branch=self.beta_main, name="Primary 1").exists()
         )
+
+    def test_a_principal_cannot_reach_it(self):
+        self.client.force_login(self.north_principal)
+        self.assertEqual(self.client.get(reverse(self.url)).status_code, 403)
 
     def test_a_bursar_cannot_reach_it(self):
         self.client.force_login(self.north_bursar)
@@ -713,7 +745,7 @@ class ClassEditAllTests(AcademicsTestCase):
         return data
 
     def test_a_class_is_renamed_without_visiting_its_own_page(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         response = self.client.post(
             reverse(self.url),
             self.rows({
@@ -726,7 +758,7 @@ class ClassEditAllTests(AcademicsTestCase):
         self.assertEqual(self.north_jss1.name, "JSS One")
 
     def test_a_class_can_be_deactivated_rather_than_deleted(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         self.client.post(
             reverse(self.url),
             self.rows({
@@ -741,17 +773,17 @@ class ClassEditAllTests(AcademicsTestCase):
         self.assertTrue(Class.all_objects.filter(pk=self.north_jss1.pk).exists())
 
     def test_the_screen_only_offers_classes_the_user_may_see(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         response = self.client.get(reverse(self.url))
         editing = {form.instance.pk for form in response.context["formset"].forms}
-        self.assertEqual(editing, {self.north_jss1.pk})
+        self.assertEqual(editing, {self.north_jss1.pk, self.south_jss1.pk})
 
     def test_renaming_into_a_clash_at_the_same_campus_is_refused(self):
         other = Class.all_objects.create(
             branch=self.north, name="JSS 2", level=Level.JUNIOR_SECONDARY,
             year_in_level=2,
         )
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         response = self.client.post(
             reverse(self.url),
             self.rows(
@@ -800,7 +832,7 @@ class SubjectBulkCreateTests(AcademicsTestCase):
         return data
 
     def test_several_subjects_are_added_in_one_post(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         response = self.client.post(
             reverse(self.url),
             {
@@ -821,7 +853,7 @@ class SubjectBulkCreateTests(AcademicsTestCase):
         )
 
     def test_the_batch_classes_are_attached_to_every_subject(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         self.client.post(
             reverse(self.url),
             {
@@ -849,7 +881,7 @@ class SubjectBulkCreateTests(AcademicsTestCase):
         self.assertEqual(list(subject.classes.all()), [])
 
     def test_a_subject_the_campus_already_teaches_is_refused(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         response = self.client.post(
             reverse(self.url),
             {"branch": str(self.north.pk), **self.rows({"name": "Mathematics"})},

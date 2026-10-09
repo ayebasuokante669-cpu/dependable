@@ -30,6 +30,7 @@ from django.views.generic import FormView, ListView, TemplateView, View
 
 from django.urls import reverse, reverse_lazy
 
+from apps.core.emails import send_password_changed_email
 from apps.core.navigation import home_url_for
 from apps.core.permissions import (
     Capability,
@@ -112,7 +113,13 @@ class AccountSettingsView(LoginRequiredMixin, TemplateView):
             # A password change rotates the session hash; without this the
             # person who just changed it would be signed out.
             update_session_auth_hash(request, form.user)
-            messages.success(request, "Password changed.")
+            send_password_changed_email(form.user)
+            messages.success(
+                request,
+                f"Password changed. We have emailed {user.email} to let you know."
+                if user.email
+                else "Password changed.",
+            )
             if was_temporary:
                 return HttpResponseRedirect(home_url_for(form.user))
             return redirect("accounts:settings")

@@ -221,10 +221,13 @@ class LogoCapabilityTests(UITestCase):
                     Capability.MANAGE_SCHOOL_LOGO, capabilities_for(role)
                 )
 
-    def test_a_principal_still_manages_the_rest_of_the_profile(self):
-        """They correct a misspelled school name; they do not choose the mark
-        that goes on every receipt."""
+    def test_a_principal_reads_the_rest_of_the_profile_but_does_not_change_it(self):
+        """Pilot feedback: School settings are the owner's to change. A
+        principal sees them, and edits none of them -- logo included."""
         self.assertIn(
+            Capability.VIEW_SCHOOL_PROFILE, capabilities_for(Role.PRINCIPAL)
+        )
+        self.assertNotIn(
             Capability.MANAGE_SCHOOL_PROFILE, capabilities_for(Role.PRINCIPAL)
         )
 
@@ -242,7 +245,7 @@ class LogoScreenTests(UITestCase):
     def test_a_principal_is_told_whose_decision_it_is(self):
         self.client.force_login(self.principal)
         response = self.client.get(self.url)
-        self.assertContains(response, "the proprietor's decision")
+        self.assertContains(response, "Only the school owner can")
         self.assertNotContains(response, 'class="logo-file"')
 
     def test_the_form_drops_the_field_rather_than_disabling_it(self):
@@ -266,25 +269,27 @@ class LogoScreenTests(UITestCase):
         self.assertTrue(self.school.logo)
 
     def test_a_principal_cannot_even_by_posting_one(self):
-        """The field is absent from their form, so an upload posted by hand has
-        nowhere to land."""
+        """The whole POST is refused before a form is built, so an upload
+        posted by hand has nowhere to land."""
         self.client.force_login(self.principal)
         response = self.client.post(self.url, {
             "name": "Fulfilled Academy", "contact_email": "",
             "contact_phone": "", "logo": png(),
-        }, follow=True)
-        self.assertEqual(response.status_code, 200)
+        })
+        self.assertEqual(response.status_code, 403)
         self.school.refresh_from_db()
         self.assertFalse(self.school.logo)
 
-    def test_a_principal_can_still_save_the_rest(self):
+    def test_a_principal_cannot_save_the_rest_either(self):
         self.client.force_login(self.principal)
-        self.client.post(self.url, {
+        before = self.school.contact_email
+        response = self.client.post(self.url, {
             "name": "Fulfilled Academy", "contact_email": "office@fa.example",
             "contact_phone": "08031234567",
         })
+        self.assertEqual(response.status_code, 403)
         self.school.refresh_from_db()
-        self.assertEqual(self.school.contact_email, "office@fa.example")
+        self.assertEqual(self.school.contact_email, before)
 
     def test_the_proprietor_can_remove_one(self):
         self.client.force_login(self.owner)

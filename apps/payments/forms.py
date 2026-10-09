@@ -155,6 +155,20 @@ class PaymentForm(StyledFormMixin, forms.ModelForm):
         help_text="Leave unticked to hold it in the pending queue for checking.",
     )
 
+    #: The human check on an attached slip. Required -- in clean(), not here --
+    #: only when a receipt is attached and the payment is being confirmed: that
+    #: is the moment money starts counting toward a balance on the strength of
+    #: a picture, and nothing in the system reads the picture. The person
+    #: confirming does, and this is them saying so. Unticked by default, always:
+    #: a box that arrives ticked is a blind confirm with an extra step.
+    receipt_checked = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="I have checked the receipt against the student and amount",
+        help_text="The name or admission number on the slip is this student, "
+                  "and the amount on it matches the amount above.",
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["date_paid"].initial = timezone.localdate()
@@ -192,8 +206,39 @@ class PaymentForm(StyledFormMixin, forms.ModelForm):
             )
         return upload
 
+    def has_receipt(self) -> bool:
+        """Whether the payment will have a slip attached once this form saves.
+
+        A new upload counts; so does the one already on the row, unless the
+        form's own "clear" box is removing it (which cleans to ``False``).
+        """
+        upload = self.cleaned_data.get("receipt")
+        if upload is False:
+            return False
+        if upload:
+            return True
+        return bool(self.instance.pk and self.instance.receipt)
+
+    def needs_receipt_check(self) -> bool:
+        """Confirming money on the strength of an attached slip.
+
+        Only on the way *into* confirmed: re-saving a payment that is already
+        confirmed is a correction, and was checked when it was confirmed.
+        """
+        confirming = bool(self.cleaned_data.get("confirm_now"))
+        already_confirmed = bool(
+            self.instance.pk and self.instance.status == PaymentStatus.CONFIRMED
+        )
+        return confirming and not already_confirmed and self.has_receipt()
+
     def clean(self):
         cleaned = super().clean()
+        if self.needs_receipt_check() and not cleaned.get("receipt_checked"):
+            self.add_error(
+                "receipt_checked",
+                "Check the attached receipt against the student and the amount, "
+                "then tick this box. Or untick “confirm” to leave it pending.",
+            )
         student = cleaned.get("student")
         if student is None:
             return cleaned

@@ -31,6 +31,8 @@ and lives at /academics/classes/.
 {% block content %}
 <div class="space-y-5">
 
+  {% include "core/_record_payment.html" %}
+
   {% include "core/_setup_banner.html" %}
 
   <div class="grid gap-4 sm:grid-cols-3">
@@ -65,7 +67,7 @@ and lives at /academics/classes/.
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ class_count }}</div>
       <a href="{% url 'academics:class_list' %}"
          class="mt-1 inline-block text-xs font-medium text-brand-700 hover:underline">
-        Manage classes
+        {% if "manage_academics" in capabilities %}Manage classes{% else %}View classes{% endif %}
       </a>
     </div>
     <div class="card p-5">
@@ -82,7 +84,7 @@ and lives at /academics/classes/.
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ subject_count }}</div>
       <a href="{% url 'academics:subject_list' %}"
          class="mt-1 inline-block text-xs font-medium text-brand-700 hover:underline">
-        Manage subjects
+        {% if "manage_academics" in capabilities %}Manage subjects{% else %}View subjects{% endif %}
       </a>
     </div>
   </div>
@@ -113,6 +115,8 @@ and lives at /academics/classes/.
           <a href="{% url 'fees:structure_list' %}" class="font-semibold underline">
             Set their fees
           </a>.
+        {% else %}
+          The school owner sets fees.
         {% endif %}
       </p>
     </div>

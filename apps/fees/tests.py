@@ -236,20 +236,28 @@ class ScopingTests(FeesTestCase):
                 FeeComponent.objects.values_list("fee_structure_id", flat=True),
             )
 
-    def test_editing_another_branchs_structure_is_a_404(self):
+    def test_a_principal_cannot_edit_any_structure(self):
+        """Refused on the capability before the row is looked up, so their own
+        campus's structure and another's get the same 403."""
         self.client.force_login(self.north_principal)
-        response = self.client.get(
-            reverse("fees:structure_update", args=[self.south_p1_fees.pk])
-        )
-        self.assertEqual(response.status_code, 404)
+        for structure in (self.north_p1_fees, self.south_p1_fees):
+            response = self.client.get(
+                reverse("fees:structure_update", args=[structure.pk])
+            )
+            self.assertEqual(response.status_code, 403)
 
 
 class CapabilityTests(TestCase):
-    def test_leadership_roles_manage_fees(self):
-        for role in (Role.PLATFORM_OWNER, Role.SCHOOL_OWNER, Role.PRINCIPAL):
+    def test_only_owners_manage_fees(self):
+        for role in (Role.PLATFORM_OWNER, Role.SCHOOL_OWNER):
             self.assertTrue(
                 has_capability(User(role=role), Capability.MANAGE_FEES), role
             )
+
+    def test_principal_views_but_does_not_manage(self):
+        principal = User(role=Role.PRINCIPAL)
+        self.assertTrue(has_capability(principal, Capability.VIEW_FEES))
+        self.assertFalse(has_capability(principal, Capability.MANAGE_FEES))
 
     def test_bursar_views_but_does_not_manage(self):
         bursar = User(role=Role.BURSAR)
@@ -287,10 +295,16 @@ class ViewPermissionTests(FeesTestCase):
         body = self.client.get(reverse("fees:structure_list")).content.decode()
         self.assertNotIn("New structure", body)
 
-    def test_principal_sees_edit_controls(self):
-        self.client.force_login(self.north_principal)
+    def test_owner_sees_edit_controls(self):
+        self.client.force_login(self.alpha_owner)
         body = self.client.get(reverse("fees:structure_list")).content.decode()
         self.assertIn("New structure", body)
+
+    def test_principal_reads_the_list_without_edit_controls(self):
+        self.client.force_login(self.north_principal)
+        response = self.client.get(reverse("fees:structure_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("New structure", response.content.decode())
 
     def test_anonymous_is_redirected_to_login(self):
         response = self.client.get(reverse("fees:structure_list"))
@@ -332,8 +346,8 @@ class ListViewTests(FeesTestCase):
 
 
 class EditingTests(FeesTestCase):
-    def test_principal_creates_a_structure_with_line_items(self):
-        self.client.force_login(self.north_principal)
+    def test_owner_creates_a_structure_with_line_items(self):
+        self.client.force_login(self.alpha_owner)
         data = {"school_class": self.north_kg1.pk, "term": self.north_term.pk}
         data.update(
             component_post([("School Fees", 24000), ("Textbooks", 32000),
@@ -351,7 +365,7 @@ class EditingTests(FeesTestCase):
         self.assertEqual([c.position for c in structure.components.all()], [0, 1, 2])
 
     def test_a_structure_needs_at_least_one_line_item(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         data = {"school_class": self.north_kg1.pk, "term": self.north_term.pk}
         data.update(component_post([]))
         response = self.client.post(reverse("fees:structure_create"), data)
@@ -359,7 +373,7 @@ class EditingTests(FeesTestCase):
         self.assertFalse(FeeStructure.all_objects.filter(school_class=self.north_kg1))
 
     def test_duplicate_line_item_names_are_rejected(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         data = {"school_class": self.north_kg1.pk, "term": self.north_term.pk}
         data.update(component_post([("Textbooks", 1000), ("textbooks", 2000)]))
         response = self.client.post(reverse("fees:structure_create"), data)
@@ -368,7 +382,7 @@ class EditingTests(FeesTestCase):
 
     def test_nothing_is_written_when_the_line_items_fail(self):
         """Form and formset are validated together, inside one transaction."""
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         before = FeeStructure.all_objects.count()
         data = {"school_class": self.north_kg1.pk, "term": self.north_term.pk}
         data.update(component_post([("Textbooks", "not-a-number")]))
@@ -376,7 +390,7 @@ class EditingTests(FeesTestCase):
         self.assertEqual(FeeStructure.all_objects.count(), before)
 
     def test_editing_removes_and_adds_line_items(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         existing = list(self.north_p1_fees.components.all())
         rows = [
             (existing[0].name, 30000, existing[0].pk, False),   # repriced
@@ -397,7 +411,7 @@ class EditingTests(FeesTestCase):
         self.assertEqual(self.north_p1_fees.total, Decimal("104000"))
 
     def test_a_class_cannot_be_priced_twice_in_one_term(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         data = {"school_class": self.north_p1.pk, "term": self.north_term.pk}
         data.update(component_post([("School Fees", 1000)]))
         response = self.client.post(reverse("fees:structure_create"), data)
@@ -405,7 +419,7 @@ class EditingTests(FeesTestCase):
         self.assertIn("school_class", response.context["form"].errors)
 
     def test_deleting_a_structure_takes_its_components(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
         response = self.client.post(
             reverse("fees:structure_delete", args=[self.north_p1_fees.pk])
         )

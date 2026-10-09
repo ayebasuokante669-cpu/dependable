@@ -1,0 +1,47 @@
+{% comment %}
+"Record a payment", on every dashboard of a role that can take money: the
+principal's, the bursar's and the owner's. It is the action pilot schools perform
+most, and it used to need the sidebar.
+
+The card is two links rather than one big one, because there are two jobs here:
+taking new money, and checking the receipts that are already waiting. The second
+only appears while something is waiting.
+
+Takes `receipts_waiting` -- the count of pending payments in the caller's scope,
+from views.payment_shortcuts. Gated on the capability, so a school that has
+switched payments off, or a role that cannot record, never sees it.
+{% endcomment %}
+{% if "record_payments" in capabilities %}
+  <section data-tour="record-payment"
+           class="card flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+    <span class="icon-tile accent-emerald hidden sm:grid">
+      <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.7"
+           stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
+      </svg>
+    </span>
+    <div class="min-w-0 flex-1">
+      <h2 class="text-base font-semibold text-ink-900">Record a payment</h2>
+      <p class="mt-0.5 text-sm text-ink-600">
+        {% if receipts_waiting %}
+          {{ receipts_waiting }} receipt{{ receipts_waiting|pluralize }} waiting
+          to be checked by a person before {{ receipts_waiting|pluralize:"it counts,they count" }}
+          toward a balance.
+        {% else %}
+          Money taken at the bursary window, or a parent's bank slip to attach.
+        {% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2 sm:shrink-0">
+      {% if receipts_waiting %}
+        <a href="{% url 'payments:pending' %}" class="btn btn-secondary text-sm">
+          Check {{ receipts_waiting }} receipt{{ receipts_waiting|pluralize }}
+        </a>
+      {% endif %}
+      <a href="{% url 'payments:record' %}" class="btn btn-primary text-sm">
+        Record a payment
+      </a>
+    </div>
+  </section>
+{% endif %}

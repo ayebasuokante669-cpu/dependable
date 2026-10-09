@@ -9,6 +9,7 @@ from apps.core import seo
 from apps.core.branding import PRODUCT_NAME
 from apps.core.views import (
     BrandedLogoutView,
+    BrandedPasswordResetConfirmView,
     BrandedPasswordResetView,
     RoleAwareLoginView,
 )
@@ -38,6 +39,13 @@ urlpatterns = [
         "accounts/password_reset/",
         BrandedPasswordResetView.as_view(),
         name="password_reset",
+    ),
+    # Ours so a reset sends the "your password was changed" notice. Same path
+    # and name as Django's, which the reset email links to.
+    path(
+        "accounts/reset/<uidb64>/<token>/",
+        BrandedPasswordResetConfirmView.as_view(),
+        name="password_reset_confirm",
     ),
     # A password is changed on Account settings, next to the email address.
     # Django's standalone page would be a second, unlinked way to do the same.

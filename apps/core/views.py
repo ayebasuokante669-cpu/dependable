@@ -29,7 +29,13 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView, LogoutView, PasswordResetView
+from django.contrib.auth.views import (
+    LoginView,
+    LogoutView,
+    PasswordResetConfirmView,
+    PasswordResetView,
+)
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
@@ -42,7 +48,7 @@ from apps.schools.models import Branch, School, SchoolModule
 from apps.students.models import Student, StudentStatus
 
 from .branding import PRIVACY_EMAIL, PRODUCT_DESCRIPTION, branding
-from .emails import send_welcome_email
+from .emails import send_password_changed_email, send_welcome_email
 # The money and payment-state derivations the dashboards and Reports share.
 # Re-exported by name so `from apps.core.views import status_breakdown` -- which
 # is how the dashboard tests reach it -- keeps working after the move.
@@ -265,6 +271,29 @@ class BrandedPasswordResetView(PasswordResetView):
 
     extra_email_context = branding()
     html_email_template_name = "registration/password_reset_email_html.html"
+
+
+class BrandedPasswordResetConfirmView(PasswordResetConfirmView):
+    """Django's "choose a new password" step, with the owner told it happened.
+
+    A reset is a password change like any other, and the one most worth hearing
+    about: it is how somebody who has got into a mailbox gets into the account
+    too. So the "your password was changed" mail goes out here as well as from
+    Account settings.
+
+    Not on an account's first password. The invitation is this same screen (see
+    ``invites.send_set_password_email``), and telling a new colleague their
+    password "was changed" a second after they chose it is noise that teaches
+    people to ignore the message that matters. An account that has never signed
+    in is a first password; anything else is a change.
+    """
+
+    def form_valid(self, form):
+        first_password = form.user.last_login is None
+        response = super().form_valid(form)
+        if not first_password:
+            send_password_changed_email(form.user)
+        return response
 
 
 class SignupView(FormView):
@@ -685,6 +714,20 @@ class SchoolModuleToggleView(CapabilityRequiredMixin, View):
         return reverse("core:platform_school", args=[school.pk])
 
 
+def receipts_waiting(request) -> int:
+    """Pending payments in the caller's scope, for the "Record a payment" card.
+
+    Zero -- and no query -- for an account that cannot record, since the card is
+    not drawn for them. Imported here: payments is built on core, so a
+    module-level import would close a circle.
+    """
+    if not has_capability(request.user, Capability.RECORD_PAYMENTS):
+        return 0
+    from apps.payments.models import Payment, PaymentStatus
+
+    return Payment.objects.filter(status=PaymentStatus.PENDING).count()
+
+
 class SchoolDashboardView(RoleDashboardMixin, TemplateView):
     """A school owner's view: how big the school is, and where its fees stand.
 
@@ -730,6 +773,7 @@ class SchoolDashboardView(RoleDashboardMixin, TemplateView):
         # itself resolves each campus's own term -- see status_breakdown.
         context["status"] = status_breakdown(next(iter(current_terms.values()), None))
         context["setup"] = setup_progress(self.request)
+        context["receipts_waiting"] = receipts_waiting(self.request)
         context["page_title"] = "School overview"
         return context
 
@@ -783,6 +827,7 @@ class BranchDashboardView(RoleDashboardMixin, TemplateView):
         # and the report both use.
         context["status"] = status_breakdown(term)
         context["setup"] = setup_progress(self.request)
+        context["receipts_waiting"] = receipts_waiting(self.request)
         context["page_title"] = "Branch dashboard"
         return context
 
@@ -853,6 +898,7 @@ class BursarDashboardView(RoleDashboardMixin, TemplateView):
         context.update(
             with_outstanding(collection_summary(term), expected_total)
         )
+        context["receipts_waiting"] = receipts_waiting(self.request)
         context["page_title"] = "Finance dashboard"
         return context
 
@@ -984,7 +1030,10 @@ class SchoolSettingsView(CapabilityRequiredMixin, UpdateView):
 
     form_class = SchoolProfileForm
     template_name = "core/school_settings.html"
-    capability = Capability.MANAGE_SCHOOL_PROFILE
+    # Reading is leadership-wide; saving needs MANAGE_SCHOOL_PROFILE, checked in
+    # post(). A principal gets the same page with the values as text and no
+    # Save button, rather than a 403 for a screen their sidebar offers.
+    capability = Capability.VIEW_SCHOOL_PROFILE
     success_url = reverse_lazy("core:school_settings")
 
     def dispatch(self, request, *args, **kwargs):
@@ -1012,6 +1061,19 @@ class SchoolSettingsView(CapabilityRequiredMixin, UpdateView):
             raise Http404("This account is not attached to a school.")
         return school
 
+    def can_edit(self) -> bool:
+        return has_capability(self.request.user, Capability.MANAGE_SCHOOL_PROFILE)
+
+    def post(self, request, *args, **kwargs):
+        # Refused before the form is built, so nothing a read-only account posts
+        # by hand reaches the model -- the page hiding its Save button is only
+        # the visible half of this.
+        if not self.can_edit():
+            raise PermissionDenied(
+                "Your role can view the school's settings but not change them."
+            )
+        return super().post(request, *args, **kwargs)
+
     def can_manage_logo(self) -> bool:
         return has_capability(self.request.user, Capability.MANAGE_SCHOOL_LOGO)
 
@@ -1025,6 +1087,7 @@ class SchoolSettingsView(CapabilityRequiredMixin, UpdateView):
         context["page_title"] = "School settings"
         context["setup"] = setup_progress(self.request)
         context["can_manage_logo"] = self.can_manage_logo()
+        context["can_edit"] = self.can_edit()
         return context
 
     def form_valid(self, form):

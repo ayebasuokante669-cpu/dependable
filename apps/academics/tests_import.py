@@ -50,12 +50,18 @@ def subject_xlsx(rows, **kwargs) -> bytes:
 
 
 class ImportTestCase(AcademicsTestCase):
-    """Signed in as the North principal, whose branch needs no choosing."""
+    """Signed in as the school owner, importing into North unless told otherwise.
+
+    The owner rather than a principal because importing classes and subjects is
+    changing the academic setup, which is the owner's alone. The owner sees both
+    campuses, so the campus is chosen on every upload.
+    """
 
     def setUp(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
 
     def post_file(self, url, content, **extra):
+        extra.setdefault("branch", self.north.pk)
         return self.client.post(
             reverse(url), {"upload": upload(content), **extra}
         )
@@ -491,22 +497,19 @@ class ImportPermissionTests(ImportTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("login", response["Location"])
 
-    def test_a_principal_is_not_asked_which_campus(self):
-        response = self.client.get(reverse("academics:class_import"))
-        self.assertNotIn("branch", response.context["form"].fields)
+    def test_a_principal_is_refused_every_import_screen(self):
+        """Importing is changing the academic setup, which a principal reads
+        but does not change."""
+        self.client.force_login(self.north_principal)
+        for name in self.IMPORT_URLS:
+            self.assertEqual(self.client.get(reverse(name)).status_code, 403, name)
 
-    def test_a_principal_cannot_import_into_another_branch(self):
-        """The field does not exist for them, and a forged one is ignored."""
-        self.post_file(
-            "academics:class_import",
-            class_xlsx([class_row(name="Grade 9")]),
-            branch=self.south.pk,
-        )
-        self.client.post(
-            reverse("academics:class_import_review"), {"action": "import"}
-        )
-        klass = Class.all_objects.get(name="Grade 9")
-        self.assertEqual(klass.branch, self.north)
+    def test_a_principal_cannot_post_a_file_either(self):
+        self.client.force_login(self.north_principal)
+        before = Class.all_objects.count()
+        response = self.post_file("academics:class_import", class_xlsx([class_row()]))
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Class.all_objects.count(), before)
 
     def test_a_school_owner_picks_the_campus_and_it_is_honoured(self):
         self.client.force_login(self.alpha_owner)

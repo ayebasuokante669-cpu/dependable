@@ -397,15 +397,23 @@ while still being unable to change it.
 | Capability         | Platform owner | School owner | Principal | Bursar |
 | ------------------ | :------------: | :----------: | :-------: | :----: |
 | `view_academics`   | ✓ | ✓ | ✓ | ✓ |
-| `manage_academics` | ✓ | ✓ | ✓ | — |
+| `manage_academics` | ✓ | ✓ | — | — |
 | `view_fees`        | ✓ | ✓ | ✓ | ✓ |
-| `manage_fees`      | ✓ | ✓ | ✓ | — |
+| `manage_fees`      | ✓ | ✓ | — | — |
 | `view_students`    | ✓ | ✓ | ✓ | ✓ |
 | `manage_students`  | ✓ | ✓ | ✓ | — |
+| `view_school_profile`   | ✓ | ✓ | ✓ | — |
+| `manage_school_profile` | ✓ | ✓ | — | — |
 
 A bursar collects against the fee structure but does not decide it, and finds
 students in order to take money from them rather than to enrol or remove them —
-so they read all three layers and change none. The money-*movement* capabilities
+so they read all three layers and change none.
+
+A principal reads the school's setup — its classes, fee structures and School
+settings — and changes none of it; that is the school owner's (and the
+platform's, on their behalf). Pilot schools asked for that line. The principal
+keeps the day-to-day work: recording and confirming payments, reading them and
+their attached receipts, and the roster. The money-*movement* capabilities
 arrive with the payments layer.
 
 Grants live in one table, `ROLE_CAPABILITIES`, never in an ad-hoc check inside a

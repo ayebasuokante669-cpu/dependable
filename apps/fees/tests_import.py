@@ -43,10 +43,15 @@ def fee_xlsx(rows, **kwargs) -> bytes:
 
 
 class FeeImportTestCase(FeesTestCase):
-    """Signed in as the North principal, whose branch needs no choosing."""
+    """Signed in as the school owner, pricing North's term unless told otherwise.
+
+    The owner rather than a principal because importing fees is changing the fee
+    structure, which is the owner's alone. The owner sees every campus's terms,
+    so the term is chosen on every upload and every template download.
+    """
 
     def setUp(self):
-        self.client.force_login(self.north_principal)
+        self.client.force_login(self.alpha_owner)
 
     def validate(self, dicts, term=None, user=None):
         user = user or self.north_principal
@@ -58,6 +63,7 @@ class FeeImportTestCase(FeesTestCase):
             return importers.validate(rows, term=term or self.north_term)
 
     def post_file(self, content, **extra):
+        extra.setdefault("term", self.north_term.pk)
         return self.client.post(
             reverse("fees:structure_import"), {"upload": upload(content), **extra}
         )
@@ -335,7 +341,9 @@ class FeeImportScreenTests(FeeImportTestCase):
         self.assertTrue(response.content.startswith(b"PK"))
 
     def test_the_template_lists_the_terms_own_campuss_classes(self):
-        response = self.client.get(reverse("fees:structure_import_template"))
+        response = self.client.get(
+            reverse("fees:structure_import_template"), {"term": self.north_term.pk}
+        )
         book = load_workbook(BytesIO(response.content))
         self.assertIn("Classes", book.sheetnames)
         listed = {
@@ -344,7 +352,9 @@ class FeeImportScreenTests(FeeImportTestCase):
         self.assertEqual(listed, {"KG 1", "Primary 1", "Primary 2"})
 
     def test_the_template_reads_back_through_our_own_reader(self):
-        response = self.client.get(reverse("fees:structure_import_template"))
+        response = self.client.get(
+            reverse("fees:structure_import_template"), {"term": self.north_term.pk}
+        )
         from apps.core.spreadsheets import WorkbookError, read_rows
 
         with self.assertRaises(WorkbookError) as caught:
@@ -395,17 +405,24 @@ class FeeImportPermissionTests(FeeImportTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("login", response["Location"])
 
-    def test_a_principal_is_not_asked_which_term(self):
-        """North has one term, so there is nothing to choose."""
-        response = self.client.get(reverse("fees:structure_import"))
-        self.assertNotIn("term", response.context["form"].fields)
+    def test_a_principal_is_refused_every_import_screen(self):
+        """Importing fees is changing the fee structure, which a principal
+        reads but does not change."""
+        self.client.force_login(self.north_principal)
+        for name in self.IMPORT_URLS:
+            self.assertEqual(self.client.get(reverse(name)).status_code, 403, name)
 
-    def test_a_principal_cannot_price_another_campuss_term(self):
-        """The field does not exist for them, and a forged one is ignored."""
-        self.post_file(fee_xlsx([fee_row()]), term=self.south_term.pk)
-        self.confirm()
-        structure = FeeStructure.all_objects.get(school_class=self.north_p2)
-        self.assertEqual(structure.term, self.north_term)
+    def test_a_principal_cannot_post_a_file_either(self):
+        self.client.force_login(self.north_principal)
+        before = FeeComponent.all_objects.count()
+        response = self.post_file(fee_xlsx([fee_row()]))
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(FeeComponent.all_objects.count(), before)
+
+    def test_a_principal_is_not_offered_the_import_on_the_fee_list(self):
+        self.client.force_login(self.north_principal)
+        response = self.client.get(reverse("fees:structure_list"))
+        self.assertNotContains(response, reverse("fees:structure_import"))
 
     def test_a_school_owner_picks_the_term_and_it_is_honoured(self):
         self.client.force_login(self.alpha_owner)

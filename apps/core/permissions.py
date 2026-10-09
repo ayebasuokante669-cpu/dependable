@@ -33,6 +33,11 @@ class Capability(str, Enum):
     VOID_PAYMENTS = "void_payments"
     VIEW_MESSAGING_IDENTITY = "view_messaging_identity"
     MANAGE_MESSAGING_IDENTITY = "manage_messaging_identity"
+    # The school's profile on Settings. Reading it is leadership-wide; changing
+    # it is the proprietor's (see _SCHOOL_ADMIN). A principal sees what the
+    # school is called and how the office is reached without being able to
+    # rewrite either.
+    VIEW_SCHOOL_PROFILE = "view_school_profile"
     MANAGE_SCHOOL_PROFILE = "manage_school_profile"
     # The school's logo, separately from the rest of its profile. A principal
     # corrects a misspelled school name or a wrong office number; what the
@@ -73,14 +78,13 @@ class Capability(str, Enum):
     DEACTIVATE_ACCOUNTS = "deactivate_accounts"
 
 
-#: Owner- and principal-level roles: set up the school, who attends it, and what
-#: it charges.
+#: Owner- and principal-level roles: who attends the school, and the money it
+#: takes. The school's *setup* -- its classes, its fee structures and its
+#: profile -- is read here and changed only in _SCHOOL_ADMIN below.
 _LEADERSHIP = frozenset(
     {
         Capability.VIEW_ACADEMICS,
-        Capability.MANAGE_ACADEMICS,
         Capability.VIEW_FEES,
-        Capability.MANAGE_FEES,
         Capability.VIEW_STUDENTS,
         Capability.MANAGE_STUDENTS,
         Capability.VIEW_MESSAGES,
@@ -89,10 +93,11 @@ _LEADERSHIP = frozenset(
         Capability.RECORD_PAYMENTS,
         Capability.VOID_PAYMENTS,
         Capability.VIEW_MESSAGING_IDENTITY,
-        # What the school is called and what its logo is: the proprietor's
-        # decision, and the principal's to correct. Not the bursar's -- they
-        # take money, they do not decide how the school presents itself.
-        Capability.MANAGE_SCHOOL_PROFILE,
+        # What the school is called and how it is reached. Read-only at this
+        # level: changing it is the proprietor's (MANAGE_SCHOOL_PROFILE, in
+        # _SCHOOL_ADMIN). Not the bursar's at all -- they take money, they do
+        # not need the school's settings to do it.
+        Capability.VIEW_SCHOOL_PROFILE,
         # Both read their school's campuses and staff list. Changing either is
         # granted separately, in _SCHOOL_ADMIN below.
         Capability.VIEW_BRANCHES,
@@ -112,11 +117,16 @@ _LEADERSHIP = frozenset(
 #: and the platform's on their behalf -- not the principal's, who runs one
 #: campus rather than deciding how many there are.
 #:
-#: The logo sits here rather than in _LEADERSHIP for the same reason: a principal
-#: may correct the school's name or its office number, and does not choose the
-#: mark that goes on every receipt a parent is handed.
+#: The school's setup sits here too: its classes and subjects, its terms and
+#: fee structures, and its profile and logo. Pilot schools were explicit that a
+#: principal runs the campus *under* that setup -- they record and check
+#: payments, and read the classes and the fees they are charged against -- but
+#: what the school offers and what it charges is the proprietor's to change.
 _SCHOOL_ADMIN = frozenset(
     {
+        Capability.MANAGE_ACADEMICS,
+        Capability.MANAGE_FEES,
+        Capability.MANAGE_SCHOOL_PROFILE,
         Capability.MANAGE_BRANCHES,
         Capability.MANAGE_STAFF,
         Capability.MANAGE_ADMISSION_REQUIREMENTS,

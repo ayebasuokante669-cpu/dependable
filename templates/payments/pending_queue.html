@@ -23,11 +23,22 @@
 
 {% block content %}
 
-  <p class="card mb-5 px-4 py-3 text-sm text-ink-600">
-    Nothing here counts toward a balance yet. Open a receipt, check who it is
-    for and what it is for against the slip, correct anything that is wrong, and
-    confirm.
-  </p>
+  {% comment %}
+  The queue is where a person checks each slip -- nothing in the system reads
+  the picture. Said plainly at the top, because the failure this guards against
+  is a confirm pressed without looking.
+  {% endcomment %}
+  <div class="card mb-5 px-4 py-3 text-sm text-ink-600">
+    <p class="font-semibold text-ink-900">
+      This is where receipts are checked by a person.
+    </p>
+    <p class="mt-1">
+      Nothing here counts toward a balance yet. For each one, open the slip and
+      check that the name or admission number on it is the student it is
+      recorded against, and that the amount matches. Correct anything that is
+      wrong, then confirm — you will be asked to tick that you checked it.
+    </p>
+  </div>
 
   {% if payments %}
     <div class="space-y-4">

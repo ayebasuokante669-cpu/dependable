@@ -41,12 +41,14 @@ bar, so the page is readable without reading a picture.
 {% block content %}
 <div class="space-y-5">
 
+  {% include "core/_record_payment.html" %}
+
   {% if not term %}
     <div class="card border-partial/30 bg-partial-soft px-5 py-4 text-sm text-partial-strong">
       <p class="font-semibold">No term is marked current for this campus.</p>
       <p class="mt-0.5">
         Every figure on this page is priced against a term, so there is nothing
-        to total until a principal or the proprietor sets one.
+        to total until the school owner sets one.
       </p>
     </div>
   {% endif %}

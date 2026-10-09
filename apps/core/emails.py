@@ -1,7 +1,7 @@
 """Mail the platform sends as itself.
 
-One function so far -- the welcome a school gets when it signs itself up. It lives
-here rather than in ``views.py`` because sending is not a view's job and because a
+The welcome a school gets when it signs itself up, and the security notice an
+account gets when its password changes. They live here rather than in ``views.py`` because sending is not a view's job and because a
 management command or a later signal should be able to send the same message
 without going through an HTTP request.
 
@@ -31,6 +31,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 
 from .branding import branding
 
@@ -132,6 +133,60 @@ def send_welcome_email(school, branch, owner) -> bool:
         # created, the owner is signed in, and the only thing that did not happen
         # is an informational email.
         logger.exception("Welcome email for %r could not be sent", school.name)
+        return False
+
+    return True
+
+
+def send_password_changed_email(user) -> bool:
+    """Tell ``user`` their password was just changed.
+
+    The point is the case where it was *not* them: the message says what
+    happened and when, and the one thing to do about it -- reset the password
+    from a link that does not depend on the old one -- with the support address
+    beside it. It never contains the password, or a link that changes anything
+    by itself.
+
+    Sent from both places a password changes: Account settings, and the reset
+    link (see ``BrandedPasswordResetConfirmView``). Best effort, like the welcome:
+    the password has already changed, and a mail failure must not turn that into
+    an error page. Returns ``True`` only if a message was handed to the backend.
+    """
+    if not getattr(user, "email", ""):
+        return False
+
+    site = _site()
+    if site is None:
+        logger.warning(
+            "Password-changed email for user %s not sent: PUBLIC_BASE_URL is not "
+            "set, so the links in it would go nowhere.",
+            user.pk,
+        )
+        return False
+    origin, host = site
+
+    context = {
+        **branding(),
+        "user": user,
+        "changed_at": timezone.localtime(),
+        "reset_url": origin + reverse("password_reset"),
+        "site_url": origin,
+        "protocol": urlsplit(origin).scheme,
+        "domain": host,
+    }
+
+    try:
+        message = EmailMultiAlternatives(
+            subject=f"Your {context['product_name']} password was changed",
+            body=render_to_string("email/password_changed.txt", context),
+            to=[user.email],
+        )
+        message.attach_alternative(
+            render_to_string("email/password_changed.html", context), "text/html"
+        )
+        message.send()
+    except Exception:
+        logger.exception("Password-changed email for user %s could not be sent", user.pk)
         return False
 
     return True

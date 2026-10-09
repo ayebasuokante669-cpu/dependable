@@ -672,6 +672,7 @@ class RecordingTests(PaymentsTestCase):
                 "method": PaymentMethod.TRANSFER,
                 "receipt": upload,
                 "confirm_now": "on",
+                "receipt_checked": "on",
             },
         )
 
