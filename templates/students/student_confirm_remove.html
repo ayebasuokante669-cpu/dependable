@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="card p-5 sm:p-6">
+    <h2 class="text-base font-semibold text-ink-900">
+      Remove {{ student.formal_name }} from the roster?
+    </h2>
+    <p class="mt-2 text-sm text-ink-600">
+      <span class="numeric">{{ student.admission_number }}</span> in
+      {{ student.school_class.display_name }} at {{ student.branch.name }} will be
+      marked <strong class="font-semibold text-ink-900">withdrawn</strong>.
+    </p>
+
+    {% comment %} Removing is a status change, not a deletion: the payment
+       history has to keep a person attached to it. {% endcomment %}
+    <div class="mt-4 rounded-md border border-ink-200 bg-ink-50 px-3 py-3 text-sm text-ink-700">
+      <ul class="list-disc space-y-1 pl-5">
+        <li>They drop off the active roster and stop being billed.</li>
+        <li>Their record, payments and receipts are kept.</li>
+        <li>
+          To bring them back, edit their details and set the status to Active.
+        </li>
+      </ul>
+    </div>
+
+    <form method="post" class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      {% csrf_token %}
+      <a href="{{ student.get_absolute_url }}" class="btn btn-secondary text-sm">Cancel</a>
+      <button type="submit"
+              class="btn text-sm bg-overdue text-white hover:bg-overdue-strong">
+        Remove student
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

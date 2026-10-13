@@ -1,0 +1,42 @@
+{% load money %}
+{% comment %}
+"Where they stand", for the record/edit payment form. Rendered inline on load
+and fetched again from payments:student_position each time the student picker
+changes, so the panel the bursar sees is always this one template.
+{% endcomment %}
+{% if position and position.is_priced %}
+  <dl class="divide-y divide-ink-200">
+    <div class="flex items-baseline justify-between gap-3 px-5 py-3">
+      <dt class="text-sm text-ink-600">Expected this term</dt>
+      <dd class="numeric text-sm text-ink-900">{{ position.expected|naira }}</dd>
+    </div>
+    <div class="flex items-baseline justify-between gap-3 px-5 py-3">
+      <dt class="text-sm text-ink-600">Confirmed so far</dt>
+      <dd class="numeric text-sm text-ink-900">{{ position.paid|naira }}</dd>
+    </div>
+    <div class="flex items-baseline justify-between gap-3 bg-ink-50 px-5 py-3">
+      <dt class="text-sm font-semibold text-ink-900">Outstanding</dt>
+      <dd class="numeric text-lg font-semibold
+                 {% if position.outstanding %}text-overdue-strong
+                 {% else %}text-paid-strong{% endif %}">
+        {{ position.outstanding|naira }}
+      </dd>
+    </div>
+  </dl>
+  <div class="border-t border-ink-200 px-5 py-3">
+    <span class="status-pill {{ position.pill_class }}">
+      {{ position.pill_label }}
+    </span>
+  </div>
+{% else %}
+  <div class="empty-state py-8">
+    <p class="text-sm text-ink-600">
+      {% if position %}
+        That student's class has no fees set for this term, so there is no
+        balance to move.
+      {% else %}
+        Pick a student and their balance appears here.
+      {% endif %}
+    </p>
+  </div>
+{% endif %}

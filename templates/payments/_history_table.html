@@ -49,6 +49,12 @@ Expects: payments (a list), and optionally can_record.
               <span class="status-pill {{ payment.pill_class }}">
                 {{ payment.get_status_display }}
               </span>
+              {% if payment.has_attachment %}
+                <a href="{{ payment.receipt_file_url }}" target="_blank" rel="noopener"
+                   class="ml-1 text-xs font-medium text-brand-800 hover:underline">
+                  View receipt
+                </a>
+              {% endif %}
             </td>
           </tr>
         {% endfor %}

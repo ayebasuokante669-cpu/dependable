@@ -22,12 +22,11 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.contrib import messages
-from django.db.models import ProtectedError, Q
+from django.db.models import Q
 from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     CreateView,
-    DeleteView,
     DetailView,
     ListView,
     UpdateView,
@@ -275,44 +274,42 @@ class StudentUpdateView(ManageStudentsMixin, UpdateView):
         return self.object.get_absolute_url()
 
 
-class StudentDeleteView(ManageStudentsMixin, DeleteView):
+class StudentRemoveView(ManageStudentsMixin, DetailView):
+    """Take a student off the roster -- by withdrawing them, never by deleting.
+
+    "Remove" is what a principal or proprietor means when a child leaves, and
+    what they need afterwards is the child's payment history still attached to
+    a person. So the action is a status change: the student drops off the
+    active roster and stops being billed, and the record, its payments and
+    every receipt that names them stay exactly where they were. Undoing it is
+    setting the status back to Active on the edit screen.
+
+    Held by everyone with MANAGE_STUDENTS -- the owner and the principal. It
+    touches the roster only; the principal's read-only hold on classes, fees
+    and settings is a different set of capabilities and is not widened here.
+    """
+
     model = Student
-    template_name = "students/student_confirm_delete.html"
-    success_url = reverse_lazy("students:student_list")
+    template_name = "students/student_confirm_remove.html"
+    context_object_name = "student"
     extra_context = {"page_title": "Remove student"}
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        # Offered on the confirmation page: withdrawing keeps the record and the
-        # payment history that will hang off it, which is almost always what the
-        # school actually means by "remove".
-        context["withdraw_url"] = (
-            f"{reverse('students:student_update', args=[self.object.pk])}"
-            f"?status={StudentStatus.WITHDRAWN}"
-        )
-        return context
+    def get_queryset(self):
+        return super().get_queryset().select_related("school_class", "branch")
 
-    def form_valid(self, form):
-        student = self.object
-        try:
-            response = super().form_valid(form)
-        except ProtectedError:
-            # Payments reference the student with PROTECT, so money already
-            # recorded against them stops the deletion. That is the right
-            # outcome -- deleting the row would strand the payments outside
-            # every balance -- but it has to arrive as a sentence, not a 500.
-            messages.error(
-                self.request,
-                f"{student.full_name} has payments recorded against them, so "
-                f"the record cannot be deleted. Withdraw them instead: the "
-                f"history stays and they stop being billed.",
+    def post(self, request, *args, **kwargs):
+        student = self.get_object()
+        if student.status == StudentStatus.WITHDRAWN:
+            messages.info(request, f"{student.full_name} was already withdrawn.")
+        else:
+            student.status = StudentStatus.WITHDRAWN
+            student.save(update_fields=["status", "updated_at"])
+            messages.success(
+                request,
+                f"{student.full_name} removed from the roster and marked "
+                f"withdrawn. Their record and payment history are kept.",
             )
-            return HttpResponseRedirect(
-                f"{reverse('students:student_update', args=[student.pk])}"
-                f"?status={StudentStatus.WITHDRAWN}"
-            )
-        messages.success(self.request, f"{student.full_name} removed from the roster.")
-        return response
+        return HttpResponseRedirect(reverse("students:student_list"))
 
 
 # ===========================================================================

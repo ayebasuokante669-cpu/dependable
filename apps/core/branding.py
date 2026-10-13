@@ -17,8 +17,16 @@ from __future__ import annotations
 #: What every user-facing surface calls this software.
 PRODUCT_NAME = "SCHOOLCORD"
 
-#: One line, used on the landing page and in the footer.
-PRODUCT_TAGLINE = "School management that starts with the fees"
+#: One line: the landing-page headline, the sign-in panel, the footer and the
+#: email sign-off. It carries its own full stops, so templates print it as-is
+#: and never add one after it.
+PRODUCT_TAGLINE = "Run Your School. Not Your Paperwork."
+
+#: The sentence that sits under the tagline wherever the tagline is a headline.
+PRODUCT_SUBHEAD = (
+    "Track school fees, manage student records and communicate with parents, "
+    "all in one place."
+)
 
 #: What it is, for someone who has never heard of it: the meta description on
 #: the home page, link previews, structured data and llms.txt.
@@ -100,6 +108,7 @@ def branding(request=None) -> dict:
     return {
         "product_name": PRODUCT_NAME,
         "product_tagline": PRODUCT_TAGLINE,
+        "product_subhead": PRODUCT_SUBHEAD,
         "product_initial": PRODUCT_INITIAL,
         # The footer is on signed-out pages too, and it needs both.
         "contact_email": CONTACT_EMAIL,

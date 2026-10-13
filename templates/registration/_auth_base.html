@@ -54,13 +54,12 @@ Pages fill:
     <div class="max-w-md">
       <h2 class="text-3xl font-bold leading-tight tracking-tight text-white">
         {% block auth_visual_title %}
-          Know what every child owes, and who has paid
+          {{ product_tagline }}
         {% endblock %}
       </h2>
       <p class="mt-5 text-base leading-relaxed text-panel-copy">
         {% block auth_visual_body %}
-          Fees, students and parent messages in one place — for schools that
-          are tired of three notebooks disagreeing with each other.
+          {{ product_subhead }}
         {% endblock %}
       </p>
 
@@ -92,7 +91,7 @@ Pages fill:
     </div>
 
     <p class="text-xs text-panel-subtle">
-      {{ product_tagline }}.
+      {{ product_tagline }}
     </p>
   </aside>
 

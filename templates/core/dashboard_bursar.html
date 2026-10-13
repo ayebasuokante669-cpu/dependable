@@ -56,9 +56,12 @@ bar, so the page is readable without reading a picture.
   {# ===== The three figures ============================================== #}
   <div class="grid gap-4 sm:grid-cols-3">
 
-    <div class="card p-5">
+    <a href="{% url 'fees:structure_list' %}" class="card card-interactive group p-5">
       <div class="flex items-start justify-between gap-3">
-        <div class="text-sm font-medium text-ink-600">Expected this term</div>
+        <div class="flex items-center gap-1.5 text-sm font-medium text-ink-600">
+          Expected this term
+          {% include "partials/_tile_arrow.html" %}
+        </div>
         <span class="icon-tile icon-tile-sm accent-blue">
           <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
                stroke="currentColor" aria-hidden="true">
@@ -73,11 +76,14 @@ bar, so the page is readable without reading a picture.
       <div class="mt-1 text-xs text-ink-500">
         Across {{ student_count }} enrolled student{{ student_count|pluralize }}
       </div>
-    </div>
+    </a>
 
-    <div class="card p-5">
+    <a href="{% url 'payments:index' %}?status=confirmed" class="card card-interactive group p-5">
       <div class="flex items-start justify-between gap-3">
-        <div class="text-sm font-medium text-ink-600">Collected</div>
+        <div class="flex items-center gap-1.5 text-sm font-medium text-ink-600">
+          Collected
+          {% include "partials/_tile_arrow.html" %}
+        </div>
         <span class="icon-tile icon-tile-sm accent-emerald">
           <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
                stroke="currentColor" aria-hidden="true">
@@ -94,17 +100,19 @@ bar, so the page is readable without reading a picture.
         Confirmed payments this term
         {% if pending_count %}
           &middot;
-          <a href="{% url 'payments:pending' %}" class="font-medium text-partial-strong
-                    hover:underline">
+          <span class="font-medium text-partial-strong">
             {{ pending_total|naira }} pending
-          </a>
+          </span>
         {% endif %}
       </div>
-    </div>
+    </a>
 
-    <div class="card p-5">
+    <a href="{% url 'payments:outstanding' %}" class="card card-interactive group p-5">
       <div class="flex items-start justify-between gap-3">
-        <div class="text-sm font-medium text-ink-600">Outstanding</div>
+        <div class="flex items-center gap-1.5 text-sm font-medium text-ink-600">
+          Outstanding
+          {% include "partials/_tile_arrow.html" %}
+        </div>
         <span class="icon-tile icon-tile-sm accent-rose">
           <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
                stroke="currentColor" aria-hidden="true">
@@ -117,11 +125,11 @@ bar, so the page is readable without reading a picture.
         {{ outstanding_total|naira }}
       </div>
       <div class="mt-1 text-xs text-ink-500">
-        <a href="{% url 'payments:outstanding' %}" class="hover:underline">
+        <span class="group-hover:underline">
           Expected less confirmed
-        </a>
+        </span>
       </div>
-    </div>
+    </a>
 
   </div>
 
@@ -140,9 +148,13 @@ bar, so the page is readable without reading a picture.
     split per class next to it -- which is where somebody comparing classes was
     always going to end up anyway.
     {% endcomment %}
-    <div class="card card-glass p-5 sm:p-6">
+    <a href="{% url 'payments:index' %}"
+       class="card card-glass card-interactive group block p-5 sm:p-6">
       <div class="flex items-baseline justify-between gap-3">
-        <h2 class="text-sm font-semibold text-ink-900">Collected against the term</h2>
+        <h2 class="flex items-center gap-1.5 text-sm font-semibold text-ink-900">
+          Collected against the term
+          {% include "partials/_tile_arrow.html" %}
+        </h2>
         <p class="numeric text-2xl font-bold text-brand-900">
           {{ collected_total|percent_label:expected_total }}
         </p>
@@ -190,7 +202,7 @@ bar, so the page is readable without reading a picture.
           </dd>
         </div>
       </dl>
-    </div>
+    </a>
 
   </div>
 

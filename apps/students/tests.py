@@ -240,7 +240,7 @@ class ScopingTests(StudentTestCase):
 
     def test_another_branchs_student_is_a_404(self):
         self.client.force_login(self.north_principal)
-        for name in ("student_detail", "student_update", "student_delete"):
+        for name in ("student_detail", "student_update", "student_remove"):
             response = self.client.get(
                 reverse(f"students:{name}", args=[self.south_student.pk])
             )
@@ -279,7 +279,7 @@ class ViewPermissionTests(StudentTestCase):
         cases = [
             reverse("students:student_create"),
             reverse("students:student_update", args=[self.chinaza.pk]),
-            reverse("students:student_delete", args=[self.chinaza.pk]),
+            reverse("students:student_remove", args=[self.chinaza.pk]),
         ]
         for url in cases:
             self.assertEqual(self.client.get(url).status_code, 403, url)
@@ -294,13 +294,14 @@ class ViewPermissionTests(StudentTestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(Student.all_objects.count(), before)
 
-    def test_bursar_cannot_delete_a_student(self):
+    def test_bursar_cannot_remove_a_student(self):
         self.client.force_login(self.north_bursar)
         response = self.client.post(
-            reverse("students:student_delete", args=[self.chinaza.pk])
+            reverse("students:student_remove", args=[self.chinaza.pk])
         )
         self.assertEqual(response.status_code, 403)
-        self.assertTrue(Student.all_objects.filter(pk=self.chinaza.pk).exists())
+        self.chinaza.refresh_from_db()
+        self.assertEqual(self.chinaza.status, StudentStatus.ACTIVE)
 
     def test_bursar_list_hides_edit_controls(self):
         self.client.force_login(self.north_bursar)
@@ -568,19 +569,59 @@ class EditingTests(StudentTestCase):
             fee_position.position_for(self.chinaza).expected, Decimal("112000")
         )
 
-    def test_deleting_a_student(self):
+    def test_principal_removes_a_student_by_withdrawing_them(self):
+        # EditingTests signs in as the principal. "Remove" is a status change:
+        # the row stays, and only its status moves.
         response = self.client.post(
-            reverse("students:student_delete", args=[self.emeka.pk])
+            reverse("students:student_remove", args=[self.emeka.pk])
+        )
+        self.assertRedirects(response, reverse("students:student_list"))
+        self.emeka.refresh_from_db()
+        self.assertEqual(self.emeka.status, StudentStatus.WITHDRAWN)
+        self.assertTrue(Student.all_objects.filter(pk=self.emeka.pk).exists())
+
+    def test_removing_keeps_the_payment_history(self):
+        from apps.payments.models import Payment
+
+        payment = Payment.all_objects.create(
+            school=self.alpha, branch=self.north, student=self.chinaza,
+            term=self.north_term, amount=Decimal("20000"),
+        )
+        response = self.client.post(
+            reverse("students:student_remove", args=[self.chinaza.pk])
         )
         self.assertEqual(response.status_code, 302)
-        self.assertFalse(Student.all_objects.filter(pk=self.emeka.pk).exists())
+        self.chinaza.refresh_from_db()
+        self.assertEqual(self.chinaza.status, StudentStatus.WITHDRAWN)
+        payment.refresh_from_db()
+        self.assertEqual(payment.student_id, self.chinaza.pk)
 
-    def test_the_delete_page_offers_withdrawal_instead(self):
+    def test_a_removed_student_leaves_the_default_roster(self):
+        self.client.post(reverse("students:student_remove", args=[self.emeka.pk]))
+        response = self.client.get(reverse("students:student_list"))
+        self.assertNotContains(response, "FA/2020/007")
+
+    def test_owner_removes_a_student_the_same_way(self):
+        self.client.force_login(self.alpha_owner)
+        self.client.post(reverse("students:student_remove", args=[self.emeka.pk]))
+        self.emeka.refresh_from_db()
+        self.assertEqual(self.emeka.status, StudentStatus.WITHDRAWN)
+
+    def test_the_remove_page_says_it_keeps_the_record(self):
         response = self.client.get(
-            reverse("students:student_delete", args=[self.emeka.pk])
+            reverse("students:student_remove", args=[self.emeka.pk])
         )
-        self.assertIn("withdrawn", response.context["withdraw_url"])
-        self.assertContains(response, "Mark withdrawn instead")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "withdrawn")
+        self.assertContains(response, "payments and receipts are kept")
+        self.assertNotContains(response, "cannot be undone")
+
+    def test_principal_still_cannot_change_classes_or_fees(self):
+        # Removing students does not widen the principal's read-only setup.
+        principal = User(role=Role.PRINCIPAL)
+        self.assertFalse(has_capability(principal, Capability.MANAGE_ACADEMICS))
+        self.assertFalse(has_capability(principal, Capability.MANAGE_FEES))
+        self.assertFalse(has_capability(principal, Capability.MANAGE_SCHOOL_PROFILE))
 
 
 class FormScopingTests(StudentTestCase):

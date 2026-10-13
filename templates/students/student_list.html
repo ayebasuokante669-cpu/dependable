@@ -126,7 +126,7 @@
                     <div class="flex justify-end gap-1">
                       <a href="{% url 'students:student_update' row.student.pk %}"
                          class="btn btn-ghost text-xs">Edit</a>
-                      <a href="{% url 'students:student_delete' row.student.pk %}"
+                      <a href="{% url 'students:student_remove' row.student.pk %}"
                          class="btn btn-ghost text-xs text-overdue-strong
                                 hover:bg-overdue-soft">Remove</a>
                     </div>

@@ -20,6 +20,10 @@ nothing else.
 
 {% block page_actions %}
   <a href="{{ payment.get_absolute_url }}" class="btn btn-ghost text-sm">Details</a>
+  {% if payment.has_attachment %}
+    <a href="{{ payment.receipt_file_url }}" target="_blank" rel="noopener"
+       class="btn btn-secondary text-sm">View receipt</a>
+  {% endif %}
   <button type="button" class="btn btn-primary text-sm" data-print>
     <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
          stroke="currentColor" aria-hidden="true">

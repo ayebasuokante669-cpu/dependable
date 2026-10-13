@@ -125,7 +125,7 @@
               </p>
               {% if payment.has_attachment %}
                 {% if payment.attachment_is_pdf %}
-                  <a href="{{ payment.receipt.url }}" target="_blank" rel="noopener"
+                  <a href="{{ payment.receipt_file_url }}" target="_blank" rel="noopener"
                      class="mt-2 flex min-h-touch items-center gap-2 rounded-md
                             border border-ink-200 bg-ink-50 px-3 text-sm
                             text-brand-800 hover:bg-ink-100">
@@ -141,7 +141,7 @@
                     Open the PDF
                   </a>
                 {% else %}
-                  <a href="{{ payment.receipt.url }}" target="_blank" rel="noopener">
+                  <a href="{{ payment.receipt_file_url }}" target="_blank" rel="noopener">
                     {% comment %}
                     The one screen with a real lazy-loading case: a queue of
                     uploaded receipts, one per pending payment. `data-src` is
@@ -150,12 +150,12 @@
                     in. The <noscript> twin means a blocked script costs
                     nothing at all.
                     {% endcomment %}
-                    <img data-src="{{ payment.receipt.url }}" loading="lazy"
+                    <img data-src="{{ payment.receipt_file_url }}" loading="lazy"
                          decoding="async" alt="Receipt for {{ payment.amount }}"
                          class="mt-2 max-h-56 w-full rounded-md border border-ink-200
                                 object-contain">
                     <noscript>
-                      <img src="{{ payment.receipt.url }}"
+                      <img src="{{ payment.receipt_file_url }}"
                            alt="Receipt for {{ payment.amount }}"
                            class="mt-2 max-h-56 w-full rounded-md border border-ink-200
                                   object-contain">

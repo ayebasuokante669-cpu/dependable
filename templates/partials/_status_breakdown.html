@@ -23,8 +23,9 @@ No script: the widths are the data, written as a CSS custom property.
 {% with total=breakdown_total %}
 <div>
   <div class="flex items-baseline justify-between gap-3">
-    <h3 class="text-sm font-semibold text-ink-900">
+    <h3 class="flex items-center gap-1.5 text-sm font-semibold text-ink-900">
       {{ heading|default:"Where the roster stands" }}
+      {% if linked %}{% include "partials/_tile_arrow.html" %}{% endif %}
     </h3>
     <p class="numeric text-xs text-ink-500">
       {{ total }} priced student{{ total|pluralize }}

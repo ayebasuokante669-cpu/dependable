@@ -137,16 +137,18 @@
 
     {% if payment.has_attachment %}
       <section class="card overflow-hidden">
-        <div class="border-b border-ink-200 px-5 py-3">
+        <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-3">
           <h2 class="text-sm font-semibold text-ink-900">Attached receipt</h2>
+          <a href="{{ payment.receipt_file_url }}" target="_blank" rel="noopener"
+             class="text-sm font-medium text-brand-800 hover:underline">View receipt</a>
         </div>
         <div class="px-5 py-5">
           {% if payment.attachment_is_pdf %}
-            <a href="{{ payment.receipt.url }}" target="_blank" rel="noopener"
+            <a href="{{ payment.receipt_file_url }}" target="_blank" rel="noopener"
                class="btn btn-secondary text-sm">Open the PDF</a>
           {% else %}
-            <a href="{{ payment.receipt.url }}" target="_blank" rel="noopener">
-              <img src="{{ payment.receipt.url }}" alt="Uploaded receipt" loading="lazy" decoding="async"
+            <a href="{{ payment.receipt_file_url }}" target="_blank" rel="noopener">
+              <img src="{{ payment.receipt_file_url }}" alt="Uploaded receipt" loading="lazy" decoding="async"
                    class="max-h-[32rem] max-w-full rounded-md border border-ink-200">
             </a>
           {% endif %}

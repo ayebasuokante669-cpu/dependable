@@ -66,19 +66,20 @@
         </p>
       </div>
       <div class="px-5 py-5">
-        {% if form.instance.has_attachment %}
+        {# Only a saved slip: an upload on a form that bounced was never stored. #}
+        {% if form.instance.receipt_file_url %}
           <div class="mb-4 rounded-md border border-ink-200 bg-ink-50 p-3">
             <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
               Attached
             </p>
             {% if form.instance.attachment_is_pdf %}
-              <a href="{{ form.instance.receipt.url }}" target="_blank" rel="noopener"
+              <a href="{{ form.instance.receipt_file_url }}" target="_blank" rel="noopener"
                  class="mt-1 inline-block text-sm text-brand-800 hover:underline">
                 Open the PDF
               </a>
             {% else %}
-              <a href="{{ form.instance.receipt.url }}" target="_blank" rel="noopener">
-                <img src="{{ form.instance.receipt.url }}" alt="Uploaded receipt" loading="lazy" decoding="async"
+              <a href="{{ form.instance.receipt_file_url }}" target="_blank" rel="noopener">
+                <img src="{{ form.instance.receipt_file_url }}" alt="Uploaded receipt" loading="lazy" decoding="async"
                      class="mt-2 max-h-96 max-w-full rounded-md border border-ink-200">
               </a>
             {% endif %}
@@ -101,42 +102,10 @@
       <div class="border-b border-ink-200 px-5 py-3">
         <h2 class="text-sm font-semibold text-ink-900">Where they stand</h2>
       </div>
-      {% if position and position.is_priced %}
-        <dl class="divide-y divide-ink-200">
-          <div class="flex items-baseline justify-between gap-3 px-5 py-3">
-            <dt class="text-sm text-ink-600">Expected this term</dt>
-            <dd class="numeric text-sm text-ink-900">{{ position.expected|naira }}</dd>
-          </div>
-          <div class="flex items-baseline justify-between gap-3 px-5 py-3">
-            <dt class="text-sm text-ink-600">Confirmed so far</dt>
-            <dd class="numeric text-sm text-ink-900">{{ position.paid|naira }}</dd>
-          </div>
-          <div class="flex items-baseline justify-between gap-3 bg-ink-50 px-5 py-3">
-            <dt class="text-sm font-semibold text-ink-900">Outstanding</dt>
-            <dd class="numeric text-lg font-semibold
-                       {% if position.outstanding %}text-overdue-strong
-                       {% else %}text-paid-strong{% endif %}">
-              {{ position.outstanding|naira }}
-            </dd>
-          </div>
-        </dl>
-        <div class="border-t border-ink-200 px-5 py-3">
-          <span class="status-pill {{ position.pill_class }}">
-            {{ position.pill_label }}
-          </span>
-        </div>
-      {% else %}
-        <div class="empty-state py-8">
-          <p class="text-sm text-ink-600">
-            {% if position %}
-              That student's class has no fees set for this term, so there is no
-              balance to move.
-            {% else %}
-              Pick a student and their balance appears here.
-            {% endif %}
-          </p>
-        </div>
-      {% endif %}
+      <div id="position-panel" aria-live="polite"
+           data-position-url="{% url 'payments:student_position' %}">
+        {% include "payments/_position_panel.html" %}
+      </div>
     </section>
 
     <section class="card overflow-hidden">
@@ -210,4 +179,48 @@
     </section>
   </div>
 </form>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+  // "Where they stand": refetch the panel whenever the picker names a student.
+  // Without scripting the panel still renders on load and after a submit.
+  (function () {
+    var panel = document.getElementById('position-panel');
+    var picker = document.querySelector('input[name="student"]');
+    if (!panel || !picker || !window.fetch) return;
+    var url = panel.getAttribute('data-position-url');
+    var last = picker.value.trim();
+    var inFlight = null;
+    var timer = null;
+
+    function refresh() {
+      var value = picker.value.trim();
+      if (value === last) return;
+      last = value;
+      if (inFlight) inFlight.abort();
+      inFlight = new AbortController();
+      fetch(url + '?student=' + encodeURIComponent(value), {
+        signal: inFlight.signal,
+        headers: { 'X-Requested-With': 'fetch' },
+        credentials: 'same-origin'
+      })
+        .then(function (response) {
+          if (!response.ok) throw new Error(response.status);
+          return response.text();
+        })
+        .then(function (html) { panel.innerHTML = html; })
+        // A dropped request leaves the last good panel on screen.
+        .catch(function () {});
+    }
+
+    // `change` fires when an option is picked from the datalist or the field
+    // is left; `input` (debounced) covers typing a full admission number.
+    picker.addEventListener('change', refresh);
+    picker.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(refresh, 300);
+    });
+  })();
+</script>
 {% endblock %}

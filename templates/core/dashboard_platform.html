@@ -49,12 +49,18 @@ term; this does. Everything else is one click away.
       </div>
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ school_count }}</div>
     </a>
-    <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Campuses</div>
+    <a href="{% url 'core:platform_schools' %}" class="card card-interactive group p-5">
+      <div class="flex items-center gap-1.5 text-sm font-medium text-ink-600">
+        Campuses
+        {% include "partials/_tile_arrow.html" %}
+      </div>
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">{{ branch_count }}</div>
-    </div>
-    <div class="card p-5">
-      <div class="text-sm font-medium text-ink-600">Students enrolled</div>
+    </a>
+    <a href="{% url 'core:platform_schools' %}" class="card card-interactive group p-5">
+      <div class="flex items-center gap-1.5 text-sm font-medium text-ink-600">
+        Students enrolled
+        {% include "partials/_tile_arrow.html" %}
+      </div>
       <div class="numeric mt-2 text-3xl font-semibold text-brand-900">
         {{ active_student_count }}
       </div>
@@ -63,7 +69,7 @@ term; this does. Everything else is one click away.
           {{ student_count }} on the roll, including withdrawn
         </div>
       {% endif %}
-    </div>
+    </a>
     <a href="{% url 'staff:list' %}" class="card card-interactive group p-5">
       <div class="flex items-center gap-1.5 text-sm font-medium text-ink-600">
         Accounts

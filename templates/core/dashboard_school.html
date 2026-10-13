@@ -124,9 +124,14 @@ campuses themselves is a different job and lives at /branches/.
   campuses are on different calendars still gets one honest total rather than
   three campuses judged by a fourth one's deadline.
   {% endcomment %}
-  <div class="glass-ground card card-glass p-5 sm:p-6">
-    {% include "partials/_status_breakdown.html" with breakdown=status.buckets breakdown_total=status.total heading="Fees across every campus" %}
-  </div>
+  {% comment %}
+  The whole picture is the link: "who is in which state" is answered in full on
+  the outstanding list.
+  {% endcomment %}
+  <a href="{% url 'payments:outstanding' %}"
+     class="glass-ground card card-glass card-interactive group block p-5 sm:p-6">
+    {% include "partials/_status_breakdown.html" with breakdown=status.buckets breakdown_total=status.total heading="Fees across every campus" linked=True %}
+  </a>
 
   {% comment %}
   An alert, not a breakdown, so it stays: a campus with no current term cannot be

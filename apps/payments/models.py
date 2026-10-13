@@ -249,6 +249,16 @@ class Payment(BranchScopedModel):
     def attachment_is_pdf(self) -> bool:
         return bool(self.receipt) and self.receipt.name.lower().endswith(".pdf")
 
+    @property
+    def receipt_file_url(self) -> str:
+        """Where the attached slip is opened: behind the payments permission,
+        not the storage URL. Every "View receipt" link points here."""
+        # No pk yet means a form re-rendering an upload it has not saved:
+        # there is nothing stored to open.
+        if not (self.pk and self.receipt):
+            return ""
+        return reverse("payments:receipt_file", args=[self.pk])
+
     # -- transitions ---------------------------------------------------------
 
     def confirm(self, *, by=None, save: bool = True) -> "Payment":

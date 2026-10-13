@@ -143,8 +143,10 @@
                     {{ payment.get_status_display }}
                   </span>
                   {% if payment.has_attachment %}
-                    <span class="ml-1 text-xs text-ink-500" title="Receipt attached"
-                          aria-label="Receipt attached">&#128206;</span>
+                    <a href="{{ payment.receipt_file_url }}" target="_blank" rel="noopener"
+                       class="ml-1 text-xs font-medium text-brand-800 hover:underline">
+                      View receipt
+                    </a>
                   {% endif %}
                 </td>
               </tr>

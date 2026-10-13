@@ -17,16 +17,33 @@ from decimal import Decimal
 
 from django.contrib import messages as flash
 from django.db.models import Count, Q, Sum
-from django.http import HttpResponseRedirect
+import mimetypes
+import posixpath
+
+from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.urls import reverse
-from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
+from django.views.generic import (
+    CreateView,
+    DetailView,
+    FormView,
+    ListView,
+    TemplateView,
+    UpdateView,
+    View,
+)
 
 from apps.core.permissions import Capability, CapabilityRequiredMixin
 from apps.fees.models import Term
 from apps.students import fees
 
 from . import balances
-from .forms import PaymentFilterForm, PaymentForm, PendingConfirmForm, VoidForm
+from .forms import (
+    PaymentFilterForm,
+    PaymentForm,
+    PendingConfirmForm,
+    VoidForm,
+    student_from_picker,
+)
 from .models import Payment, PaymentStatus
 
 ZERO = Decimal("0")
@@ -195,6 +212,27 @@ class PaymentCreateView(RecordPaymentsMixin, TermMixin, CreateView):
             # Straight to the receipt: the parent is still standing there.
             return reverse("payments:receipt", args=[self.object.pk])
         return reverse("payments:pending")
+
+
+class StudentPositionView(RecordPaymentsMixin, TemplateView):
+    """The "Where they stand" panel for whoever the picker now names.
+
+    Fetched by the record form as the bursar picks a student, and swapped into
+    the panel in place -- so the balance is on screen before the amount is
+    typed, not after the form is submitted. The fragment is the same partial
+    the form renders on load, so the two can never disagree.
+
+    Tenant-scoped through the picker's own lookup: an admission number from
+    another school names nobody here, and the panel falls back to its prompt.
+    """
+
+    template_name = "payments/_position_panel.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        student = student_from_picker(self.request.GET.get("student"))
+        context["position"] = fees.position_for(student) if student else None
+        return context
 
 
 class PaymentUpdateView(RecordPaymentsMixin, TermMixin, UpdateView):
@@ -388,6 +426,48 @@ class ReceiptView(ViewPaymentsMixin, DetailView):
         return context
 
 
+#: What an attached slip may be shown inline as. Anything else (or a file whose
+#: type cannot be told from its name) is handed over as a download, so a stray
+#: upload can never render as a page on this origin.
+_INLINE_RECEIPT_TYPES = {
+    "application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic",
+}
+
+
+class ReceiptFileView(ViewPaymentsMixin, View):
+    """The attached slip itself, behind the same gate as the payment.
+
+    The storage URL would open for anyone holding it; this one only opens for a
+    signed-in account that can see payments, and only for a payment in its own
+    school -- ``Payment.objects`` is tenant-scoped, so another school's id 404s.
+    Streamed from whichever storage backend holds it, local disk or bucket.
+    """
+
+    def get(self, request, pk):
+        payment = Payment.objects.filter(pk=pk).first()
+        if payment is None or not payment.receipt:
+            raise Http404("No receipt is attached to that payment.")
+        try:
+            handle = payment.receipt.open("rb")
+        except (FileNotFoundError, OSError):
+            raise Http404("The attached receipt could not be found.")
+
+        filename = posixpath.basename(payment.receipt.name)
+        content_type, _ = mimetypes.guess_type(filename)
+        if content_type not in _INLINE_RECEIPT_TYPES:
+            content_type = "application/octet-stream"
+        response = FileResponse(
+            handle,
+            content_type=content_type,
+            as_attachment=content_type == "application/octet-stream",
+            filename=filename,
+        )
+        # A parent's bank slip is personal financial data.
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
+
+
 class StudentPaymentHistoryView(ViewPaymentsMixin, DetailView):
     """A student's full payment history, when the detail page's card is not enough."""
 
@@ -437,8 +517,10 @@ def _position_for_form(form):
     typing what was paid -- the number they are most likely to be checking
     against.
     """
-    student = form["student"].value()
-    if hasattr(student, "pk"):
+    # Unbound, this is the initial Student; bound, it is whatever was typed --
+    # the picker's text, which only the picker's own lookup can resolve.
+    student = student_from_picker(form["student"].value())
+    if student is not None:
         return fees.position_for(student)
     if getattr(form, "instance", None) is not None and form.instance.student_id:
         return fees.position_for(form.instance.student)

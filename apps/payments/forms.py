@@ -18,7 +18,9 @@ nothing.
 
 from __future__ import annotations
 
+import posixpath
 import re
+from dataclasses import dataclass
 from decimal import Decimal
 
 from django import forms
@@ -39,6 +41,24 @@ RECEIPT_MAX_BYTES = 8 * 1024 * 1024
 
 #: "FA/2025/001 — Chinaza Okonkwo (JSS 1A)" → the admission number.
 _PICKER = re.compile(r"^\s*([^—]+?)\s*(?:—.*)?$")
+
+
+def student_from_picker(value) -> Student | None:
+    """The student a picker entry names, or None.
+
+    Accepts the whole datalist option or just the admission number. Tenant-scoped
+    through ``Student.objects``, so another school's admission number names
+    nobody. The field's ``clean`` and the live balance lookup both read through
+    here, so the panel can never show a student the form would then refuse.
+    """
+    if isinstance(value, Student):
+        return value
+    value = str(value or "").strip()
+    if not value:
+        return None
+    match = _PICKER.match(value)
+    admission_number = (match.group(1) if match else value).strip()
+    return Student.objects.filter(admission_number__iexact=admission_number).first()
 
 
 def picker_label(student: Student) -> str:
@@ -73,13 +93,10 @@ class StudentPickerField(forms.CharField):
                 raise ValidationError("Choose the student this payment is for.")
             return None
 
-        match = _PICKER.match(value)
-        admission_number = (match.group(1) if match else value).strip()
-
-        student = Student.objects.filter(
-            admission_number__iexact=admission_number
-        ).first()
+        student = student_from_picker(value)
         if student is None:
+            match = _PICKER.match(value)
+            admission_number = (match.group(1) if match else value).strip()
             raise ValidationError(
                 f'No student here has the admission number "{admission_number}". '
                 f"Pick one from the list as you type."
@@ -95,6 +112,35 @@ class StudentPickerField(forms.CharField):
             if student is not None:
                 return picker_label(student)
         return value
+
+
+@dataclass(frozen=True)
+class _GatedFile:
+    """What the "Currently:" line links to: the name, but the gated URL."""
+
+    name: str
+    url: str
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class GatedReceiptInput(forms.ClearableFileInput):
+    """The receipt upload, whose "Currently:" link opens the gated page.
+
+    Django's widget links straight to the storage URL, which skips the
+    payments permission. ``gated_url`` is set by the form from its instance.
+    """
+
+    gated_url = ""
+
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+        if context["widget"]["is_initial"] and self.gated_url:
+            context["widget"]["value"] = _GatedFile(
+                name=posixpath.basename(value.name), url=self.gated_url
+            )
+        return context
 
 
 def picker_options() -> list[str]:
@@ -140,7 +186,7 @@ class PaymentForm(StyledFormMixin, forms.ModelForm):
             "note": forms.TextInput(
                 attrs={"placeholder": "Anything the receipt does not say"}
             ),
-            "receipt": forms.ClearableFileInput(
+            "receipt": GatedReceiptInput(
                 attrs={"accept": "image/*,application/pdf"}
             ),
         }
@@ -176,6 +222,9 @@ class PaymentForm(StyledFormMixin, forms.ModelForm):
         self.fields["reference"].label = "Reference"
         self.fields["note"].label = "Note"
         self.student_options = picker_options()
+
+        if "receipt" in self.fields:
+            self.fields["receipt"].widget.gated_url = self.instance.receipt_file_url
 
         if self.instance.pk:
             self.fields["confirm_now"].initial = (

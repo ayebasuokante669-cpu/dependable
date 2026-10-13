@@ -218,7 +218,17 @@ class PrincipalScreenTests(SetupFixtures):
                     reverse("payments:payment_detail", args=[payment.pk])
                 )
                 self.assertEqual(response.status_code, 200)
-                self.assertContains(response, payment.receipt.url)
+                # The gated page, not the storage URL -- and it opens.
+                gated = reverse("payments:receipt_file", args=[payment.pk])
+                self.assertContains(response, gated)
+                self.assertNotContains(response, payment.receipt.url)
+                opened = self.client.get(gated)
+                self.assertEqual(opened.status_code, 200)
+                self.assertEqual(opened["Content-Type"], "image/png")
+                self.assertEqual(
+                    b"".join(opened.streaming_content), b"\x89PNG\r\n\x1a\n"
+                )
+                opened.close()
         finally:
             shutil.rmtree(media, ignore_errors=True)
 
