@@ -145,3 +145,39 @@ class TaglineTests(TestCase):
     def test_the_landing_hero_pairs_it_with_the_subhead(self):
         response = self.client.get("/")
         self.assertContains(response, PRODUCT_SUBHEAD)
+
+
+class OldFramingTests(TestCase):
+    """Nothing a visitor, a search engine or a link preview reads still carries
+    the old fees-first framing."""
+
+    OLD_PHRASES = (
+        "starts with the fees",
+        "start with the fees",
+        "fees first",
+        "every child owes",
+        "who has paid",
+        "has this one paid",
+        "has this child paid",
+        "who owes what",
+    )
+
+    def test_public_pages_and_their_meta(self):
+        for path in ("/", "/about/", "/signup/", "/accounts/login/",
+                     "/privacy/", "/llms.txt"):
+            with self.subTest(path=path):
+                html = self.client.get(path).content.decode().lower()
+                for phrase in self.OLD_PHRASES:
+                    self.assertNotIn(phrase, html, phrase)
+
+    def test_search_and_preview_descriptions_lead_with_the_tagline(self):
+        from apps.core.branding import PRODUCT_DESCRIPTION
+        from apps.core.seo import PUBLIC_PAGES
+
+        self.assertTrue(PRODUCT_DESCRIPTION.startswith(PRODUCT_TAGLINE))
+        self.assertIn(PRODUCT_SUBHEAD, PRODUCT_DESCRIPTION)
+        about = next(p for p in PUBLIC_PAGES if p.url_name == "core:about")
+        self.assertIn(PRODUCT_TAGLINE, about.description)
+
+        response = self.client.get("/")
+        self.assertContains(response, f'content="{PRODUCT_DESCRIPTION}"')

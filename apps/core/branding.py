@@ -29,10 +29,10 @@ PRODUCT_SUBHEAD = (
 )
 
 #: What it is, for someone who has never heard of it: the meta description on
-#: the home page, link previews, structured data and llms.txt.
+#: the home page, link previews, structured data and llms.txt. The tagline and
+#: subhead, so search results say what the landing page says.
 PRODUCT_DESCRIPTION = (
-    "School management software for Nigerian schools. Manage school fees and "
-    "balances, keep student records, and message parents — all in one place."
+    f"{PRODUCT_TAGLINE} {PRODUCT_SUBHEAD} Built for Nigerian schools."
 )
 
 #: The letter in the brand mark when the full logo will not fit.

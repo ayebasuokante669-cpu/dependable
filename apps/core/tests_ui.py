@@ -465,14 +465,14 @@ class AboutPageTests(UITestCase):
         self.client.force_login(self.owner)
         response = self.client.get(reverse("core:about"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Why we start with the fees")
+        self.assertContains(response, "Run Your School. Not Your Paperwork.")
 
     def test_it_describes_the_product_from_the_one_source(self):
-        from apps.core.branding import PRODUCT_DESCRIPTION
+        from apps.core.branding import PRODUCT_SUBHEAD
         from apps.core.seo import FEATURES
 
         response = self.client.get(reverse("core:about"))
-        self.assertContains(response, PRODUCT_DESCRIPTION)
+        self.assertContains(response, PRODUCT_SUBHEAD)
         for title, _ in FEATURES:
             with self.subTest(feature=title):
                 self.assertContains(response, title)

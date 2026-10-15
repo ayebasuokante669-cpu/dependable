@@ -73,8 +73,9 @@ PUBLIC_PAGES: tuple[PublicPage, ...] = (
         label="About",
         title=f"About {PRODUCT_NAME}",
         description=(
-            f"Who builds {PRODUCT_NAME}, why it starts with the fees, and how to "
-            "reach us. School management software for Nigerian schools."
+            f"Run Your School. Not Your Paperwork. Who builds {PRODUCT_NAME}, "
+            "why, and how to reach us. School management software for Nigerian "
+            "schools."
         ),
     ),
     PublicPage(
@@ -154,8 +155,8 @@ NAMED_CRAWLERS: tuple[str, ...] = (
 FEATURES: tuple[tuple[str, str], ...] = (
     (
         "School fee management",
-        "Set each class's fees per term, record payments, and see what every "
-        "student owes and who has paid. Balances are always worked out from the "
+        "Set each class's fees per term, record payments, and see every "
+        "student's balance at a glance. Balances are always worked out from the "
         "fee structure and confirmed payments, never typed in.",
     ),
     (

@@ -246,7 +246,11 @@ class PublicPageHeadTests(TestCase):
         _, head = self.head("/")
         self.assertIn(PRODUCT_NAME, head.title)
         self.assertIn("nigerian schools", head.title.lower())
-        for phrase in ["school fees", "student records", "message parents"]:
+        self.assertTrue(
+            head.meta["description"].startswith("Run Your School. Not Your Paperwork.")
+        )
+        for phrase in ["school fees", "student records", "communicate with parents",
+                       "Nigerian schools"]:
             self.assertIn(phrase, head.meta["description"])
 
     def test_link_previews_use_the_logo_at_an_absolute_url(self):
