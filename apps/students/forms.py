@@ -43,6 +43,7 @@ class StudentForm(StyledFormMixin, forms.ModelForm):
             "status",
             "parent_name",
             "parent_phone",
+            "parent_phone_alt",
             "parent_email",
             "address",
         ]
@@ -67,6 +68,13 @@ class StudentForm(StyledFormMixin, forms.ModelForm):
             "parent_phone": forms.TextInput(
                 attrs={
                     "placeholder": "0803 123 4567",
+                    "inputmode": "tel",
+                    "autocomplete": "tel",
+                }
+            ),
+            "parent_phone_alt": forms.TextInput(
+                attrs={
+                    "placeholder": "0805 987 6543",
                     "inputmode": "tel",
                     "autocomplete": "tel",
                 }
@@ -111,6 +119,9 @@ class StudentForm(StyledFormMixin, forms.ModelForm):
     def clean_parent_phone(self):
         """Store one canonical form, whatever shape it was typed in."""
         return normalise_phone(self.cleaned_data["parent_phone"])
+
+    def clean_parent_phone_alt(self):
+        return normalise_phone(self.cleaned_data["parent_phone_alt"])
 
     def clean_first_name(self):
         return self.cleaned_data["first_name"].strip()

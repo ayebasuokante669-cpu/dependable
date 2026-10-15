@@ -114,6 +114,17 @@
           </dd>
         </div>
         <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Second phone</dt>
+          <dd class="mt-1 text-sm">
+            {% if student.parent_phone_alt %}
+              <a href="{{ student.parent_phone_alt_link }}"
+                 class="numeric text-brand-800 hover:underline">
+                {{ student.parent_phone_alt_display }}
+              </a>
+            {% else %}<span class="text-ink-400">Not recorded</span>{% endif %}
+          </dd>
+        </div>
+        <div>
           <dt class="text-xs font-semibold uppercase tracking-wide text-ink-500">Email</dt>
           <dd class="mt-1 text-sm">
             {% if student.parent_email %}

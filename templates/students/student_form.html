@@ -74,7 +74,10 @@
           {% include "partials/_field.html" with field=form.parent_name %}
           {% include "partials/_field.html" with field=form.parent_phone %}
         </div>
-        {% include "partials/_field.html" with field=form.parent_email %}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.parent_phone_alt %}
+          {% include "partials/_field.html" with field=form.parent_email %}
+        </div>
         {% include "partials/_field.html" with field=form.address %}
       </div>
     </div>

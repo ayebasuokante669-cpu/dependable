@@ -118,7 +118,7 @@ class Sheet:
         max_rows: int = DEFAULT_MAX_ROWS,
         #: Enough recognised headers to be confident we found the header row
         #: rather than a row of data containing a word we know. Narrow sheets
-        #: need a lower bar than the thirteen-column student one.
+        #: need a lower bar than the fourteen-column student one.
         header_match_threshold: int = 0,
         #: The class a row's verdict is built as. Subclassed where an entity's
         #: own screens have always called the record something -- the roster

@@ -101,6 +101,8 @@ def record(
                 student=student,
                 # Normalised here rather than trusted from the row: a number
                 # imported from a spreadsheet may still be carrying spaces.
+                # The primary number only. ``parent_phone_alt`` is kept on file
+                # but deliberately not texted -- see Student.parent_phone_alt.
                 phone=normalise_phone(student.parent_phone),
                 parent_name=student.parent_name,
                 status=DeliveryStatus.PENDING,

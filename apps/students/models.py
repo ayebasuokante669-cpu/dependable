@@ -99,6 +99,17 @@ class Student(BranchScopedModel):
         validators=[validate_phone],
         help_text="Mobile number, e.g. 0803 123 4567.",
     )
+    # A second number for the same contact -- the other parent, or the line
+    # that is answered when the first is off. Stored and shown, but not texted:
+    # fee reminders go to ``parent_phone`` only, so a family is not charged
+    # twice for one message nor reminded twice about one bill.
+    parent_phone_alt = models.CharField(
+        "second parent / guardian phone",
+        max_length=20,
+        blank=True,
+        validators=[validate_phone],
+        help_text="Optional. Kept on file; reminders go to the first number.",
+    )
     parent_email = models.EmailField("parent / guardian email", blank=True)
     address = models.TextField(blank=True)
 
@@ -185,6 +196,17 @@ class Student(BranchScopedModel):
     def parent_phone_link(self) -> str:
         """``tel:`` target -- staff read the roster on a phone as often as a desk."""
         return f"tel:{to_international(self.parent_phone)}" if self.parent_phone else ""
+
+    @property
+    def parent_phone_alt_display(self) -> str:
+        return format_phone(self.parent_phone_alt)
+
+    @property
+    def parent_phone_alt_link(self) -> str:
+        return (
+            f"tel:{to_international(self.parent_phone_alt)}"
+            if self.parent_phone_alt else ""
+        )
 
     # -- persistence ---------------------------------------------------------
 

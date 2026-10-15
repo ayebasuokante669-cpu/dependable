@@ -728,6 +728,34 @@ def receipts_waiting(request) -> int:
     return Payment.objects.filter(status=PaymentStatus.PENDING).count()
 
 
+#: How many rows the dashboard's recent-payments feed shows. A glance, not a
+#: ledger -- the "See all" link is where the ledger is.
+RECENT_PAYMENTS_LIMIT = 6
+
+
+def recent_payments(request) -> list:
+    """The latest payments in the caller's scope, newest first, for the feed.
+
+    Empty -- and no query -- for an account that cannot see payments, including
+    a school that has switched the payments module off. Scoping is the tenant
+    manager's job, as everywhere else: an owner sees every campus, a principal
+    or bursar their own. Voided rows are left out; the feed is money coming in,
+    and a reversal is something the payments page shows in context.
+
+    Ordered by the model's own ordering (date paid, then entry), so the feed's
+    top rows are the same as the first rows behind "See all".
+    """
+    if not has_capability(request.user, Capability.VIEW_PAYMENTS):
+        return []
+    from apps.payments.models import Payment, PaymentStatus
+
+    return list(
+        Payment.objects.exclude(status=PaymentStatus.VOID)
+        .select_related("student")
+        .order_by("-date_paid", "-id")[:RECENT_PAYMENTS_LIMIT]
+    )
+
+
 class SchoolDashboardView(RoleDashboardMixin, TemplateView):
     """A school owner's view: how big the school is, and where its fees stand.
 
@@ -774,6 +802,7 @@ class SchoolDashboardView(RoleDashboardMixin, TemplateView):
         context["status"] = status_breakdown(next(iter(current_terms.values()), None))
         context["setup"] = setup_progress(self.request)
         context["receipts_waiting"] = receipts_waiting(self.request)
+        context["recent_payments"] = recent_payments(self.request)
         context["page_title"] = "School overview"
         return context
 
@@ -828,6 +857,7 @@ class BranchDashboardView(RoleDashboardMixin, TemplateView):
         context["status"] = status_breakdown(term)
         context["setup"] = setup_progress(self.request)
         context["receipts_waiting"] = receipts_waiting(self.request)
+        context["recent_payments"] = recent_payments(self.request)
         context["page_title"] = "Branch dashboard"
         return context
 
@@ -899,6 +929,7 @@ class BursarDashboardView(RoleDashboardMixin, TemplateView):
             with_outstanding(collection_summary(term), expected_total)
         )
         context["receipts_waiting"] = receipts_waiting(self.request)
+        context["recent_payments"] = recent_payments(self.request)
         context["page_title"] = "Finance dashboard"
         return context
 

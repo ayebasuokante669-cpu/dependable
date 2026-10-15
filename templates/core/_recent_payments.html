@@ -1,0 +1,61 @@
+{% load money %}
+{% comment %}
+Recent payments, on the dashboard of every role that can see money: the owner's,
+the principal's and the bursar's. A glance at what just came in -- who, how
+much, when, and whether a person has checked it yet -- with each row opening the
+payment and "See all" opening the ledger.
+
+Takes `recent_payments` from views.recent_payments, which is already scoped to
+the caller's school or campus, already newest first and already empty for an
+account without VIEW_PAYMENTS. The capability check here is the second lock on
+the same door: a school with payments switched off never sees the section.
+
+Colours are tokens throughout, so the list follows the theme with no `dark:`
+variants -- see the note at the top of assets/app.css.
+{% endcomment %}
+{% if "view_payments" in capabilities %}
+  <section class="card overflow-hidden" aria-labelledby="recent-payments-heading">
+    <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-5 py-3">
+      <h2 id="recent-payments-heading" class="text-sm font-semibold text-ink-900">
+        Recent payments
+      </h2>
+      <a href="{% url 'payments:index' %}"
+         class="text-sm font-medium text-brand-800 hover:underline">
+        See all
+      </a>
+    </div>
+
+    {% if recent_payments %}
+      <ul class="divide-y divide-ink-200">
+        {% for payment in recent_payments %}
+          <li>
+            <a href="{{ payment.get_absolute_url }}"
+               class="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-ink-50">
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium text-ink-900">
+                  {{ payment.student.full_name }}
+                </span>
+                <span class="block text-xs text-ink-500">
+                  {{ payment.date_paid|date:"j M Y" }}
+                  &middot; {{ payment.get_label_display }}
+                </span>
+              </span>
+              <span class="flex shrink-0 flex-col items-end gap-1">
+                <span class="numeric text-sm font-semibold text-ink-900">
+                  {{ payment.amount|naira }}
+                </span>
+                <span class="status-pill {{ payment.pill_class }}">
+                  {{ payment.get_status_display }}
+                </span>
+              </span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="px-5 py-6 text-sm text-ink-500">
+        No payments recorded yet. They will appear here as they come in.
+      </p>
+    {% endif %}
+  </section>
+{% endif %}

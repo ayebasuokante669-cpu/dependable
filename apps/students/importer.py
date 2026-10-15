@@ -11,7 +11,7 @@ and lives in :mod:`apps.core.imports`, :mod:`apps.core.spreadsheets` and
 written up there and are not restated here. What is left in this module is the
 part that is only true of students:
 
-* the thirteen columns, and the spellings a school's own roster uses for them;
+* the fourteen columns, and the spellings a school's own roster uses for them;
 * the admission number, which has to be unique against the roster *and* against
   the rest of the file;
 * the leading zero Excel eats off a phone number.
@@ -83,6 +83,11 @@ COLUMNS: tuple[Column, ...] = (
     Column("parent_phone", "Parent / Guardian Phone", True, "08034129876",
            ("parent phone", "guardian phone", "phone", "phone number",
             "parent number", "contact"), width=24),
+    Column("parent_phone_alt", "Second Parent / Guardian Phone", False,
+           "08059876543 — optional, not used for reminders",
+           ("second phone", "second parent phone", "second guardian phone",
+            "alternative phone", "alternate phone", "other phone", "phone 2",
+            "parent phone 2", "second number"), width=32),
     Column("parent_email", "Parent / Guardian Email", False,
            "ngozi.okonkwo@example.com — optional",
            ("parent email", "guardian email", "email"), width=36),
@@ -289,6 +294,7 @@ def _validate_row(source: SourceRow, branch, classes: ClassIndex,
         status=status,
         parent_name=source.get("parent_name"),
         parent_phone=parse_import_phone(source.get("parent_phone")),
+        parent_phone_alt=parse_import_phone(source.get("parent_phone_alt")),
         parent_email=source.get("parent_email"),
         address=source.get("address"),
     )

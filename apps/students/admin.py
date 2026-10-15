@@ -44,7 +44,8 @@ class StudentAdmin(TenantScopedAdminMixin):
         ("Enrolment", {"fields": ("school_class", "date_admitted", "status")}),
         (
             "Parent / guardian",
-            {"fields": ("parent_name", "parent_phone", "parent_email", "address")},
+            {"fields": ("parent_name", "parent_phone", "parent_phone_alt",
+                        "parent_email", "address")},
         ),
         (
             "Audit",

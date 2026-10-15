@@ -142,6 +142,8 @@ and lives at /academics/classes/.
     {% include "partials/_status_breakdown.html" with breakdown=status.buckets breakdown_total=status.total heading="Where this campus stands" linked=True %}
   </a>
 
+  {% include "core/_recent_payments.html" %}
+
   {% include "partials/_report_link.html" with blurb="What each class on this campus is expected to bring in and how much of it has arrived, the roster across the four payment states, and who still owes — plus a PDF." %}
 
 </div>
